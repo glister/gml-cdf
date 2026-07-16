@@ -1,0 +1,10 @@
+node_modules
+/docs/
+dist
+.output
+.turbo
+.vinxi
+.env.secrets
+.env.local
+.env.*.local
+.DS_Store

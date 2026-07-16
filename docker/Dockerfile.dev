@@ -1,0 +1,11 @@
+# Development container. Source is bind-mounted by compose; dependencies are
+# installed at container start (`pnpm install && pnpm run dev`). node_modules are
+# anonymous volumes so the container keeps its own copy.
+FROM node:24-slim
+
+RUN corepack enable
+
+WORKDIR /app
+
+# The compose `command` runs install + dev. This image only provides the toolchain.
+CMD ["sh", "-c", "pnpm install && pnpm run dev"]

@@ -1,0 +1,39 @@
+{
+  "name": "@repo/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --include '../../packages/**/*.ts' --conditions=development --import ./src/instrument.ts src/index.ts",
+    "trigger": "tsx --env-file ../../.env scripts/publish.ts",
+    "build": "tsup",
+    "start": "node --import ./dist/instrument.js dist/index.js",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@azure/service-bus": "^7.9.5",
+    "@repo/db": "workspace:*",
+    "@repo/email": "workspace:*",
+    "@repo/env": "workspace:*",
+    "@repo/logging": "workspace:*",
+    "@repo/service-bus": "workspace:*",
+    "@repo/trpc": "workspace:*",
+    "csv-parse": "^5.6.0",
+    "kysely": "^0.29.0",
+    "winston": "^3.19.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@repo/vitest-config": "workspace:*",
+    "@types/node": "^22.13.10",
+    "eslint": "^9.22.0",
+    "tsup": "^8.5.1",
+    "tsx": "^4.20.0",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.0"
+  }
+}

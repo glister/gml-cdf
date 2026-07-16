@@ -1,0 +1,16 @@
+{
+  "name": "@repo/vitest-config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./vitest.config": "./vitest.config.ts"
+  },
+  "files": [
+    "vitest.config.ts",
+    "setup-env.ts"
+  ],
+  "peerDependencies": {
+    "vitest": "^3"
+  }
+}

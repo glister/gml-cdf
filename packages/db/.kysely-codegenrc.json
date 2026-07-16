@@ -1,0 +1,9 @@
+{
+  "$schema": "https://raw.githubusercontent.com/RobinBlomberg/kysely-codegen/main/src/schema.json",
+  "camelCase": false,
+  "overrides": {
+    "columns": {
+      "user.role": "Generated<'admin' | 'agent'>"
+    }
+  }
+}

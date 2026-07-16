@@ -1,0 +1,24 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+supportedArchitectures:
+  os: [linux, darwin]
+  cpu: [x64]
+autoInstallPeers: true
+allowBuilds:
+  esbuild: true
+  # protobufjs postinstall is only a version-scheme warning check (no codegen/native
+  # build); it was excluded under pnpm 10's onlyBuiltDependencies allowlist too.
+  protobufjs: false
+blockExoticSubdeps: true
+minimumReleaseAge: 4320
+trustPolicy: no-downgrade
+# Targeted exceptions to no-downgrade for legit older transitive deps that lack
+# provenance attestation. Keep this list minimal and reviewed.
+trustPolicyExclude:
+  - 'semver@6.3.1'
+  - 'undici-types@6.21.0'
+  - 'chokidar@4.0.3'
+  # Expo/React Native transitives (via @repo/mobile) that predate npm provenance.
+  - 'ua-parser-js@0.7.41' # via expo-device
+  - 'ua-parser-js@1.0.41' # via react-native-web -> fbjs

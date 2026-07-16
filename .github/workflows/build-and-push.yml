@@ -1,0 +1,68 @@
+name: build-and-push
+
+# Runs after Terraform succeeds on dev/prod (infra exists), or on manual dispatch.
+on:
+  workflow_run:
+    workflows: [terraform]
+    types: [completed]
+    branches: [dev, prod]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy
+        type: choice
+        options: [dev, prod]
+
+permissions:
+  id-token: write # OIDC
+  contents: read
+
+jobs:
+  build:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [api, web, worker]
+    env:
+      PROJECT: cdf
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolve environment
+        id: env
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            name="${{ inputs.environment }}"
+          else
+            name="${{ github.event.workflow_run.head_branch }}"
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "acr=${PROJECT}${name}acr" >> "$GITHUB_OUTPUT"
+          echo "rg=${PROJECT}-${name}-rg" >> "$GITHUB_OUTPUT"
+
+      - name: ACR login
+        run: az acr login --name "${{ steps.env.outputs.acr }}"
+
+      - uses: docker/setup-buildx-action@c47758b77c9736f4b2ef4073d4d51994fabfe349 # v3.7.1
+
+      - name: Build and push ${{ matrix.app }}
+        uses: docker/build-push-action@4f58ea79222b3b9dc2c8bbdd6debcef730109a75 # v6.9.0
+        with:
+          context: .
+          file: docker/Dockerfile.${{ matrix.app }}.prod
+          push: true
+          tags: ${{ steps.env.outputs.acr }}.azurecr.io/${{ matrix.app }}:${{ github.sha }}
+
+      - name: Update Container App
+        run: |
+          az containerapp update \
+            --name "${PROJECT}-${{ steps.env.outputs.name }}-${{ matrix.app }}" \
+            --resource-group "${{ steps.env.outputs.rg }}" \
+            --image "${{ steps.env.outputs.acr }}.azurecr.io/${{ matrix.app }}:${{ github.sha }}"

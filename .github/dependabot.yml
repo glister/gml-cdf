@@ -1,0 +1,9 @@
+version: 2
+updates:
+  # Keep third-party action SHAs current (Dependabot bumps the pin + comment).
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci

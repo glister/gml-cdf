@@ -1,0 +1,133 @@
+# Local development stack. Ports come from .env (${PORT_*}). Secrets are loaded
+# into the dev container from .env.secrets (git-ignored).
+#
+#   docker compose up
+#   pnpm migrate && pnpm seed   # from the host
+
+name: cdf
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - '${POSTGRES_PORT}:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Backing SQL store required by the Service Bus emulator.
+  mssql:
+    image: mcr.microsoft.com/azure-sql-edge:latest
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: 'Y'
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          '/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1" || exit 1',
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+
+  servicebus-emulator:
+    image: mcr.microsoft.com/azure-messaging/servicebus-emulator:latest
+    restart: unless-stopped
+    volumes:
+      - ./docker/servicebus/Config.json:/ServiceBus_Emulator/ConfigFiles/Config.json:ro
+    environment:
+      SQL_SERVER: mssql
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+      ACCEPT_EULA: 'Y'
+    ports:
+      - '5672:5672'
+    depends_on:
+      mssql:
+        condition: service_healthy
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    restart: unless-stopped
+    command: 'azurite-blob --blobHost 0.0.0.0 --blobPort 10000'
+    ports:
+      - '10000:10000'
+    volumes:
+      - azurite_data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'nc -z 127.0.0.1 10000 || exit 1']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - '1025:1025' # SMTP
+      - '8025:8025' # web UI
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://localhost:8025']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  dev:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+    command: sh -c 'pnpm install && pnpm run dev'
+    working_dir: /app
+    env_file:
+      - .env
+      - .env.secrets
+    environment:
+      # Point host-named services at their in-network names.
+      POSTGRES_HOST: postgres
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      EMAIL_SMTP_HOST: mailpit
+      SERVICE_BUS_CONNECTION_STRING: 'Endpoint=sb://servicebus-emulator;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;'
+      AZURE_STORAGE_CONNECTION_STRING: 'DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;'
+    ports:
+      - '${PORT_WEB}:3000'
+      - '${PORT_API}:3001'
+      - '${PORT_WORKER}:3002'
+    volumes:
+      - .:/app
+      # Anonymous volumes shadow the host node_modules (container has its own).
+      - /app/node_modules
+      - /app/apps/web/node_modules
+      - /app/apps/api/node_modules
+      - /app/apps/worker/node_modules
+      - pnpm_store:/root/.local/share/pnpm/store
+    depends_on:
+      postgres:
+        condition: service_healthy
+      azurite:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+      servicebus-emulator:
+        condition: service_started
+
+  # Optional: uncomment to run HyperDX locally for OTel traces.
+  # hyperdx:
+  #   image: docker.hyperdx.io/hyperdx/hyperdx-local:latest
+  #   ports:
+  #     - '8080:8080'
+  #     - '4318:4318'
+
+volumes:
+  pgdata:
+  azurite_data:
+  pnpm_store:

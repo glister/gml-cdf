@@ -1,0 +1,46 @@
+{
+  "name": "@repo/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --include '../../packages/**/*.ts' --conditions=development --import ./src/instrument.ts src/index.ts",
+    "build": "tsup",
+    "start": "node --import ./dist/instrument.js dist/index.js",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.0.6",
+    "@hono/otel": "^1.1.2",
+    "@hono/trpc-server": "^0.4.2",
+    "@repo/cloud-storage": "workspace:*",
+    "@repo/db": "workspace:*",
+    "@repo/email": "workspace:*",
+    "@repo/env": "workspace:*",
+    "@repo/logging": "workspace:*",
+    "@repo/service-bus": "workspace:*",
+    "@repo/sms": "workspace:*",
+    "@repo/trpc": "workspace:*",
+    "@trpc/server": "^11.0.0",
+    "better-auth": "^1.5.0",
+    "hono": "^4.7.0",
+    "kysely": "^0.29.0",
+    "pg": "^8.13.0",
+    "winston": "^3.19.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@repo/vitest-config": "workspace:*",
+    "@types/node": "^22.13.10",
+    "@types/pg": "^8.20.0",
+    "eslint": "^9.22.0",
+    "tsup": "^8.5.1",
+    "tsx": "^4.20.0",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.0"
+  }
+}

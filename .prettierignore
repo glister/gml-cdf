@@ -1,0 +1,20 @@
+# Prettier's glob does not respect .gitignore, so list generated + build output
+# explicitly here — otherwise a local `pnpm build` breaks `format:check`.
+
+# Generated files (never hand-edited)
+**/routeTree.gen.ts
+packages/db/src/types.ts
+
+# Build output
+**/dist/
+**/.output/
+**/.turbo/
+
+# Terraform working dir (provider/module cache, state)
+**/.terraform/
+
+# Dependencies
+**/node_modules/
+
+# Lockfile
+pnpm-lock.yaml
