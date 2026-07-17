@@ -60,9 +60,12 @@ strictly typed.
    pnpm seed
    ```
 
-- Web: http://localhost:3000
-- API: http://localhost:3001
-- Mailpit UI: http://localhost:8025
+Host ports derive from `"portPrefix"` in `package.json` (default `170`) — see the
+"Port prefix convention" section in `CLAUDE.md`. With the default prefix:
+
+- Web: http://localhost:17000
+- API: http://localhost:17001
+- Mailpit UI: http://localhost:17021
 
 ### Common commands
 

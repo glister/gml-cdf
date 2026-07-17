@@ -138,7 +138,8 @@ caching).
   repo root so the committed `.env`/`.env.test` are loaded.
 - `apps/web/src/router.tsx` — must export `getRouter()` (not `createRouter`).
 - `.husky/pre-commit` — runs lint-staged (eslint + prettier on staged files), then
-  `pnpm typecheck`, then `pnpm test`. When a `.github/workflows/*.yml` is staged,
+  `pnpm ports:check`, `pnpm typecheck`, then `pnpm test`. When a
+  `.github/workflows/*.yml` is staged,
   lint-staged also runs `pnpm lint:pins` and `pnpm lint:actions` (actionlint is an
   external binary — `brew install actionlint` — skipped gracefully if absent).
 
@@ -238,13 +239,14 @@ feature follows. Match the existing wiring; do not hand-roll alternatives.
 ### Non-sensitive
 
 Ports, hostnames, etc. go in the root `.env` and are referenced in `compose.yml`
-(as `environment`/`ports`) for the containers that need them. `PORT_*` vars follow
-the existing scheme (web `3000` / api `3001` / worker `3002`); continue it for new
-services.
+(as `environment`/`ports`) for the containers that need them. Host-published ports
+are **not** hand-edited — they are derived from a single prefix (see "Port prefix
+convention" below).
 
 **IMPORTANT:** every env var defined for the `dev` service in `compose.yml` must be
-listed in the `globalEnv` array in `turbo.json`. All env vars used in client code
-MUST be `VITE_`-prefixed (web) or `EXPO_PUBLIC_`-prefixed (mobile).
+listed in the `globalEnv` array in `turbo.json` (`pnpm ports:check` enforces this
+for the managed `PORT_*` vars). All env vars used in client code MUST be
+`VITE_`-prefixed (web) or `EXPO_PUBLIC_`-prefixed (mobile).
 
 ### Sensitive
 
@@ -259,6 +261,44 @@ Services run in containers; the in-network port differs from the published one (
 mapping lives in `compose.yml` / `.env`). If a port feeds another env var used
 **on the server**, use the internal port. If it feeds a var used **on the client**
 (e.g. a `VITE_`- or `EXPO_PUBLIC_`-prefixed var), it MUST use the external port.
+
+### Port prefix convention
+
+Every **host-published** port derives from one prefix so projects don't clash on a
+shared dev machine. The prefix lives in root `package.json` as `"portPrefix"` (this
+repo: `170`); each project picks a distinct one. The formula and slot convention
+(the last two digits — stable across all projects) are:
+
+`external port = portPrefix * 100 + slot`. Bands: apps `00–09`, datastores /
+messaging `10–19`, tooling / UI `20–29`.
+
+| Slot | Service | @170 | | Slot | Service | @170 |
+| ---- | ------------- | ----- | | ----- | ------------------ | ----- |
+| 00 | web | 17000 | | 12 | servicebus (AMQP) | 17012 |
+| 01 | api | 17001 | | 13 | azurite (blob) | 17013 |
+| 02 | worker | 17002 | | 20 | mailpit SMTP | 17020 |
+| 10 | postgres dev | 17010 | | 21 | mailpit UI | 17021 |
+| 11 | postgres test | 17011 | | 22/23 | reserved (hyperdx) | — |
+
+The real values are materialised as literals into `.env` / `.env.test` (dotenv
+does not interpolate, and `compose.yml`, `psql`, migrations, and the env schemas
+read the literals). **Never hand-edit a managed port.** Instead:
+
+- `pnpm ports:sync` — rewrite `.env` / `.env.test` from the prefix.
+- `pnpm ports:check` — verify no drift (runs in pre-commit and the `ports-check`
+  CI gate; blocking).
+
+Source of truth for the slot map + which vars each port drives (including ports
+embedded inside URLs / connection strings) is `scripts/gen-ports.mjs`
+(`SLOTS` / `FILES`). **Adding a service:** pick the next free slot in its band, add
+it to `SLOTS` and the relevant `FILES` entries, add the `PORT_*` var to `.env` and
+`turbo.json` `globalEnv`, then run `pnpm ports:sync`.
+
+Only host-published ports are prefixed. **Container-internal ports stay fixed**
+(`3000/3001/3002`, `5432`, `1025/8025`, `5672`, `10000`) — so the compose `dev`
+in-network overrides, `API_INTERNAL_URL` (SSR → api's container `3001`), and `PORT`
+(prod Node listen) are deliberately unmanaged. Changing the prefix moves the whole
+stack; run `docker compose up` (native non-Docker `pnpm dev` is out of scope).
 
 ## Data
 
@@ -314,3 +354,50 @@ test `5433`).
 - `.env` — committed non-secret dev config.
 - `.env.test` — committed test-safe defaults (keep in sync with every new var).
 - `.env.secrets` — git-ignored real secrets, loaded into containers via compose.
+
+## Visual verification with agent-browser
+
+When making UI changes, take a screenshot to verify your work looks correct before considering the task done. Use `agent-browser` (already installed globally).
+
+### Basic screenshot workflow
+
+Screenshots use a persistent authenticated session named `dev`. Always use `--session dev` so cookies persist between commands.
+
+```bash
+agent-browser --session dev open http://localhost:3000/some/route
+agent-browser --session dev screenshot .screenshots/some-route.png --viewport 1280x800
+```
+
+For mobile checks, use `--viewport 375x812`. For full-page (scrolling) shots, add `--full-page`.
+
+Save all screenshots to `.screenshots/` (gitignored). Use descriptive filenames like `dashboard-after-fix.png`, not `test.png`.
+
+### After taking a screenshot
+
+Read it back with the Read tool and check that the change you made is actually visible and correct. If it looks wrong, iterate. Do not mark a UI task complete without visually confirming.
+
+### Handling expired auth
+
+If a screenshot shows the login page (`/login`) instead of the expected authenticated content, the dev session has expired. Refresh it and retake the shot:
+
+```bash
+./scripts/refresh-auth.sh
+```
+
+The script uses Mailpit to intercept the OTP email and completes the sign-in flow automatically. It takes a few seconds. After it succeeds, retake the screenshot with the same `agent-browser --session dev` command.
+
+Do not attempt to fill in the login form manually. Do not attempt to bypass authentication. Always use the refresh script.
+
+### If refresh-auth.sh fails
+
+- Check that the dev server is running on the expected port
+- Check that Mailpit is running (default: `http://localhost:8025`)
+- Check the login form selectors in the script match the current UI — if the login form was recently changed, the script's `fill` selectors may need updating
+
+### When NOT to screenshot
+
+- Backend-only changes (API routes, DB migrations, non-UI logic)
+- Small refactors with no visual output
+- Text-only changes (copy edits are fine to verify via code diff)
+
+Screenshotting has a cost — do it when it adds real signal, not reflexively.

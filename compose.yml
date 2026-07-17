@@ -51,7 +51,7 @@ services:
       MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
       ACCEPT_EULA: 'Y'
     ports:
-      - '5672:5672'
+      - '${PORT_SERVICEBUS}:5672'
     depends_on:
       mssql:
         condition: service_healthy
@@ -61,7 +61,7 @@ services:
     restart: unless-stopped
     command: 'azurite-blob --blobHost 0.0.0.0 --blobPort 10000'
     ports:
-      - '10000:10000'
+      - '${PORT_AZURITE}:10000'
     volumes:
       - azurite_data:/data
     healthcheck:
@@ -74,8 +74,8 @@ services:
     image: axllent/mailpit:latest
     restart: unless-stopped
     ports:
-      - '1025:1025' # SMTP
-      - '8025:8025' # web UI
+        - '${PORT_MAILPIT_SMTP}:1025'
+        - '${PORT_MAILPIT_UI}:8025'
     healthcheck:
       test: ['CMD', 'wget', '-q', '--spider', 'http://localhost:8025']
       interval: 5s
@@ -96,6 +96,8 @@ services:
       POSTGRES_HOST: postgres
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       EMAIL_SMTP_HOST: mailpit
+      # In-network Mailpit listens on its container port, not the host-published one.
+      EMAIL_SMTP_PORT: 1025
       SERVICE_BUS_CONNECTION_STRING: 'Endpoint=sb://servicebus-emulator;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;'
       AZURE_STORAGE_CONNECTION_STRING: 'DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;'
     ports:

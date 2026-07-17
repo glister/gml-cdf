@@ -1,0 +1,20 @@
+name: ports-check
+
+# Ports are derived from package.json "portPrefix" via scripts/gen-ports.mjs.
+# This gate fails if .env / .env.test drift from the derived values (or a managed
+# port var is missing from turbo.json globalEnv).
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ports:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      # Zero-dependency Node script; ubuntu-latest ships Node, so no setup/install.
+      - name: Check ports are in sync with portPrefix
+        run: node scripts/gen-ports.mjs --check

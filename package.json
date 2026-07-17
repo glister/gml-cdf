@@ -2,6 +2,7 @@
   "name": "cdf-platform",
   "private": true,
   "type": "module",
+  "portPrefix": 170,
   "packageManager": "pnpm@11.10.0+sha512.0b7f8b98060031904c017e3a41eb187a16d40eeb829b95c4f8cb03681761fc4ab53dd219115b9b447f4dce1a05a214764461e7d3703392a9f32f9511ce8c86c8",
   "scripts": {
     "build": "turbo run build",
@@ -14,6 +15,8 @@
     "clean": "rm -rf node_modules **/node_modules **/dist **/.output **/.turbo",
     "migrate": "pnpm --filter=@repo/db migrate",
     "seed": "pnpm --filter=@repo/db seed",
+    "ports:sync": "node scripts/gen-ports.mjs",
+    "ports:check": "node scripts/gen-ports.mjs --check",
     "lint:pins": "sh scripts/check-action-pins.sh",
     "lint:actions": "command -v actionlint >/dev/null 2>&1 && actionlint || echo 'actionlint not installed, skipping'",
     "prepare": "husky"
