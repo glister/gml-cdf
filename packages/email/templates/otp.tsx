@@ -1,3 +1,10 @@
+// Templates are consumed as source in dev (the `development` export condition),
+// where the consuming app's tsx/esbuild applies its automatic JSX runtime only
+// to files in the app's own tsconfig scope. These out-of-scope templates fall
+// back to esbuild's default classic transform (`React.createElement`), so every
+// template MUST import React to provide that binding — otherwise it throws
+// "React is not defined" at runtime. Convention: React is the first import.
+import React from 'react';
 import type { CSSProperties } from 'react';
 import { Body, Container, Head, Heading, Html, Section, Text } from '@react-email/components';
 
