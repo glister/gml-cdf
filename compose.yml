@@ -92,8 +92,19 @@ services:
       - .env
       - .env.secrets
     environment:
+      # Bind each app to its fixed container-internal port, not the host-published
+      # PORT_* value from .env (which is only the external mapping in `ports:`
+      # below). Without this the api binds PORT_API (17001) inside the container,
+      # so host 17001->3001 and SSR's API_INTERNAL_URL (localhost:3001) hit nothing.
+      PORT_WEB: 3000
+      PORT_API: 3001
+      PORT_WORKER: 3002
       # Point host-named services at their in-network names.
       POSTGRES_HOST: postgres
+      # Postgres listens on its fixed container port in-network, not the
+      # host-published POSTGRES_PORT (17010). @repo/db builds its pool from the
+      # discrete POSTGRES_* vars, so this must be overridden alongside the host.
+      POSTGRES_PORT: 5432
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       EMAIL_SMTP_HOST: mailpit
       # In-network Mailpit listens on its container port, not the host-published one.
