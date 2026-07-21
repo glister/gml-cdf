@@ -209,7 +209,7 @@ you found it.**
 - **`@repo/trpc` owns the API contract** — the security boundary. Procedures and
   schemas are defined there; `apps/api` mounts the router, `apps/web` consumes the
   types. All auth checks live in procedures (`protectedProcedure`,
-  `adminProcedure`, `serviceProcedure`). Web-side route guards are UX-only.
+  `adminProcedure`). Web-side route guards are UX-only.
 - **Package names use the `@repo/` scope.**
 
 ### Web data, tables and forms (hard rules)

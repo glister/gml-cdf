@@ -9,8 +9,7 @@ does not define procedures.
   request logging → CORS (reflect origin, credentials). Mounts Better Auth at
   `/api/auth/**`; a session middleware on `/trpc/*` sets `user`/`session`; tRPC
   mounted via `@hono/trpc-server`. `createContext` injects `db`, `logger`, email/
-  sms senders, an in-memory rate limiter, and `isServiceCall` (timing-safe
-  compare of `x-service-token` vs `INTERNAL_SERVICE_TOKEN`). Health check at `/`.
+  sms senders, and an in-memory rate limiter. Health check at `/`.
   Exports `app` for tests; only calls `serve()` when `VITEST` is unset.
 - `src/lib/auth.ts` — `betterAuth({ database: pool })`. Email/password +
   `emailOTP` (6-digit/300s, sends via `@repo/email`) + `admin` (roles

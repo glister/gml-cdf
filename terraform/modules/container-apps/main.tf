@@ -3,7 +3,6 @@ locals {
   secret_env = {
     POSTGRES_PASSWORD               = "postgres-password"
     BETTER_AUTH_SECRET              = "better-auth-secret"
-    INTERNAL_SERVICE_TOKEN          = "internal-service-token"
     RESEND_API_KEY                  = "resend-api-key"
     SERVICE_BUS_CONNECTION_STRING   = "service-bus-connection-string"
     AZURE_STORAGE_CONNECTION_STRING = "storage-connection-string"

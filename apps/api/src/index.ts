@@ -1,4 +1,3 @@
-import { timingSafeEqual } from 'node:crypto';
 import { serve } from '@hono/node-server';
 import { httpInstrumentationMiddleware } from '@hono/otel';
 import { trpcServer } from '@hono/trpc-server';
@@ -22,7 +21,6 @@ type Variables = {
 const env = parse(
   z.object({
     PORT_API: z.coerce.number().int().positive(),
-    INTERNAL_SERVICE_TOKEN: z.string().min(1),
     VITEST: z.string().optional(),
   }),
 );
@@ -57,15 +55,6 @@ function createRateLimiter(limit = 100, windowMs = 60_000): RateLimiter {
   };
 }
 const rateLimit = createRateLimiter();
-
-/** Timing-safe compare of the incoming service token against the secret. */
-function isValidServiceToken(provided: string | undefined): boolean {
-  if (!provided) return false;
-  const a = Buffer.from(provided);
-  const b = Buffer.from(env.INTERNAL_SERVICE_TOKEN);
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
-}
 
 const app = new Hono<{ Variables: Variables }>();
 
@@ -116,7 +105,6 @@ function buildContext(c: Context<{ Variables: Variables }>): TRPCContext {
     email,
     sms,
     rateLimit,
-    isServiceCall: isValidServiceToken(c.req.header('x-service-token')),
     user: user
       ? {
           id: user.id,

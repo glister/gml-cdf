@@ -34,7 +34,6 @@ jobs:
       TF_VAR_postgres_admin_password: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
       TF_VAR_resend_api_key: ${{ secrets.RESEND_API_KEY }}
       TF_VAR_better_auth_secret: ${{ secrets.BETTER_AUTH_SECRET }}
-      TF_VAR_internal_service_token: ${{ secrets.INTERNAL_SERVICE_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 

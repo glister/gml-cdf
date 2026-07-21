@@ -19,7 +19,7 @@ One root config parameterized per environment (`environments/dev.tfvars`,
 ## Secrets flow
 
 Sensitive vars (`subscription_id`, `postgres_admin_password`, `resend_api_key`,
-`better_auth_secret`, `internal_service_token`) arrive via `TF_VAR_*` env vars in
+`better_auth_secret`) arrive via `TF_VAR_*` env vars in
 CI — never `-var` flags, never committed. They're written to Key Vault and
 injected into Container Apps as secret refs via the managed identity.
 

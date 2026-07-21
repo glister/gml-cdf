@@ -75,7 +75,6 @@ module "key_vault" {
   secrets = {
     "resend-api-key"                = var.resend_api_key
     "better-auth-secret"            = var.better_auth_secret
-    "internal-service-token"        = var.internal_service_token
     "postgres-password"             = var.postgres_admin_password
     "service-bus-connection-string" = module.service_bus.primary_connection_string
     "storage-connection-string"     = module.storage.primary_connection_string

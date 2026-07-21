@@ -8,7 +8,6 @@ export {
   publicProcedure,
   protectedProcedure,
   adminProcedure,
-  serviceProcedure,
 } from './trpc.js';
 export type {
   TRPCContext,

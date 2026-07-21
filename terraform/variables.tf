@@ -80,11 +80,6 @@ variable "better_auth_secret" {
   sensitive = true
 }
 
-variable "internal_service_token" {
-  type      = string
-  sensitive = true
-}
-
 # --- App config ---
 variable "email_from" {
   description = "From address for transactional email."

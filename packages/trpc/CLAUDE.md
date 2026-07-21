@@ -8,8 +8,8 @@ only mounts it.
 
 - `src/trpc.ts` — init hub. `initTRPC.context<TRPCContext>()`; exports `router`
   and the procedure builders: `publicProcedure`, `protectedProcedure`,
-  `adminProcedure`, `serviceProcedure`. `TRPCContext` carries injected `db`,
-  `user`, `session`, `logger`, `email`, `sms`, `rateLimit`, `isServiceCall`.
+  `adminProcedure`. `TRPCContext` carries injected `db`,
+  `user`, `session`, `logger`, `email`, `sms`, `rateLimit`.
   Services are passed in as structural interfaces — never imported here (keeps
   the package decoupled).
 - `src/schemas.ts` — flat module of Zod input/output schemas + inferred types.
@@ -29,5 +29,5 @@ edges. Push every facet into the input schema and apply as `where`/`order by`.
 
 ## Auth
 
-Enforcement lives in the procedures (`protectedProcedure`/`adminProcedure`/
-`serviceProcedure`), not in the app. Web-side route guards are UX-only.
+Enforcement lives in the procedures (`protectedProcedure`/`adminProcedure`),
+not in the app. Web-side route guards are UX-only.

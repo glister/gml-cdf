@@ -16,4 +16,4 @@ app_url    = "https://cdf-dev-web.example.com"
 api_url    = "https://cdf-dev-api.example.com"
 
 # Sensitive values (subscription_id, postgres_admin_password, resend_api_key,
-# better_auth_secret, internal_service_token) come from TF_VAR_* in CI.
+# better_auth_secret) come from TF_VAR_* in CI.

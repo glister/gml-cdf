@@ -50,8 +50,6 @@ export interface TRPCContext {
   logger: ContextLogger;
   email: EmailSender;
   sms: SmsSender;
-  /** True when the request carried a valid internal service token. */
-  isServiceCall: boolean;
   rateLimit: RateLimiter;
 }
 
@@ -82,13 +80,3 @@ export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   }
   return next({ ctx });
 });
-
-const requireService = t.middleware(({ ctx, next }) => {
-  if (!ctx.isServiceCall) {
-    throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Valid service token required' });
-  }
-  return next({ ctx });
-});
-
-/** Requires a valid internal service token (service-to-service calls). */
-export const serviceProcedure = t.procedure.use(requireService);

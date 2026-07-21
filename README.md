@@ -42,7 +42,7 @@ strictly typed.
 ## Local development
 
 1. Populate secrets: create `.env.secrets` (git-ignored) with `RESEND_API_KEY`,
-   `BETTER_AUTH_SECRET`, `INTERNAL_SERVICE_TOKEN`.
+   `BETTER_AUTH_SECRET`.
 2. Boot the stack (Postgres, Service Bus emulator + mssql, Azurite, Mailpit, and
    the dev app container). This needs only Docker — the dev container runs its own
    `corepack enable` internally:

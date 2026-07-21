@@ -18,7 +18,7 @@ speculative Lows is a worse review.
 
 1. **Map the attack surface first.** Read before you grep:
    - `packages/trpc/src/trpc.ts` (the procedure builders — `publicProcedure`,
-     `protectedProcedure`, `adminProcedure`, `serviceProcedure` — this is the
+     `protectedProcedure`, `adminProcedure` — this is the
      security boundary), `packages/trpc/src/router.ts`,
      `packages/trpc/src/routers/*`, `packages/trpc/src/schemas.ts`,
      `packages/trpc/src/lib/keyset.ts`.
@@ -88,7 +88,7 @@ grep/verify, and where in this repo it lives.
 
 - **The core question the user asked: does every query and mutation enforce
   authorization?** For every procedure, verify: (a) the right builder is used
-  (`protectedProcedure`/`adminProcedure`/`serviceProcedure`, not
+  (`protectedProcedure`/`adminProcedure`, not
   `publicProcedure` by accident); (b) `adminProcedure` guards **read/list**
   admin endpoints too, not only writes.
 - **IDOR/BOLA** — any procedure taking an `id`/foreign key in input must scope
