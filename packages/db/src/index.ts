@@ -10,6 +10,12 @@ import type {
 
 export { db, pool } from './client.js';
 export { newUuidV7 } from './ids.js';
+export {
+  appendEvent,
+  payloadByteSize,
+  MAX_PAYLOAD_BYTES,
+  type AppendEventInput,
+} from './journal.js';
 export type { DB } from './types.js';
 export type {
   Account,

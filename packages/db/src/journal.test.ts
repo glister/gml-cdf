@@ -2,7 +2,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { sql } from 'kysely';
 import { db } from './client.js';
 import { newUuidV7 } from './ids.js';
+import { appendEvent, MAX_PAYLOAD_BYTES, type AppendEventInput } from './journal.js';
 import { createMigrator } from './migrator.js';
+import { makeUser } from './test-support.js';
 import type { NewDomainEvent } from './index.js';
 
 /**
@@ -168,5 +170,181 @@ describe('platform.domain_event append-only guard', () => {
       await sql`REVOKE USAGE ON SCHEMA platform FROM cdf_erasure`.execute(db);
       await sql`DROP ROLE IF EXISTS cdf_erasure`.execute(db);
     }
+  });
+});
+
+describe('appendEvent', () => {
+  it('appends inside the caller transaction with registry-driven defaults', async () => {
+    const streamId = newUuidV7();
+    const correlationId = newUuidV7();
+
+    const returned = await db.transaction().execute((trx) =>
+      appendEvent(trx, {
+        streamType: 'platform.demo',
+        streamId,
+        eventType: 'platform.demo.pinged',
+        payload: { note: 'hi' },
+        correlationId,
+      }),
+    );
+
+    // The returned row and the persisted row agree.
+    const found = await db
+      .selectFrom('platform.domain_event')
+      .selectAll()
+      .where('id', '=', returned.id)
+      .executeTakeFirstOrThrow();
+
+    expect(found).toMatchObject({
+      kind: 'domain', // default
+      stream_type: 'platform.demo',
+      stream_id: streamId,
+      event_type: 'platform.demo.pinged',
+      schema_version: 1, // from the registry, not the caller
+      correlation_id: correlationId,
+      causation_id: null,
+      actor_person_id: null,
+      published_at: null, // unrelayed
+    });
+    expect(found.payload).toMatchObject({ note: 'hi' });
+    expect(found.recorded_at).toBeTruthy();
+    expect(found.occurred_at).toBeTruthy(); // DB default now()
+  });
+
+  it('carries kind, actor, on-behalf, causation and a supplied occurred_at', async () => {
+    const occurredAt = new Date('2020-01-02T03:04:05.000Z');
+    const actorPersonId = newUuidV7();
+    const causationId = newUuidV7();
+
+    const row = await db.transaction().execute((trx) =>
+      appendEvent(trx, {
+        kind: 'security',
+        streamType: 'platform.demo',
+        streamId: newUuidV7(),
+        eventType: 'platform.demo.pinged',
+        payload: { note: 'audited' },
+        actorPersonId,
+        onBehalfOf: null,
+        correlationId: newUuidV7(),
+        causationId,
+        occurredAt,
+      }),
+    );
+
+    expect(row.kind).toBe('security');
+    expect(row.actor_person_id).toBe(actorPersonId);
+    expect(row.causation_id).toBe(causationId);
+    expect(new Date(row.occurred_at as unknown as string).toISOString()).toBe(
+      occurredAt.toISOString(),
+    );
+  });
+
+  it('rolls the event back with the state row on an injected failure (atomicity)', async () => {
+    const userId = newUuidV7();
+
+    await expect(
+      db.transaction().execute(async (trx) => {
+        await trx
+          .insertInto('user')
+          .values(makeUser({ id: userId }))
+          .execute();
+        await appendEvent(trx, {
+          streamType: 'user',
+          streamId: userId,
+          eventType: 'platform.demo.pinged',
+          payload: { note: 'boom' },
+          correlationId: newUuidV7(),
+        });
+        throw new Error('injected failure after append');
+      }),
+    ).rejects.toThrow('injected failure after append');
+
+    const user = await db
+      .selectFrom('user')
+      .select('id')
+      .where('id', '=', userId)
+      .executeTakeFirst();
+    expect(user).toBeUndefined();
+
+    const event = await db
+      .selectFrom('platform.domain_event')
+      .select('id')
+      .where('stream_id', '=', userId)
+      .executeTakeFirst();
+    expect(event).toBeUndefined();
+  });
+
+  it('rejects an unregistered event type before insert', async () => {
+    const streamId = newUuidV7();
+    await expect(
+      db.transaction().execute((trx) =>
+        appendEvent(trx, {
+          streamType: 'platform.demo',
+          streamId,
+          eventType: 'platform.nope.happened',
+          payload: {},
+          correlationId: newUuidV7(),
+        } as unknown as AppendEventInput),
+      ),
+    ).rejects.toThrow(/unknown event type/i);
+
+    const any = await db
+      .selectFrom('platform.domain_event')
+      .select('id')
+      .where('stream_id', '=', streamId)
+      .executeTakeFirst();
+    expect(any).toBeUndefined();
+  });
+
+  it('rejects a payload that fails its strict schema before insert', async () => {
+    const streamId = newUuidV7();
+    await expect(
+      db.transaction().execute((trx) =>
+        appendEvent(trx, {
+          streamType: 'platform.demo',
+          streamId,
+          eventType: 'platform.demo.pinged',
+          // Unknown key — strict schema rejects it (the PII lint).
+          payload: { note: 'ok', email: 'leak@example.com' },
+          correlationId: newUuidV7(),
+        } as unknown as AppendEventInput),
+      ),
+    ).rejects.toThrow();
+
+    const any = await db
+      .selectFrom('platform.domain_event')
+      .select('id')
+      .where('stream_id', '=', streamId)
+      .executeTakeFirst();
+    expect(any).toBeUndefined();
+  });
+
+  it('rejects an oversize payload before insert', async () => {
+    const streamId = newUuidV7();
+    // A valid demo payload (note ≤ 200) against a deliberately tiny cap — proves
+    // the byte guard fires independently of the schema's own length bound.
+    await expect(
+      db.transaction().execute((trx) =>
+        appendEvent(
+          trx,
+          {
+            streamType: 'platform.demo',
+            streamId,
+            eventType: 'platform.demo.pinged',
+            payload: { note: 'x'.repeat(200) },
+            correlationId: newUuidV7(),
+          },
+          32, // maxPayloadBytes
+        ),
+      ),
+    ).rejects.toThrow(/payload is \d+ bytes/i);
+
+    const any = await db
+      .selectFrom('platform.domain_event')
+      .select('id')
+      .where('stream_id', '=', streamId)
+      .executeTakeFirst();
+    expect(any).toBeUndefined();
+    expect(MAX_PAYLOAD_BYTES).toBe(65536);
   });
 });
