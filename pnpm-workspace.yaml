@@ -1,6 +1,11 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+# When the store path or node_modules layout changes, pnpm purges and re-links
+# node_modules. The dev container runs `pnpm install` with no TTY (compose
+# `command`), where the default confirmation would abort
+# (ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY). Reconcile without prompting.
+confirmModulesPurge: false
 supportedArchitectures:
   os: [linux, darwin]
   cpu: [x64]
