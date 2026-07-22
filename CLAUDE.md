@@ -210,6 +210,18 @@ you found it.**
   schemas are defined there; `apps/api` mounts the router, `apps/web` consumes the
   types. All auth checks live in procedures (`protectedProcedure`,
   `adminProcedure`). Web-side route guards are UX-only.
+- **Module schemas & boundaries (ADR-0008).** Every module table is
+  schema-qualified (`platform.*`, `hr.*`; Better Auth stays in `public`). **A
+  module never reads another module's tables** — cross-module access goes through
+  the other module's exported service surface, and cross-module notification goes
+  through domain events. Enforced two ways: ESLint blocks cross-module _imports_
+  (`routers/hr/**` ↔ `routers/platform/**`) and apps being imported by packages;
+  and — because ESLint cannot see SQL strings — **a `'platform.'`/`'hr.'` table
+  key used outside its own module's directory is a review-blocking violation.**
+- **`@repo/domain` is pure (ADR-0009).** All business-logic engines live there:
+  no I/O, DB, env, clock or randomness (time and ids are passed in). Purity is
+  lint-enforced. A tRPC procedure that grows business logic is a smell — move it
+  to `@repo/domain`.
 - **Package names use the `@repo/` scope.**
 
 ### Web data, tables and forms (hard rules)
@@ -302,7 +314,17 @@ stack; run `docker compose up` (native non-Docker `pnpm dev` is out of scope).
 
 ## Data
 
-- **Timestamps.** Data records carry `created_at`, `updated_at`, `deleted_at`.
+- **Foundations helpers & conventions (ADR-0011/0012/0004).** The shared table
+  substrate lives in `@repo/db/migration-helpers` (`withStandardColumns`,
+  `makeAppendOnly`, `attachUpdatedAtTrigger`) and `@repo/db` (`newUuidV7`). Before
+  designing any table, classify it against the **history-mechanism checklist**
+  and follow the append-only / soft-delete / UUIDv7 rules — all documented in
+  `packages/db/CLAUDE.md` ("Foundations conventions"). Primary keys are app-side
+  UUIDv7 (`uuid` columns, no DB default); append-only tables (journal, ledgers,
+  transitions, evidence) use `makeAppendOnly`.
+- **Timestamps.** Data records carry `created_at`, `updated_at`, `deleted_at`
+  (via `withStandardColumns`; `updated_at` is trigger-maintained, `deleted_at` is
+  soft-delete only — hard deletes are reserved for the plan 16 erasure process).
 - **ORM records.** Use Kysely `Selectable`/`Insertable`/`Updateable` wrappers — no
   inline anonymous record types.
 - **String-literal union columns.** Whenever a migration adds/changes a column

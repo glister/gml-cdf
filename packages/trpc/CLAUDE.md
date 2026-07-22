@@ -19,6 +19,18 @@ only mounts it.
   via `ctx.db`, helpers from `./lib`.
 - `src/lib/keyset.ts` — cursor/keyset pagination helpers.
 
+## Hard rule — module boundaries (ADR-0008)
+
+Routers are grouped by module under `src/routers/<module>/` (`platform`, `hr`).
+**A module never reads another module's tables.** Every table key is
+schema-qualified (`ctx.db.selectFrom('platform.person')`); cross-module access
+goes through the other module's exported service surface, and cross-module
+notification goes through domain events — never a direct cross-schema join.
+ESLint blocks cross-module _imports_, but it cannot see SQL strings: **a
+`'platform.'`/`'hr.'` table key used in a router outside its own module's
+directory is a review-blocking violation.** `ctx.db.withSchema(...)` is banned
+(it hides the boundary behind implicit resolution).
+
 ## Hard rule — server-side tables
 
 All filtering/sorting/searching happens in SQL via keyset/cursor pagination —

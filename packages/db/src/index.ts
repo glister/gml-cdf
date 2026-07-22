@@ -2,6 +2,7 @@ import type { Insertable, Selectable, Updateable } from 'kysely';
 import type { Account, Session, User, Verification } from './types.js';
 
 export { db, pool } from './client.js';
+export { newUuidV7 } from './ids.js';
 export type { DB } from './types.js';
 export type { Account, Session, User, Verification } from './types.js';
 
