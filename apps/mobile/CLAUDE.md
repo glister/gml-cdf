@@ -66,6 +66,17 @@ Use Tailwind classes via `className`. NativeWind uses Tailwind CSS **v3.4**
 (imported once in `src/app/_layout.tsx`); config: `tailwind.config.js`. Plain
 `StyleSheet` also works and coexists (the template screens use it).
 
+**Design system (mandatory):** every screen follows the **CD Fencing Design
+System** (root `CLAUDE.md`; Claude Design project read via DesignSync). The
+native visual spec is the `components/mobile/` group (PhoneFrame conventions,
+AppTabBar, NativeHeader, BottomCTA, SheetModal, capture flow, home
+launcher/sections) and the `ui_kits/hr-app-mobile` kit — reference designs
+authored as prompts 27–33 of `docs/design/component-library-prompts.md`, whose
+tokens, spacing, states and copy are translated to NativeWind here. Stock
+NativeWind defaults are not the design, and the web kits' mobile-width cards
+are responsive-web reference only. Never improvise styling the system already
+defines; flag genuine gaps.
+
 ## Testing
 
 `pnpm --filter @repo/mobile test` runs Vitest in a Node environment for logic

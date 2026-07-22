@@ -50,13 +50,24 @@ Read these in order. Do not skim; later steps depend on details in each.
      plan's web work.
 7. **If the run builds UI (web routes or mobile screens):** the design source
    of truth is the **CD Fencing Design System** Claude Design project (id
-   `23b5e330-deb3-4365-8d26-171f9fcd95b1` — see root `CLAUDE.md`). Via the
-   DesignSync tool, read its `SKILL.md` first, then the component groups
+   `23b5e330-deb3-4365-8d26-171f9fcd95b1` — see root `CLAUDE.md`). This step
+   is not optional and not skimmable: no UI code is written before it. Via
+   the DesignSync tool, read its `SKILL.md` first, then the component groups
    matching the plan's surfaces (`components/<domain>/…` — `.d.ts` prop
-   contracts + `.prompt.md` usage notes) and any matching screen kit
-   (`ui_kits/hr-app-*`; desktop **and** mobile card variants). Screens are
-   built to match the system; a component it lacks is flagged in the run
-   report, never silently improvised.
+   contracts + `.prompt.md` usage notes) and the matching screen kit:
+   - **Web scope:** the `ui_kits/hr-app-employee` / `hr-app-ops` /
+     `hr-app-lifecycle` kits, desktop **and** mobile-width card variants
+     (the mobile-width cards are the responsive-web reference).
+   - **Mobile scope:** the `components/mobile/` group (PhoneFrame, AppTabBar,
+     NativeHeader, BottomCTA, SheetModal, lifecycle/trust states, camera
+     capture, home launcher and sections, self-service profile) and the
+     `ui_kits/hr-app-mobile` kit — the native visual spec, authored as
+     prompts 27–33 of `docs/design/component-library-prompts.md`. Do **not**
+     substitute the web kits' mobile-width cards for native screens.
+
+   Screens are built to match the system; a component it lacks is flagged in
+   the run report, never silently improvised.
+
 8. **Root `CLAUDE.md`** and the `CLAUDE.md` of every package you will touch.
 
 ## 2. Preflight gate — verify before starting
@@ -160,8 +171,11 @@ Read these in order. Do not skim; later steps depend on details in each.
 **Mobile (`apps/mobile` — only when mobile items are in scope)**
 
 - Screens match the CD Fencing Design System (orientation step 7) — the
-  `ui_kits/hr-app-*` mobile card variants and `components/navigation`
-  mobile pieces (`MobileTabBar`, `appshell-mobile`) are the visual spec.
+  `components/mobile/` group and the `ui_kits/hr-app-mobile` kit are the
+  native visual spec: reference designs whose tokens, spacing, states and
+  copy translate to NativeWind. Stock NativeWind/Tailwind defaults are not
+  the design; the web kits' mobile-width cards are responsive-web reference
+  only, never the native spec.
 - Consume `mobile/01`'s rails; never rebuild them per-feature. Bespoke
   navigation, a second auth flow, a hand-rolled upload path, or a local
   variant of view-and-sign / signature pad / camera capture in a feature

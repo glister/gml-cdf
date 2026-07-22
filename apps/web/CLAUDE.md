@@ -26,6 +26,15 @@ prod Node server.
   dashboard), `_authenticated/` group + `dashboard`.
 - `src/env.client.ts` (import.meta.env) / `src/env.server.ts` (lazy, server-only).
 
+## UI — design system (mandatory)
+
+Every screen follows the **CD Fencing Design System** (root `CLAUDE.md`; Claude
+Design project read via DesignSync): tokens, component prop contracts
+(`components/<domain>/*.d.ts` + `.prompt.md`) and the `ui_kits/hr-app-*` screen
+kits are the visual spec for every route. shadcn/ui + Tailwind v4 are the build
+tools, but stock defaults are not the design — match the system, and flag
+genuine gaps rather than improvising styling or component patterns.
+
 ## Data, tables and forms
 
 The three TanStack libraries below are **mandatory** patterns (see the root
