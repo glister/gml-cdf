@@ -27,7 +27,9 @@ const SLOTS = {
   api: 1,
   worker: 2,
   postgres: 10,
-  postgresTest: 11,
+  // 11 reserved (was postgres-test). The test DB shares the dev Postgres
+  // instance as a separate `cdf_test` database on the same host port, so no
+  // dedicated test-datastore port is published.
   servicebus: 12,
   azurite: 13,
   mailpitSmtp: 20,
@@ -60,9 +62,10 @@ const FILES = {
     { key: 'PORT_WEB', kind: 'port', slot: 'web' },
     { key: 'PORT_API', kind: 'port', slot: 'api' },
     { key: 'PORT_WORKER', kind: 'port', slot: 'worker' },
-    { key: 'POSTGRES_PORT', kind: 'port', slot: 'postgresTest' },
+    // Test DB shares the dev Postgres instance (same host port, `cdf_test` db).
+    { key: 'POSTGRES_PORT', kind: 'port', slot: 'postgres' },
     { key: 'EMAIL_SMTP_PORT', kind: 'port', slot: 'mailpitSmtp' },
-    { key: 'DATABASE_URL', kind: 'url', slots: ['postgresTest'] },
+    { key: 'DATABASE_URL', kind: 'url', slots: ['postgres'] },
     { key: 'APP_URL', kind: 'url', slots: ['web'] },
     { key: 'BETTER_AUTH_URL', kind: 'url', slots: ['api'] },
     { key: 'BETTER_AUTH_TRUSTED_ORIGINS', kind: 'url', slots: ['web', 'api'] },

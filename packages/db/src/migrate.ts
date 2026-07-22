@@ -1,8 +1,5 @@
-import { promises as fs } from 'node:fs';
-import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { FileMigrationProvider, Migrator } from 'kysely/migration';
 import { db, pool } from './client.js';
+import { createMigrator } from './migrator.js';
 
 /**
  * Run all pending migrations to latest. Invoked via `pnpm migrate`
@@ -10,13 +7,7 @@ import { db, pool } from './client.js';
  * console since it must run without the built `@repo/logging` artifact present.
  */
 async function migrateToLatest(): Promise<void> {
-  const migrationFolder = path.join(path.dirname(fileURLToPath(import.meta.url)), 'migrations');
-
-  const migrator = new Migrator({
-    db,
-    provider: new FileMigrationProvider({ fs, path, migrationFolder }),
-  });
-
+  const migrator = createMigrator(db);
   const { error, results } = await migrator.migrateToLatest();
 
   for (const it of results ?? []) {
