@@ -117,12 +117,36 @@ services:
       - '${PORT_WORKER}:3002'
     volumes:
       - .:/app
-      # Anonymous volumes shadow the host node_modules (container has its own).
+      # The whole repo is bind-mounted above, but the host (macOS) and container
+      # (Linux) can't share a node_modules tree — native deps and pnpm's symlink
+      # layout diverge. Each anonymous volume below shadows a workspace's
+      # node_modules so the Linux container writes/reads its OWN copy instead of
+      # reusing macOS-built modules from the bind mount. Root also holds pnpm's
+      # `.pnpm` virtual store (symlinks into the CAS store from the named volume
+      # below — that's a separate concern from these dirs). One entry per
+      # workspace pnpm writes a real node_modules into.
       - /app/node_modules
-      - /app/apps/web/node_modules
       - /app/apps/api/node_modules
+      - /app/apps/mobile/node_modules
+      - /app/apps/web/node_modules
       - /app/apps/worker/node_modules
-      - pnpm_store:/root/.local/share/pnpm/store
+      - /app/packages/cloud-storage/node_modules
+      - /app/packages/db/node_modules
+      - /app/packages/domain/node_modules
+      - /app/packages/email/node_modules
+      - /app/packages/env/node_modules
+      - /app/packages/eslint-config/node_modules
+      - /app/packages/logging/node_modules
+      - /app/packages/service-bus/node_modules
+      - /app/packages/sms/node_modules
+      - /app/packages/trpc/node_modules
+      - /app/packages/vitest-config/node_modules
+      # pnpm's content-addressable store, on a container-owned named volume at the
+      # absolute path pinned in Dockerfile.dev (`store-dir /pnpm/store`). Persists
+      # across rebuilds and hard-links into the node_modules volumes above (same
+      # container filesystem) instead of leaking a project-local .pnpm-store onto
+      # the bind mount.
+      - pnpm_store:/pnpm/store
     depends_on:
       postgres:
         condition: service_healthy

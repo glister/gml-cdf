@@ -1,9 +1,22 @@
 # Development container. Source is bind-mounted by compose; dependencies are
 # installed at container start (`pnpm install && pnpm run dev`). node_modules are
-# anonymous volumes so the container keeps its own copy.
+# anonymous volumes so the container keeps its own Linux-built copy (see compose.yml).
 FROM node:24-slim
 
+# pnpm's global home + bin on PATH. Required so `pnpm config set --global` below
+# doesn't error that the global bin dir (`$PNPM_HOME/bin`) is not in PATH.
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME/bin:$PATH"
+
 RUN corepack enable
+
+# Pin pnpm's content-addressable store to an absolute path OUTSIDE the project
+# tree. The repo is bind-mounted at /app (macOS filesystem via virtiofs); without
+# this, pnpm can't hard-link from a store on a different filesystem and falls back
+# to a project-local /app/.pnpm-store that leaks onto the host bind mount. Backed
+# by the `pnpm_store` named volume in compose.yml so it persists across rebuilds
+# and hard-links cleanly into the (also container-owned) node_modules volumes.
+RUN pnpm config set store-dir /pnpm/store --global
 
 WORKDIR /app
 
