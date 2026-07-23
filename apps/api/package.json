@@ -19,6 +19,7 @@
     "@repo/db": "workspace:*",
     "@repo/email": "workspace:*",
     "@repo/env": "workspace:*",
+    "@repo/identity": "workspace:*",
     "@repo/logging": "workspace:*",
     "@repo/service-bus": "workspace:*",
     "@repo/sms": "workspace:*",

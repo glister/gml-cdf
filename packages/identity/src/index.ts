@@ -81,6 +81,27 @@ export async function listCredentials(db: Db, personId: string): Promise<Credent
   }));
 }
 
+/**
+ * Resolve a user's person plus the provider of its most recent credential, for
+ * the sign-in journal (`platform.person.signed_in`). Email-OTP users carry no
+ * `account` row, so the provider falls back to `'email-otp'`. Returns null for an
+ * unattached user. Lives here because it reads `account` (adapter boundary).
+ */
+export async function resolveSignInContext(
+  db: Db,
+  userId: string,
+): Promise<{ personId: string; providerId: string } | null> {
+  const row = await db
+    .selectFrom('user')
+    .leftJoin('account', 'account.user_id', 'user.id')
+    .select(['user.person_id as personId', 'account.provider_id as providerId'])
+    .where('user.id', '=', userId)
+    .orderBy('account.created_at', 'desc')
+    .executeTakeFirst();
+  if (!row?.personId) return null;
+  return { personId: row.personId, providerId: row.providerId ?? 'email-otp' };
+}
+
 // --- Person lifecycle (Entra databaseHook + admin procedures) ---------------
 
 /**

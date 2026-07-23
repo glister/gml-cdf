@@ -50,6 +50,9 @@ importers:
       '@repo/env':
         specifier: workspace:*
         version: link:../../packages/env
+      '@repo/identity':
+        specifier: workspace:*
+        version: link:../../packages/identity
       '@repo/logging':
         specifier: workspace:*
         version: link:../../packages/logging
@@ -885,9 +888,16 @@ importers:
 
   packages/vitest-config:
     dependencies:
+      pg:
+        specifier: ^8.13.0
+        version: 8.22.0
       vitest:
         specifier: ^3
         version: 3.2.6(@types/node@22.20.0)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.20.0
+        version: 8.20.0
 
 packages:
 
