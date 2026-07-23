@@ -47,3 +47,11 @@ export const userListItem = z.object({
   created_at: z.union([z.string(), z.date()]),
 });
 export type UserListItem = z.infer<typeof userListItem>;
+
+// --- platform.journal router (core plan 02 pilot slice) ---
+
+export const demoPingInput = z.object({ note: z.string().max(200) });
+export type DemoPingInput = z.infer<typeof demoPingInput>;
+
+export const demoPingOutput = z.object({ eventId: z.uuid() });
+export type DemoPingOutput = z.infer<typeof demoPingOutput>;

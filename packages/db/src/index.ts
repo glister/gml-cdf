@@ -16,6 +16,7 @@ export {
   MAX_PAYLOAD_BYTES,
   type AppendEventInput,
 } from './journal.js';
+export { relayOutboxBatch, recordConsumptionOnce } from './outbox.js';
 export type { DB } from './types.js';
 export type {
   Account,

@@ -1,8 +1,12 @@
+import type { Kysely } from 'kysely';
+import type { DB } from '@repo/db';
 import type { ServiceBusReceivedMessage } from '@repo/service-bus';
 import type { Logger } from 'winston';
 
 export interface HandlerContext {
   logger: Logger;
+  /** The shared Kysely instance; consumers dedupe and journal through it (§5.2). */
+  db: Kysely<DB>;
 }
 
 /**
