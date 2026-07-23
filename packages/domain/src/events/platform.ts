@@ -21,3 +21,168 @@ export const platformDemoPinged = defineEvent(
   1,
   z.strictObject({ note: z.string().max(200) }),
 );
+
+// --- Identity & person model (core plan 03, PL-045, kind='security') ---------
+//
+// Every identity lifecycle fact is a `kind='security'` event on
+// `stream_type='platform.person'`, `stream_id=<person id>`, emitted in the same
+// transaction as its state change (ADR-0010). `stream_id` and the actor are
+// carried by the envelope, so payloads never repeat them — they hold only the
+// *other* party, deltas, codes and the actor's audit rationale. Names, emails
+// and DoB never appear (ADR-0019); the enum literals are inlined (never imported
+// from `@repo/trpc` — circular) exactly as the CHECK constraints restate them.
+
+const relationshipTypeValues = z.enum([
+  'employee',
+  'agency',
+  'subcontractor',
+  'self_employed',
+  'external_org_employee',
+  'candidate',
+]);
+const profileStatusValues = z.enum([
+  'draft_shell',
+  'information_requested',
+  'information_submitted',
+  'pending_review',
+  'incomplete_rejected',
+  'approved_not_active',
+  'active',
+  'active_with_restrictions',
+  'inactive',
+  'leaver',
+  'reactivated',
+]);
+const flagTypeValues = z.enum(['do_not_rehire', 'safeguarding', 'safety', 'other']);
+const duplicateReasonValues = z.enum(['name_dob', 'agency_ref']);
+/** Admin-entered audit rationale — the actor's own words, never profile data. */
+const reason = z.string().min(1).max(2000);
+
+/** A person row was created — via invitation, first Entra SSO, or admin/migration. */
+export const platformPersonCreated = defineEvent(
+  'platform.person.created',
+  1,
+  z.strictObject({
+    relationshipType: relationshipTypeValues,
+    via: z.enum(['invitation', 'first_sso', 'admin', 'migration']),
+  }),
+);
+
+/** An invitation was issued/re-issued: a linked login was pre-provisioned (PL-036). */
+export const platformPersonInvited = defineEvent(
+  'platform.person.invited',
+  1,
+  z.strictObject({ reinvited: z.boolean() }),
+);
+
+/** A Better Auth account was attached to a user of this person (PL-035). */
+export const platformPersonCredentialLinked = defineEvent(
+  'platform.person.credential_linked',
+  1,
+  // The subject is hashed — the raw issuer subject is never journalled.
+  z.strictObject({ providerId: z.string().max(100), subjectHash: z.string().max(128) }),
+);
+
+/** A successful sign-in resolved to this person. */
+export const platformPersonSignedIn = defineEvent(
+  'platform.person.signed_in',
+  1,
+  z.strictObject({ providerId: z.string().max(100) }),
+);
+
+/** An advisory duplicate signal was raised against another person (PL-037). */
+export const platformPersonDuplicateFlagged = defineEvent(
+  'platform.person.duplicate_flagged',
+  1,
+  z.strictObject({
+    otherPersonId: z.uuid(),
+    reasons: z.array(duplicateReasonValues).min(1),
+  }),
+);
+
+/** An admin marked a pair "not a duplicate" — excluded from future signals. */
+export const platformPersonDuplicateDismissed = defineEvent(
+  'platform.person.duplicate_dismissed',
+  1,
+  z.strictObject({ otherPersonId: z.uuid() }),
+);
+
+/** A merge executed; this stream is the surviving person (PL-038). */
+export const platformPersonMerged = defineEvent(
+  'platform.person.merged',
+  1,
+  z.strictObject({
+    mergeId: z.uuid(),
+    supersededPersonId: z.uuid(),
+    movedUserIds: z.array(z.string().max(255)),
+    copiedFlagIds: z.array(z.uuid()),
+  }),
+);
+
+/** A merge was reversed (PL-039). */
+export const platformPersonMergeReversed = defineEvent(
+  'platform.person.merge_reversed',
+  1,
+  z.strictObject({ mergeId: z.uuid(), supersededPersonId: z.uuid() }),
+);
+
+/** A safeguarding flag was raised (PL-040). */
+export const platformPersonFlagAdded = defineEvent(
+  'platform.person.flag_added',
+  1,
+  z.strictObject({ flagId: z.uuid(), flagType: flagTypeValues }),
+);
+
+/** A safeguarding flag was explicitly closed out (PL-040). */
+export const platformPersonFlagEnded = defineEvent(
+  'platform.person.flag_ended',
+  1,
+  z.strictObject({ flagId: z.uuid(), flagType: flagTypeValues }),
+);
+
+/** The external access window was set or extended (PL-042). */
+export const platformPersonAccessExpirySet = defineEvent(
+  'platform.person.access_expiry_set',
+  1,
+  z.strictObject({ accessValidUntil: z.iso.datetime() }),
+);
+
+/** The expiry job disabled sign-in for this person (PL-042); plan 04 revokes grants. */
+export const platformPersonAccessExpired = defineEvent(
+  'platform.person.access_expired',
+  1,
+  z.strictObject({}),
+);
+
+/** An expired external was reactivated against the same person (PL-042). */
+export const platformPersonReengaged = defineEvent(
+  'platform.person.reengaged',
+  1,
+  z.strictObject({ accessValidUntil: z.iso.datetime() }),
+);
+
+/** A profile-status transition — the CORE-01 history record. */
+export const platformPersonProfileStatusChanged = defineEvent(
+  'platform.person.profile_status_changed',
+  1,
+  z.strictObject({ from: profileStatusValues, to: profileStatusValues, reason }),
+);
+
+/** A relationship transition, incl. non-employee→employee conversion (PL-046/047). */
+export const platformPersonRelationshipChanged = defineEvent(
+  'platform.person.relationship_changed',
+  1,
+  z.strictObject({
+    from: relationshipTypeValues,
+    to: relationshipTypeValues,
+    via: z.enum(['conversion', 'admin']),
+    reason,
+  }),
+);
+
+/** An authorised user created a person despite candidate matches (PL-047). */
+export const platformPersonPrecreationCheckOverridden = defineEvent(
+  'platform.person.precreation_check_overridden',
+  1,
+  z.strictObject({ candidatePersonIds: z.array(z.uuid()).min(1), reason }),
+);

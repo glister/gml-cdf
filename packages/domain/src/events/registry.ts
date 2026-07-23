@@ -1,6 +1,24 @@
 import type { z } from 'zod';
 import type { EventDefinition } from './define.js';
-import { platformDemoPinged } from './platform.js';
+import {
+  platformDemoPinged,
+  platformPersonAccessExpired,
+  platformPersonAccessExpirySet,
+  platformPersonCreated,
+  platformPersonCredentialLinked,
+  platformPersonDuplicateDismissed,
+  platformPersonDuplicateFlagged,
+  platformPersonFlagAdded,
+  platformPersonFlagEnded,
+  platformPersonInvited,
+  platformPersonMerged,
+  platformPersonMergeReversed,
+  platformPersonPrecreationCheckOverridden,
+  platformPersonProfileStatusChanged,
+  platformPersonReengaged,
+  platformPersonRelationshipChanged,
+  platformPersonSignedIn,
+} from './platform.js';
 
 /**
  * The registry of every event type the platform can emit — the single source for
@@ -15,6 +33,23 @@ import { platformDemoPinged } from './platform.js';
  */
 export const eventTypes = {
   'platform.demo.pinged': platformDemoPinged,
+  // Identity & person model (core plan 03, PL-045).
+  'platform.person.created': platformPersonCreated,
+  'platform.person.invited': platformPersonInvited,
+  'platform.person.credential_linked': platformPersonCredentialLinked,
+  'platform.person.signed_in': platformPersonSignedIn,
+  'platform.person.duplicate_flagged': platformPersonDuplicateFlagged,
+  'platform.person.duplicate_dismissed': platformPersonDuplicateDismissed,
+  'platform.person.merged': platformPersonMerged,
+  'platform.person.merge_reversed': platformPersonMergeReversed,
+  'platform.person.flag_added': platformPersonFlagAdded,
+  'platform.person.flag_ended': platformPersonFlagEnded,
+  'platform.person.access_expiry_set': platformPersonAccessExpirySet,
+  'platform.person.access_expired': platformPersonAccessExpired,
+  'platform.person.reengaged': platformPersonReengaged,
+  'platform.person.profile_status_changed': platformPersonProfileStatusChanged,
+  'platform.person.relationship_changed': platformPersonRelationshipChanged,
+  'platform.person.precreation_check_overridden': platformPersonPrecreationCheckOverridden,
 } as const;
 
 /** The union of all registered event-type names. */

@@ -9,6 +9,13 @@ import type { NewSession, NewUser } from './index.js';
  * Postgres. Imported as `@repo/db/test-support`.
  */
 
+// Re-exported so cross-package integration suites can migrate `cdf_test` to
+// latest in `beforeAll` (`createMigrator(db).migrateToLatest()` — idempotent)
+// without reaching into `@repo/db` internals. Packages that call this must inline
+// `kysely` in their vitest config so `FileMigrationProvider` loads migrations
+// through Vite (see `packages/db/vitest.config.ts`).
+export { createMigrator } from './migrator.js';
+
 export function makeUser(overrides: Partial<NewUser> = {}): NewUser {
   return {
     id: faker.string.uuid(),
@@ -34,11 +41,19 @@ export function makeSession(userId: string, overrides: Partial<NewSession> = {})
  * isolation. Use in `beforeEach` for integration tests.
  *
  * Append-only tables (journal, ledgers, transitions, signature evidence —
- * ADR-0011) are deliberately **skipped**: they `REVOKE TRUNCATE FROM PUBLIC`, so
- * TRUNCATE would raise. They are discovered by the presence of the
- * `platform.append_only_guard` trigger. Tests that touch append-only tables use
- * per-test scratch rows (and, where they create their own scratch tables, drop
- * them in teardown) rather than relying on `truncateAll`.
+ * ADR-0011) are deliberately **not listed**: they `REVOKE TRUNCATE FROM PUBLIC`
+ * and carry a `BEFORE TRUNCATE` guard, so a direct TRUNCATE would raise. They are
+ * discovered by the presence of the `platform.append_only_guard` trigger.
+ *
+ * But a truncatable parent can have append-only children with FKs to it (e.g.
+ * `platform.person` → the append-only `person_merge`/`person_flag`), and
+ * `TRUNCATE … CASCADE` fires those children's `BEFORE TRUNCATE` guards regardless
+ * of row count. So the whole reset runs inside one transaction (to pin a single
+ * connection) with `SET LOCAL session_replication_role = 'replica'`, which
+ * suppresses user triggers for the statement — letting the cascade wipe those
+ * children silently. `SET LOCAL` resets automatically at COMMIT. Append-only
+ * tables with no FK path from a listed table (the journal) are untouched; tests
+ * that accumulate there use per-test scratch rows.
  */
 export async function truncateAll(db: Kysely<DB>): Promise<void> {
   const rows = await sql<{ qualified: string }>`
@@ -64,5 +79,9 @@ export async function truncateAll(db: Kysely<DB>): Promise<void> {
   const targets = rows.rows.map((r) => r.qualified);
   if (targets.length === 0) return;
 
-  await sql`TRUNCATE TABLE ${sql.raw(targets.join(', '))} RESTART IDENTITY CASCADE`.execute(db);
+  await db.transaction().execute(async (trx) => {
+    // Superuser-only; test-role connections are superusers (assumption A3).
+    await sql`SET LOCAL session_replication_role = 'replica'`.execute(trx);
+    await sql`TRUNCATE TABLE ${sql.raw(targets.join(', '))} RESTART IDENTITY CASCADE`.execute(trx);
+  });
 }
