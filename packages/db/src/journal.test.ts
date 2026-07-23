@@ -347,4 +347,49 @@ describe('appendEvent', () => {
     expect(any).toBeUndefined();
     expect(MAX_PAYLOAD_BYTES).toBe(65536);
   });
+
+  it("returns each stream's activity slice in order, exactly as appended (event-ledger)", async () => {
+    const streamA = newUuidV7();
+    const streamB = newUuidV7();
+    const correlationId = newUuidV7();
+    const aIds: string[] = [];
+    const bIds: string[] = [];
+
+    // Interleave appends across two streams.
+    for (let i = 0; i < 5; i++) {
+      const a = await db.transaction().execute((trx) =>
+        appendEvent(trx, {
+          streamType: 'platform.demo',
+          streamId: streamA,
+          eventType: 'platform.demo.pinged',
+          payload: { note: `a${i}` },
+          correlationId,
+        }),
+      );
+      aIds.push(a.id);
+      const b = await db.transaction().execute((trx) =>
+        appendEvent(trx, {
+          streamType: 'platform.demo',
+          streamId: streamB,
+          eventType: 'platform.demo.pinged',
+          payload: { note: `b${i}` },
+          correlationId,
+        }),
+      );
+      bIds.push(b.id);
+    }
+
+    const slice = (streamId: string) =>
+      db
+        .selectFrom('platform.domain_event')
+        .select('id')
+        .where('stream_type', '=', 'platform.demo')
+        .where('stream_id', '=', streamId)
+        .orderBy('recorded_at')
+        .orderBy('id')
+        .execute();
+
+    expect((await slice(streamA)).map((r) => r.id)).toEqual(aIds); // in order, nothing lost
+    expect((await slice(streamB)).map((r) => r.id)).toEqual(bIds);
+  });
 });
