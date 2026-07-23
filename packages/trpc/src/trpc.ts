@@ -51,6 +51,18 @@ export interface TRPCContext {
   email: EmailSender;
   sms: SmsSender;
   rateLimit: RateLimiter;
+  /**
+   * Correlation id for this request (core plan 02, ADR-0010). Every event a
+   * request appends via `appendEvent` carries it, so a user action and its
+   * cascade share one id. Accepted from a valid `x-correlation-id` header, else
+   * minted per request.
+   */
+  correlationId: string;
+  /**
+   * The acting person's id, or `null` for system/service calls. Resolved from
+   * the session user's `person_id` link once plan 03 lands; `null` until then.
+   */
+  actorPersonId: string | null;
 }
 
 const t = initTRPC.context<TRPCContext>().create();

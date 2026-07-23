@@ -50,20 +50,22 @@ describe('foundations migrations', () => {
     expect(await platformFunctionExists('set_updated_at')).toBe(true);
   });
 
-  it('round-trips the two foundation migrations down and back up cleanly', async () => {
+  it('round-trips the app-schema migrations down to the auth-tables boundary and back up cleanly', async () => {
     const migrator = createMigrator(db);
 
-    const down1 = await migrator.migrateDown();
-    expect(down1.error).toBeUndefined();
-    expect(down1.results?.[0]?.migrationName).toBe('20260707T100100-convention-functions');
+    // Roll back everything above the auth-tables migration — module schemas,
+    // the convention functions, and every plan's migrations stacked on top
+    // (plan 02's domain-event journal and beyond). Targeting a fixed boundary
+    // keeps this test position-independent: a new migration on top doesn't
+    // break it. auth-tables (in `public`) stays applied.
+    const down = await migrator.migrateTo('20260101T000000-auth-tables');
+    expect(down.error).toBeUndefined();
 
-    const down2 = await migrator.migrateDown();
-    expect(down2.error).toBeUndefined();
-    expect(down2.results?.[0]?.migrationName).toBe('20260707T100000-module-schemas');
-
-    // Both are gone (auth-tables in public remains untouched below the two).
+    // The foundation objects are gone once their migrations are rolled back.
     expect(await schemaExists('platform')).toBe(false);
     expect(await schemaExists('hr')).toBe(false);
+    expect(await platformFunctionExists('append_only_guard')).toBe(false);
+    expect(await platformFunctionExists('set_updated_at')).toBe(false);
 
     const up = await migrator.migrateToLatest();
     expect(up.error).toBeUndefined();

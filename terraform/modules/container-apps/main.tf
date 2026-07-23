@@ -204,7 +204,10 @@ resource "azurerm_container_app" "worker" {
   }
 
   template {
-    min_replicas = 0
+    # The outbox relay (core plan 02 §5.2) is a poller, not a queue-triggered
+    # handler, so the worker cannot scale to zero — it must always be running to
+    # publish journalled events. KEDA still scales it UP on subscription depth.
+    min_replicas = 1
     max_replicas = var.max_replicas
 
     container {

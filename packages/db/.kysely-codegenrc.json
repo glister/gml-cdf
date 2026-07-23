@@ -3,7 +3,8 @@
   "camelCase": false,
   "overrides": {
     "columns": {
-      "user.role": "Generated<'admin' | 'agent'>"
+      "user.role": "Generated<'admin' | 'agent'>",
+      "platform.domain_event.kind": "Generated<'domain' | 'admin' | 'security'>"
     }
   }
 }

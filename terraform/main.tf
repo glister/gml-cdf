@@ -45,7 +45,17 @@ module "service_bus" {
   environment         = var.environment
   resource_group_name = azurerm_resource_group.this.name
   location            = azurerm_resource_group.this.location
-  tags                = local.tags
+
+  # The domain-event journal relay (core plan 02 §5.2) publishes to the
+  # domain-events topic; Phase 1 has the single pilot-demo subscription (later
+  # plans/modules add their own). The hello-world queue stays until plan 07
+  # replaces it with the effects queue. These replace the module's placeholder
+  # events/events-sub defaults.
+  queues        = ["hello-world"]
+  topics        = ["domain-events"]
+  subscriptions = { "pilot-demo" = "domain-events" }
+
+  tags = local.tags
 }
 
 module "postgres" {

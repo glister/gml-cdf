@@ -9,6 +9,18 @@ export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
   ? ColumnType<S, I | undefined, U>
   : ColumnType<T, T | undefined, T>;
 
+export type Json = JsonValue;
+
+export type JsonArray = JsonValue[];
+
+export type JsonObject = {
+  [x: string]: JsonValue | undefined;
+};
+
+export type JsonPrimitive = boolean | number | string | null;
+
+export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
+
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
 export interface Account {
@@ -25,6 +37,29 @@ export interface Account {
   scope: string | null;
   updated_at: Generated<Timestamp>;
   user_id: string;
+}
+
+export interface PlatformDomainEvent {
+  actor_person_id: string | null;
+  causation_id: string | null;
+  correlation_id: string;
+  event_type: string;
+  id: string;
+  kind: Generated<"domain" | "admin" | "security">;
+  occurred_at: Generated<Timestamp>;
+  on_behalf_of: string | null;
+  payload: Generated<Json>;
+  published_at: Timestamp | null;
+  recorded_at: Generated<Timestamp>;
+  schema_version: number;
+  stream_id: string;
+  stream_type: string;
+}
+
+export interface PlatformEventConsumption {
+  consumed_at: Generated<Timestamp>;
+  consumer: string;
+  event_id: string;
 }
 
 export interface Session {
@@ -64,6 +99,8 @@ export interface Verification {
 
 export interface DB {
   account: Account;
+  "platform.domain_event": PlatformDomainEvent;
+  "platform.event_consumption": PlatformEventConsumption;
   session: Session;
   user: User;
   verification: Verification;

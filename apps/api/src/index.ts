@@ -4,7 +4,7 @@ import { trpcServer } from '@hono/trpc-server';
 import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { requestId } from 'hono/request-id';
-import { db } from '@repo/db';
+import { db, newUuidV7 } from '@repo/db';
 import { createCloudStorage } from '@repo/cloud-storage';
 import { createEmailClient } from '@repo/email';
 import { createSmsClient } from '@repo/sms';
@@ -56,6 +56,9 @@ function createRateLimiter(limit = 100, windowMs = 60_000): RateLimiter {
 }
 const rateLimit = createRateLimiter();
 
+/** Any RFC-4122 UUID shape (accepts an inbound correlation id from a caller). */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const app = new Hono<{ Variables: Variables }>();
 
 app.use('*', requestId());
@@ -99,12 +102,19 @@ function buildContext(c: Context<{ Variables: Variables }>): TRPCContext {
   const session = c.get('session');
   // The admin plugin adds `role` to the user; it isn't on the base inferred type.
   const role = (user as { role?: string | null } | null)?.role === 'admin' ? 'admin' : 'agent';
+  // Accept a caller-supplied correlation id when it is a valid UUID, else mint
+  // one per request (core plan 02). actor_person_id is null until plan 03 links
+  // the session user to a person.
+  const inbound = c.req.header('x-correlation-id');
+  const correlationId = inbound && UUID_RE.test(inbound) ? inbound : newUuidV7();
   return {
     db,
     logger,
     email,
     sms,
     rateLimit,
+    correlationId,
+    actorPersonId: null,
     user: user
       ? {
           id: user.id,

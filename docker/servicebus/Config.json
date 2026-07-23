@@ -18,16 +18,16 @@
         ],
         "Topics": [
           {
-            "Name": "events",
+            "Name": "domain-events",
             "Properties": {
               "DefaultMessageTimeToLive": "PT1H",
               "RequiresDuplicateDetection": false
             },
             "Subscriptions": [
               {
-                "Name": "events-sub",
+                "Name": "pilot-demo",
                 "Properties": {
-                  "DeadLetteringOnMessageExpiration": false,
+                  "DeadLetteringOnMessageExpiration": true,
                   "DefaultMessageTimeToLive": "PT1H",
                   "LockDuration": "PT1M",
                   "MaxDeliveryCount": 10,

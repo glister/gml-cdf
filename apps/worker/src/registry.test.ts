@@ -4,7 +4,10 @@ import type { ServiceBusReceivedMessage } from '@repo/service-bus';
 import { type Completable, handleMessage } from './registry.js';
 import type { HandlerContext } from './types.js';
 
-const ctx: HandlerContext = { logger: createLogger({ service: 'worker-test', level: 'silent' }) };
+const ctx: HandlerContext = {
+  logger: createLogger({ service: 'worker-test', level: 'silent' }),
+  db: {} as HandlerContext['db'], // these tests exercise ack/nack, not the DB
+};
 const message = { body: { hello: 'world' } } as ServiceBusReceivedMessage;
 
 function fakeReceiver(): Completable & {

@@ -1,3 +1,5 @@
+import type { Kysely } from 'kysely';
+import type { DB } from '@repo/db';
 import type { ServiceBus, ServiceBusReceivedMessage, ServiceBusReceiver } from '@repo/service-bus';
 import type { Logger } from 'winston';
 import { handlers } from './handlers/index.js';
@@ -31,8 +33,12 @@ export async function handleMessage(
 }
 
 /** Open a receiver per registration and start pumping messages. */
-export function startHandlers(sb: ServiceBus, logger: Logger): ServiceBusReceiver[] {
-  const ctx: HandlerContext = { logger };
+export function startHandlers(
+  sb: ServiceBus,
+  logger: Logger,
+  db: Kysely<DB>,
+): ServiceBusReceiver[] {
+  const ctx: HandlerContext = { logger, db };
   const receivers: ServiceBusReceiver[] = [];
 
   for (const registration of handlers) {

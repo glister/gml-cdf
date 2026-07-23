@@ -335,6 +335,31 @@ stack; run `docker compose up` (native non-Docker `pnpm dev` is out of scope).
   Inline the literals — never import from `@repo/trpc` (circular). Then regenerate
   via `pnpm --filter @repo/db migrate:generate`.
 
+### Domain events (ADR-0010) — the event rail
+
+Every state change that constitutes a business fact appends an immutable event to
+the `platform.domain_event` journal **in the same transaction** as the state
+write, via `appendEvent(trx, …)` from `@repo/db` (core plan 02). This is the
+audit trail, the module-decoupling rail (relayed to the `domain-events` Service
+Bus topic), and the reporting feed — all at once. Two review-blocking rules:
+
+- **A state change without its event is a bug.** If a mutation is a business
+  fact, it calls `appendEvent` on the same `Transaction<DB>` — the helper accepts
+  only a transaction, so "same transaction" is structural. No generic
+  `journal.append` tRPC procedure exists (it would sever atomicity); appends
+  happen server-side next to their state change.
+- **A payload that copies profile data is a bug** (ADR-0019). Event payloads are
+  PII-minimal: surrogate IDs, deltas and decisions — never names, emails, or
+  special-category detail. Event types are registered in `@repo/domain`
+  (`defineEvent`, namespaced past-tense names per ADR-0021) with a **strict** Zod
+  payload schema and a `schemaVersion`; strictness is what stops a profile row
+  being spread into a payload.
+
+Consumers of the `domain-events` topic are **idempotent**: use `consumeOnce(db,
+consumer, eventId, fn)` (`apps/worker/src/lib`) — delivery is at-least-once, so a
+duplicate must be a no-op. Follow-on events a consumer appends carry
+`causationId = eventId` and the original `correlationId`.
+
 ### Data tables (filtering, sorting, searching)
 
 **Filtering, sorting, and searching of paginated tables MUST always happen
