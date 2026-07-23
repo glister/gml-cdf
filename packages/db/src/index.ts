@@ -3,6 +3,9 @@ import type {
   Account,
   PlatformDomainEvent,
   PlatformEventConsumption,
+  PlatformPerson,
+  PlatformPersonFlag,
+  PlatformPersonMerge,
   Session,
   User,
   Verification,
@@ -22,6 +25,9 @@ export type {
   Account,
   PlatformDomainEvent,
   PlatformEventConsumption,
+  PlatformPerson,
+  PlatformPersonFlag,
+  PlatformPersonMerge,
   Session,
   User,
   Verification,
@@ -52,3 +58,16 @@ export type DomainEventUpdate = Updateable<PlatformDomainEvent>;
 
 export type EventConsumptionRecord = Selectable<PlatformEventConsumption>;
 export type NewEventConsumption = Insertable<PlatformEventConsumption>;
+
+// Identity & person model (core plan 03, ADR-0014).
+export type PersonRecord = Selectable<PlatformPerson>;
+export type NewPerson = Insertable<PlatformPerson>;
+export type PersonUpdate = Updateable<PlatformPerson>;
+
+export type PersonMergeRecord = Selectable<PlatformPersonMerge>;
+export type NewPersonMerge = Insertable<PlatformPersonMerge>;
+export type PersonMergeUpdate = Updateable<PlatformPersonMerge>;
+
+export type PersonFlagRecord = Selectable<PlatformPersonFlag>;
+export type NewPersonFlag = Insertable<PlatformPersonFlag>;
+export type PersonFlagUpdate = Updateable<PlatformPersonFlag>;
