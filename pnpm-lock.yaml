@@ -404,6 +404,9 @@ importers:
       '@repo/env':
         specifier: workspace:*
         version: link:../../packages/env
+      '@repo/identity':
+        specifier: workspace:*
+        version: link:../../packages/identity
       '@repo/logging':
         specifier: workspace:*
         version: link:../../packages/logging

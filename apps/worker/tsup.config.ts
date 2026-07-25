@@ -1,7 +1,9 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: ['src/index.ts', 'src/instrument.ts'],
+  // publish-sweeps is the entrypoint the scheduled ACA Job runs (core plan 03);
+  // kept under src/ so all entries share the base and flatten to dist/*.js.
+  entry: ['src/index.ts', 'src/instrument.ts', 'src/publish-sweeps.ts'],
   format: ['esm'],
   target: 'node24',
   clean: true,

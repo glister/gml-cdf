@@ -72,6 +72,32 @@ const moduleBoundaries = [
     },
   },
   {
+    // ADR-0014 adapter boundary: only `@repo/identity` reads/writes the Better
+    // Auth framework tables (`user`/`account`/`session`). This is a best-effort
+    // tripwire on the common Kysely accessors — like the platform/hr table
+    // boundary, full enforcement is review (ESLint cannot see every SQL string).
+    // Scoped to the app + router layers, so `@repo/identity` (the adapter) and
+    // `@repo/db` (the data layer, seeds, test fixtures) are naturally exempt.
+    files: ['apps/**/*.{ts,tsx}', 'packages/trpc/**/*.{ts,tsx}'],
+    ignores: [
+      // The `users` example router predates ADR-0014; migrate it to the adapter.
+      'packages/trpc/src/routers/users.ts',
+      // Tests seed framework tables directly to build scenarios.
+      '**/*.test.{ts,tsx}',
+    ],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            'CallExpression[callee.property.name=/^(selectFrom|insertInto|updateTable|deleteFrom)$/] > Literal[value=/^(user|account|session)( |$)/]',
+          message:
+            'Better Auth tables (user/account/session) are reached only through @repo/identity — ADR-0014',
+        },
+      ],
+    },
+  },
+  {
     // @repo/domain is pure (ADR-0009): no I/O, DB, env, clock or randomness.
     files: ['packages/domain/**/*.ts'],
     rules: {

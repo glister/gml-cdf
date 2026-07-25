@@ -252,6 +252,59 @@ resource "azurerm_container_app" "worker" {
   }
 }
 
+# IDENTITY SWEEPS — scheduled ACA Job posting the daily sweep commands onto the
+# `effects` queue (core plan 03 §5.2). The worker's effects handler dispatches
+# each by subject. A placeholder scheduler until plan 07's scheduled_action
+# mechanism owns the enqueue side; runs the worker image's publish-sweeps entry.
+# ---------------------------------------------------------------------------
+resource "azurerm_container_app_job" "identity_sweeps" {
+  name                         = "${var.project}-${var.environment}-identity-sweeps"
+  container_app_environment_id = azurerm_container_app_environment.this.id
+  resource_group_name          = var.resource_group_name
+  location                     = var.location
+  tags                         = var.tags
+
+  replica_timeout_in_seconds = 300
+  replica_retry_limit        = 1
+
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [var.identity_id]
+  }
+
+  registry {
+    server   = var.acr_login_server
+    identity = var.identity_id
+  }
+
+  secret {
+    name                = "service-bus-connection-string"
+    key_vault_secret_id = var.secret_ids["service-bus-connection-string"]
+    identity            = var.identity_id
+  }
+
+  schedule_trigger_config {
+    cron_expression          = "0 2 * * *" # daily at 02:00 UTC
+    parallelism              = 1
+    replica_completion_count = 1
+  }
+
+  template {
+    container {
+      name    = "identity-sweeps"
+      image   = "${var.acr_login_server}/worker:${var.image_tag}"
+      cpu     = 0.25
+      memory  = "0.5Gi"
+      command = ["node", "dist/publish-sweeps.js"]
+
+      env {
+        name        = "SERVICE_BUS_CONNECTION_STRING"
+        secret_name = "service-bus-connection-string"
+      }
+    }
+  }
+}
+
 output "api_fqdn" {
   value = azurerm_container_app.api.ingress[0].fqdn
 }
