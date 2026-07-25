@@ -170,7 +170,7 @@ export async function attachUserToPerson(
 export async function provisionInvitedUser(
   trx: Trx,
   { personId, email }: { personId: string; email: string },
-): Promise<{ userId: string }> {
+): Promise<{ userId: string; reused: boolean }> {
   const normalisedEmail = email.trim().toLowerCase();
   const existing = await trx
     .selectFrom('user')
@@ -182,7 +182,7 @@ export async function provisionInvitedUser(
     if (existing.person_id !== personId) {
       await attachUserToPerson(trx, existing.id, personId);
     }
-    return { userId: existing.id };
+    return { userId: existing.id, reused: true };
   }
 
   const userId = newUuidV7();
@@ -196,7 +196,7 @@ export async function provisionInvitedUser(
       person_id: personId,
     })
     .execute();
-  return { userId };
+  return { userId, reused: false };
 }
 
 // --- Merge / unmerge support — user.person_id is the ONLY column touched -----
