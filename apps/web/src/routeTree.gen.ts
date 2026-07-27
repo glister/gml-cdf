@@ -13,6 +13,8 @@ import { Route as LoginRouteImport } from './routes/login';
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated';
 import { Route as IndexRouteImport } from './routes/index';
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard';
+import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin';
+import { Route as AuthenticatedAdminPeopleIndexRouteImport } from './routes/_authenticated/admin/people/index';
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -33,35 +35,54 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRoute,
 } as any);
+const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
+const AuthenticatedAdminPeopleIndexRoute =
+  AuthenticatedAdminPeopleIndexRouteImport.update({
+    id: '/people/',
+    path: '/people/',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any);
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute;
   '/login': typeof LoginRoute;
+  '/admin': typeof AuthenticatedAdminRouteWithChildren;
   '/dashboard': typeof AuthenticatedDashboardRoute;
+  '/admin/people/': typeof AuthenticatedAdminPeopleIndexRoute;
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute;
   '/login': typeof LoginRoute;
+  '/admin': typeof AuthenticatedAdminRouteWithChildren;
   '/dashboard': typeof AuthenticatedDashboardRoute;
+  '/admin/people': typeof AuthenticatedAdminPeopleIndexRoute;
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport;
   '/': typeof IndexRoute;
   '/_authenticated': typeof AuthenticatedRouteWithChildren;
   '/login': typeof LoginRoute;
+  '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren;
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute;
+  '/_authenticated/admin/people/': typeof AuthenticatedAdminPeopleIndexRoute;
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
-  fullPaths: '/' | '/login' | '/dashboard';
+  fullPaths: '/' | '/login' | '/admin' | '/dashboard' | '/admin/people/';
   fileRoutesByTo: FileRoutesByTo;
-  to: '/' | '/login' | '/dashboard';
+  to: '/' | '/login' | '/admin' | '/dashboard' | '/admin/people';
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/login'
-    | '/_authenticated/dashboard';
+    | '/_authenticated/admin'
+    | '/_authenticated/dashboard'
+    | '/_authenticated/admin/people/';
   fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
@@ -100,14 +121,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport;
       parentRoute: typeof AuthenticatedRoute;
     };
+    '/_authenticated/admin': {
+      id: '/_authenticated/admin';
+      path: '/admin';
+      fullPath: '/admin';
+      preLoaderRoute: typeof AuthenticatedAdminRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
+    '/_authenticated/admin/people/': {
+      id: '/_authenticated/admin/people/';
+      path: '/people';
+      fullPath: '/admin/people/';
+      preLoaderRoute: typeof AuthenticatedAdminPeopleIndexRouteImport;
+      parentRoute: typeof AuthenticatedAdminRoute;
+    };
   }
 }
 
+interface AuthenticatedAdminRouteChildren {
+  AuthenticatedAdminPeopleIndexRoute: typeof AuthenticatedAdminPeopleIndexRoute;
+}
+
+const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
+  AuthenticatedAdminPeopleIndexRoute: AuthenticatedAdminPeopleIndexRoute,
+};
+
+const AuthenticatedAdminRouteWithChildren =
+  AuthenticatedAdminRoute._addFileChildren(AuthenticatedAdminRouteChildren);
+
 interface AuthenticatedRouteChildren {
+  AuthenticatedAdminRoute: typeof AuthenticatedAdminRouteWithChildren;
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute;
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedAdminRoute: AuthenticatedAdminRouteWithChildren,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
 };
 

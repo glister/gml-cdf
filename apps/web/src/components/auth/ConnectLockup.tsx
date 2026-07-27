@@ -8,17 +8,23 @@ import { cn } from '~/lib/utils';
    sizing collapses to the sm/md/lg actually used). */
 
 const ICON = {
+  xs: 'size-9 rounded-[10px]',
   sm: 'size-11 rounded-[11px]',
   md: 'size-14 rounded-[13px]',
   lg: 'size-[72px] rounded-[17px]',
 };
-const WORDMARK = { sm: 'text-[37px]', md: 'text-[47px]', lg: 'text-[60px]' };
-const STRAPLINE = { sm: 'mt-2 text-[10px]', md: 'mt-2.5 text-[13px]', lg: 'mt-3 text-[17px]' };
+const WORDMARK = { xs: 'text-[21px]', sm: 'text-[37px]', md: 'text-[47px]', lg: 'text-[60px]' };
+const STRAPLINE = {
+  xs: 'mt-1.5 text-[8px]',
+  sm: 'mt-2 text-[10px]',
+  md: 'mt-2.5 text-[13px]',
+  lg: 'mt-3 text-[17px]',
+};
 
 const lockupVariants = cva('inline-flex items-center font-sans', {
   variants: {
     orientation: { horizontal: 'flex-row', stacked: 'flex-col' },
-    size: { sm: 'gap-3.5', md: 'gap-5', lg: 'gap-6' },
+    size: { xs: 'gap-2.5', sm: 'gap-3.5', md: 'gap-5', lg: 'gap-6' },
   },
   defaultVariants: { orientation: 'horizontal', size: 'md' },
 });
@@ -78,7 +84,7 @@ export function ConnectLockup({
       >
         <span
           className={cn(
-            'font-extrabold leading-none tracking-tight',
+            'whitespace-nowrap font-extrabold leading-none tracking-tight',
             WORDMARK[s],
             light ? 'text-white' : 'text-strong',
           )}
@@ -88,7 +94,7 @@ export function ConnectLockup({
         {showStrapline && (
           <span
             className={cn(
-              'font-bold uppercase leading-none tracking-[0.16em]',
+              'whitespace-nowrap font-bold uppercase leading-none tracking-[0.16em]',
               STRAPLINE[s],
               light ? 'text-green-400' : 'text-brand',
             )}
