@@ -15,6 +15,9 @@ import { Route as IndexRouteImport } from './routes/index';
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard';
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin';
 import { Route as AuthenticatedAdminPeopleIndexRouteImport } from './routes/_authenticated/admin/people/index';
+import { Route as AuthenticatedAdminPeopleNewRouteImport } from './routes/_authenticated/admin/people/new';
+import { Route as AuthenticatedAdminPeopleDuplicatesRouteImport } from './routes/_authenticated/admin/people/duplicates';
+import { Route as AuthenticatedAdminPeoplePersonIdRouteImport } from './routes/_authenticated/admin/people/$personId';
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -46,12 +49,33 @@ const AuthenticatedAdminPeopleIndexRoute =
     path: '/people/',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any);
+const AuthenticatedAdminPeopleNewRoute =
+  AuthenticatedAdminPeopleNewRouteImport.update({
+    id: '/people/new',
+    path: '/people/new',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any);
+const AuthenticatedAdminPeopleDuplicatesRoute =
+  AuthenticatedAdminPeopleDuplicatesRouteImport.update({
+    id: '/people/duplicates',
+    path: '/people/duplicates',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any);
+const AuthenticatedAdminPeoplePersonIdRoute =
+  AuthenticatedAdminPeoplePersonIdRouteImport.update({
+    id: '/people/$personId',
+    path: '/people/$personId',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any);
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute;
   '/login': typeof LoginRoute;
   '/admin': typeof AuthenticatedAdminRouteWithChildren;
   '/dashboard': typeof AuthenticatedDashboardRoute;
+  '/admin/people/$personId': typeof AuthenticatedAdminPeoplePersonIdRoute;
+  '/admin/people/duplicates': typeof AuthenticatedAdminPeopleDuplicatesRoute;
+  '/admin/people/new': typeof AuthenticatedAdminPeopleNewRoute;
   '/admin/people/': typeof AuthenticatedAdminPeopleIndexRoute;
 }
 export interface FileRoutesByTo {
@@ -59,6 +83,9 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute;
   '/admin': typeof AuthenticatedAdminRouteWithChildren;
   '/dashboard': typeof AuthenticatedDashboardRoute;
+  '/admin/people/$personId': typeof AuthenticatedAdminPeoplePersonIdRoute;
+  '/admin/people/duplicates': typeof AuthenticatedAdminPeopleDuplicatesRoute;
+  '/admin/people/new': typeof AuthenticatedAdminPeopleNewRoute;
   '/admin/people': typeof AuthenticatedAdminPeopleIndexRoute;
 }
 export interface FileRoutesById {
@@ -68,13 +95,32 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute;
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren;
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute;
+  '/_authenticated/admin/people/$personId': typeof AuthenticatedAdminPeoplePersonIdRoute;
+  '/_authenticated/admin/people/duplicates': typeof AuthenticatedAdminPeopleDuplicatesRoute;
+  '/_authenticated/admin/people/new': typeof AuthenticatedAdminPeopleNewRoute;
   '/_authenticated/admin/people/': typeof AuthenticatedAdminPeopleIndexRoute;
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
-  fullPaths: '/' | '/login' | '/admin' | '/dashboard' | '/admin/people/';
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/admin'
+    | '/dashboard'
+    | '/admin/people/$personId'
+    | '/admin/people/duplicates'
+    | '/admin/people/new'
+    | '/admin/people/';
   fileRoutesByTo: FileRoutesByTo;
-  to: '/' | '/login' | '/admin' | '/dashboard' | '/admin/people';
+  to:
+    | '/'
+    | '/login'
+    | '/admin'
+    | '/dashboard'
+    | '/admin/people/$personId'
+    | '/admin/people/duplicates'
+    | '/admin/people/new'
+    | '/admin/people';
   id:
     | '__root__'
     | '/'
@@ -82,6 +128,9 @@ export interface FileRouteTypes {
     | '/login'
     | '/_authenticated/admin'
     | '/_authenticated/dashboard'
+    | '/_authenticated/admin/people/$personId'
+    | '/_authenticated/admin/people/duplicates'
+    | '/_authenticated/admin/people/new'
     | '/_authenticated/admin/people/';
   fileRoutesById: FileRoutesById;
 }
@@ -135,14 +184,42 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminPeopleIndexRouteImport;
       parentRoute: typeof AuthenticatedAdminRoute;
     };
+    '/_authenticated/admin/people/new': {
+      id: '/_authenticated/admin/people/new';
+      path: '/people/new';
+      fullPath: '/admin/people/new';
+      preLoaderRoute: typeof AuthenticatedAdminPeopleNewRouteImport;
+      parentRoute: typeof AuthenticatedAdminRoute;
+    };
+    '/_authenticated/admin/people/duplicates': {
+      id: '/_authenticated/admin/people/duplicates';
+      path: '/people/duplicates';
+      fullPath: '/admin/people/duplicates';
+      preLoaderRoute: typeof AuthenticatedAdminPeopleDuplicatesRouteImport;
+      parentRoute: typeof AuthenticatedAdminRoute;
+    };
+    '/_authenticated/admin/people/$personId': {
+      id: '/_authenticated/admin/people/$personId';
+      path: '/people/$personId';
+      fullPath: '/admin/people/$personId';
+      preLoaderRoute: typeof AuthenticatedAdminPeoplePersonIdRouteImport;
+      parentRoute: typeof AuthenticatedAdminRoute;
+    };
   }
 }
 
 interface AuthenticatedAdminRouteChildren {
+  AuthenticatedAdminPeoplePersonIdRoute: typeof AuthenticatedAdminPeoplePersonIdRoute;
+  AuthenticatedAdminPeopleDuplicatesRoute: typeof AuthenticatedAdminPeopleDuplicatesRoute;
+  AuthenticatedAdminPeopleNewRoute: typeof AuthenticatedAdminPeopleNewRoute;
   AuthenticatedAdminPeopleIndexRoute: typeof AuthenticatedAdminPeopleIndexRoute;
 }
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
+  AuthenticatedAdminPeoplePersonIdRoute: AuthenticatedAdminPeoplePersonIdRoute,
+  AuthenticatedAdminPeopleDuplicatesRoute:
+    AuthenticatedAdminPeopleDuplicatesRoute,
+  AuthenticatedAdminPeopleNewRoute: AuthenticatedAdminPeopleNewRoute,
   AuthenticatedAdminPeopleIndexRoute: AuthenticatedAdminPeopleIndexRoute,
 };
 

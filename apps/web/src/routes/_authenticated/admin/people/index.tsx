@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, Link } from '@tanstack/react-router';
 import {
   createColumnHelper,
   flexRender,
@@ -15,10 +15,12 @@ import {
   ChevronsUpDown,
   ChevronUp,
   Search,
+  UserPlus,
 } from 'lucide-react';
 import { trpcReact } from '../../../../trpc.js';
 import { PageHeader } from '../../../../components/nav/PageHeader.js';
 import { PersonCell } from '../../../../components/data-display/PersonCell.js';
+import { Button } from '../../../../components/ui/button.js';
 import { StatusPill } from '../../../../components/data-display/StatusPill.js';
 import { cn } from '../../../../lib/utils.js';
 import {
@@ -48,13 +50,20 @@ const columns = [
     header: 'Person',
     meta: { sortKey: 'family_name' as SortKey },
     cell: (info) => (
-      <PersonCell
-        name={info.getValue()}
-        secondary={
-          info.row.original.contact_email ??
-          RELATIONSHIP_LABELS[info.row.original.relationship_type]
-        }
-      />
+      <Link
+        to="/admin/people/$personId"
+        params={{ personId: info.row.original.id }}
+        className="group/person block"
+      >
+        <PersonCell
+          link
+          name={info.getValue()}
+          secondary={
+            info.row.original.contact_email ??
+            RELATIONSHIP_LABELS[info.row.original.relationship_type]
+          }
+        />
+      </Link>
     ),
   }),
   columnHelper.accessor('relationship_type', {
@@ -185,6 +194,11 @@ function PeopleList() {
       <PageHeader
         title="People"
         description="Everyone with a record at CD Fencing — employees, agency and external workers, and candidates."
+        primaryAction={
+          <Link to="/admin/people/new">
+            <Button startIcon={<UserPlus size={17} />}>Add a person</Button>
+          </Link>
+        }
       />
 
       <div className="flex flex-col gap-3">

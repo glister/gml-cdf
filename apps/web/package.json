@@ -16,6 +16,7 @@
     "@hono/node-server": "^2.0.6",
     "@radix-ui/react-dialog": "^1.1.6",
     "@repo/db": "workspace:*",
+    "@repo/domain": "workspace:*",
     "@repo/env": "workspace:*",
     "@repo/logging": "workspace:*",
     "@repo/trpc": "workspace:*",

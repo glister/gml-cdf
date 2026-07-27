@@ -139,6 +139,7 @@
   --color-border-default: var(--color-gray-300);
   --color-border-strong: var(--color-gray-400);
   --color-border-brand: var(--color-green-500);
+  --color-border-focus: var(--color-brand);
 
   /* --- State taxonomy tones (tokens/states.css) — for StatusPill etc. ------
      Each tone: base (dot/rail), -bg (tint surface), -border, -text (AA on bg). */

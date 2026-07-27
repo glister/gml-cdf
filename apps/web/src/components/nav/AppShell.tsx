@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Link } from '@tanstack/react-router';
-import { ChevronDown, LayoutDashboard, Menu, Users } from 'lucide-react';
+import { ChevronDown, GitMerge, LayoutDashboard, Menu, Users } from 'lucide-react';
 import { cn } from '~/lib/utils';
 import { ConnectLockup } from '~/components/auth/ConnectLockup';
 import { Avatar } from '~/components/data-display/Avatar';
@@ -69,8 +69,11 @@ function Sidebar({ user }: { user: AppShellUser | null }) {
         </div>
         <NavSectionLabel>People</NavSectionLabel>
         <div className="flex flex-col gap-0.5">
-          <Link to="/admin/people" className={navItemClass}>
+          <Link to="/admin/people" activeOptions={{ exact: true }} className={navItemClass}>
             <NavItemInner icon={<Users size={20} strokeWidth={1.9} />} label="People" />
+          </Link>
+          <Link to="/admin/people/duplicates" className={navItemClass}>
+            <NavItemInner icon={<GitMerge size={20} strokeWidth={1.9} />} label="Duplicates" />
           </Link>
         </div>
       </nav>

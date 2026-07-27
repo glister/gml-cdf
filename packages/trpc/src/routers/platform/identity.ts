@@ -182,7 +182,23 @@ export const identityRouter = router({
       .execute();
     const credentials = await listCredentials(ctx.db, input.personId);
     const lineage = await personLineage(ctx.db, input.personId);
-    return { person, flags, credentials, lineage };
+    // The merges this person survives — the ids the unmerge affordance needs
+    // (PL-039), with the superseded record's name for the lineage display.
+    const merges = await ctx.db
+      .selectFrom('platform.person_merge as m')
+      .innerJoin('platform.person as sp', 'sp.id', 'm.superseded_person_id')
+      .select([
+        'm.id as mergeId',
+        'm.superseded_person_id as supersededPersonId',
+        'sp.display_name as supersededDisplayName',
+        'm.reason',
+        'm.merged_at as mergedAt',
+        'm.reversed_at as reversedAt',
+      ])
+      .where('m.surviving_person_id', '=', input.personId)
+      .orderBy('m.merged_at', 'desc')
+      .execute();
+    return { person, flags, credentials, lineage, merges };
   }),
 
   /** Own person summary — the only identity read a non-admin can make. */
