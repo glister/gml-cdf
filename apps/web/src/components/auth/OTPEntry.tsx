@@ -1,8 +1,10 @@
 import * as React from 'react';
+import { cn } from '~/lib/utils';
 
-/* Ported from the CD Fencing Design System (components/auth/OTPEntry).
-   Segmented six-digit input with auto-advance, backspace-to-previous, paste
-   support and a resend countdown. Emits onComplete(code) when full. */
+/* Ported from the CD Fencing Design System (components/auth/OTPEntry),
+   translated to Tailwind. Segmented six-digit input with auto-advance,
+   backspace-to-previous, paste support and a resend countdown. Emits
+   onComplete(code) when full. */
 
 export interface OTPEntryProps {
   email?: string | null;
@@ -14,7 +16,7 @@ export interface OTPEntryProps {
   resendSeconds?: number;
   error?: null | 'wrong' | 'expired' | string;
   busy?: boolean;
-  style?: React.CSSProperties;
+  className?: string;
 }
 
 export function OTPEntry({
@@ -27,7 +29,7 @@ export function OTPEntry({
   resendSeconds = 30,
   error = null,
   busy = false,
-  style = {},
+  className,
 }: OTPEntryProps) {
   const [digits, setDigits] = React.useState<string[]>(() => {
     const seed = String(defaultCode).replace(/\D/g, '').slice(0, length).split('');
@@ -113,46 +115,21 @@ export function OTPEntry({
   const invalid = !!error;
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 22,
-        fontFamily: 'var(--font-sans)',
-        ...style,
-      }}
-    >
+    <div className={cn('flex flex-col gap-[22px] font-sans', className)}>
       <div>
-        <h1
-          style={{
-            margin: 0,
-            font: '800 var(--text-xl)/1.1 var(--font-sans)',
-            letterSpacing: 'var(--tracking-tight)',
-            color: 'var(--text-strong)',
-          }}
-        >
+        <h1 className="text-xl font-extrabold leading-[1.1] tracking-tight text-strong">
           Enter your passcode
         </h1>
-        <p
-          style={{
-            margin: '6px 0 0',
-            fontSize: 'var(--text-sm)',
-            color: 'var(--text-muted)',
-            lineHeight: 1.5,
-          }}
-        >
+        <p className="mt-1.5 text-sm leading-normal text-muted">
           We’ve sent a six-digit code to{' '}
-          {email ? <strong style={{ color: 'var(--text-body)' }}>{email}</strong> : 'your email'}.
-          It expires in 10 minutes.
+          {email ? <strong className="text-body">{email}</strong> : 'your email'}. It expires in 10
+          minutes.
         </p>
       </div>
 
       {/* segmented input */}
       <div>
-        <div
-          style={{ display: 'flex', gap: 'clamp(6px, 2vw, 10px)', justifyContent: 'space-between' }}
-          onPaste={onPaste}
-        >
+        <div className="flex justify-between gap-[clamp(6px,2vw,10px)]" onPaste={onPaste}>
           {digits.map((d, i) => (
             <input
               key={i}
@@ -169,44 +146,17 @@ export function OTPEntry({
               onChange={(e) => setAt(i, e.target.value)}
               onKeyDown={(e) => onKeyDown(i, e)}
               onFocus={(e) => e.target.select()}
-              style={{
-                width: '100%',
-                minWidth: 0,
-                aspectRatio: '1 / 1',
-                maxWidth: 56,
-                textAlign: 'center',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 'var(--text-xl)',
-                fontWeight: 600,
-                color: 'var(--text-strong)',
-                background: busy ? 'var(--gray-100)' : 'var(--surface-card)',
-                border: `1.5px solid ${invalid ? 'var(--status-danger)' : d ? 'var(--brand)' : 'var(--border-default)'}`,
-                borderRadius: 'var(--radius-md)',
-                outline: 'none',
-                transition:
-                  'border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard)',
-              }}
-              onFocusCapture={(e) => {
-                if (!invalid) e.currentTarget.style.boxShadow = 'var(--ring)';
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.boxShadow = 'none';
-              }}
+              className={cn(
+                'aspect-square w-full min-w-0 max-w-[56px] rounded-md border-[1.5px] bg-surface-card text-center font-mono text-xl font-semibold text-strong outline-none transition-[border-color,box-shadow] duration-100 ease-standard focus-visible:ring-2 focus-visible:ring-brand/40 disabled:bg-gray-100',
+                invalid ? 'border-status-danger' : d ? 'border-brand' : 'border-border-default',
+              )}
             />
           ))}
         </div>
         {errText && (
           <p
             role="alert"
-            style={{
-              margin: '10px 0 0',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              fontSize: 'var(--text-sm)',
-              color: 'var(--status-danger)',
-              fontWeight: 500,
-            }}
+            className="mt-2.5 flex items-center gap-1.5 text-sm font-medium text-status-danger"
           >
             <svg
               width="15"
@@ -226,28 +176,18 @@ export function OTPEntry({
       </div>
 
       {/* resend */}
-      <div style={{ textAlign: 'center', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
+      <div className="text-center text-sm text-muted">
         Didn’t get it?{' '}
         {left > 0 ? (
           <span>
-            Resend in{' '}
-            <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-body)' }}>
-              0:{String(left).padStart(2, '0')}
-            </span>
+            Resend in <span className="font-mono text-body">0:{String(left).padStart(2, '0')}</span>
           </span>
         ) : (
           <button
             type="button"
             onClick={resend}
             disabled={busy}
-            style={{
-              background: 'none',
-              border: 'none',
-              padding: 0,
-              cursor: 'pointer',
-              font: '600 var(--text-sm)/1 var(--font-sans)',
-              color: 'var(--text-link)',
-            }}
+            className="font-sans text-sm font-semibold text-link"
           >
             Resend code
           </button>

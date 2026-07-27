@@ -108,5 +108,5 @@ export const Turnstile = React.forwardRef<TurnstileHandle, TurnstileProps>(funct
     };
   }, [siteKey]);
 
-  return <div ref={containerRef} style={{ minHeight: 65 }} />;
+  return <div ref={containerRef} className="min-h-[65px]" />;
 });

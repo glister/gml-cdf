@@ -7,7 +7,8 @@ import { clientEnv } from '../env.client.js';
 import { AuthShell } from '../components/auth/AuthShell.js';
 import { OTPEntry } from '../components/auth/OTPEntry.js';
 import { Turnstile, type TurnstileHandle } from '../components/auth/Turnstile.js';
-import { CdButton } from '../components/ui/cd-button.js';
+import { Button } from '../components/ui/button.js';
+import { cn } from '../lib/utils.js';
 
 export const Route = createFileRoute('/login')({
   component: LoginPage,
@@ -95,33 +96,12 @@ function LoginPage() {
   return (
     <AuthShell backgroundImage="/login-background.jpg">
       {step === 'signin' ? (
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 22,
-            fontFamily: 'var(--font-sans)',
-          }}
-        >
+        <div className="flex flex-col gap-[22px] font-sans">
           <div>
-            <h1
-              style={{
-                margin: 0,
-                font: '800 var(--text-xl)/1.15 var(--font-sans)',
-                letterSpacing: 'var(--tracking-tight)',
-                color: 'var(--text-strong)',
-              }}
-            >
+            <h1 className="text-xl font-extrabold leading-[1.15] tracking-tight text-strong">
               Welcome to Connect
             </h1>
-            <p
-              style={{
-                margin: '7px 0 0',
-                fontSize: 'var(--text-base)',
-                color: 'var(--text-muted)',
-                lineHeight: 1.5,
-              }}
-            >
+            <p className="mt-[7px] text-base leading-normal text-muted">
               Sign in to the Business Operating System
             </p>
           </div>
@@ -129,54 +109,30 @@ function LoginPage() {
           {error && (
             <p
               role="alert"
-              style={{
-                margin: 0,
-                padding: '10px 12px',
-                borderRadius: 'var(--radius-md)',
-                background: 'var(--status-danger-bg)',
-                border: '1px solid var(--status-danger)',
-                color: 'var(--status-danger)',
-                fontSize: 'var(--text-sm)',
-                lineHeight: 1.45,
-              }}
+              className="rounded-md border border-status-danger bg-status-danger-bg px-3 py-2.5 text-sm leading-snug text-status-danger"
             >
               {error}
             </p>
           )}
 
           {/* Employees — Entra ID / Microsoft 365 work account (PL-032) */}
-          <CdButton
+          <Button
             variant="neutral"
             size="lg"
-            fullWidth
             shape="square"
+            fullWidth
             startIcon={MicrosoftGlyph}
             onClick={signInWithMicrosoft}
             disabled={msBusy}
-            style={{ fontWeight: 700 }}
           >
             {msBusy ? 'Redirecting…' : 'Sign in with Microsoft'}
-          </CdButton>
+          </Button>
 
           {/* divider */}
-          <div
-            style={{ display: 'flex', alignItems: 'center', gap: 12 }}
-            role="separator"
-            aria-label="or"
-          >
-            <span style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
-            <span
-              style={{
-                fontSize: 'var(--text-xs)',
-                fontWeight: 600,
-                letterSpacing: 'var(--tracking-caps)',
-                textTransform: 'uppercase',
-                color: 'var(--text-muted)',
-              }}
-            >
-              or
-            </span>
-            <span style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
+          <div className="flex items-center gap-3" role="separator" aria-label="or">
+            <span className="h-px flex-1 bg-border-subtle" />
+            <span className="text-xs font-semibold uppercase tracking-caps text-muted">or</span>
+            <span className="h-px flex-1 bg-border-subtle" />
           </div>
 
           {/* Agency & external workers — email a one-time passcode (PL-033/036) */}
@@ -185,59 +141,38 @@ function LoginPage() {
               e.preventDefault();
               void sendForm.handleSubmit();
             }}
-            style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
+            className="flex flex-col gap-3.5"
           >
             <sendForm.Field name="email">
-              {(field) => (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label
-                    htmlFor="signin-email"
-                    style={{
-                      fontSize: 'var(--text-sm)',
-                      fontWeight: 600,
-                      color: 'var(--text-body)',
-                    }}
-                  >
-                    Agency or external worker
-                  </label>
-                  <input
-                    id="signin-email"
-                    type="email"
-                    inputMode="email"
-                    autoComplete="email"
-                    placeholder="you@company.co.uk"
-                    value={field.state.value}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                    onBlur={field.handleBlur}
-                    style={{
-                      height: 46,
-                      padding: '0 14px',
-                      fontFamily: 'var(--font-sans)',
-                      fontSize: 'var(--text-base)',
-                      color: 'var(--text-strong)',
-                      background: 'var(--surface-card)',
-                      border: `1.5px solid ${
-                        field.state.meta.isTouched && field.state.meta.errors.length
-                          ? 'var(--status-danger)'
-                          : 'var(--border-default)'
-                      }`,
-                      borderRadius: 'var(--radius-md)',
-                      outline: 'none',
-                    }}
-                  />
-                  {field.state.meta.isTouched && field.state.meta.errors.length ? (
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: 'var(--text-sm)',
-                        color: 'var(--status-danger)',
-                      }}
-                    >
-                      {field.state.meta.errors[0]?.message}
-                    </p>
-                  ) : null}
-                </div>
-              )}
+              {(field) => {
+                const invalid = field.state.meta.isTouched && field.state.meta.errors.length > 0;
+                return (
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="signin-email" className="text-sm font-semibold text-body">
+                      Agency or external worker
+                    </label>
+                    <input
+                      id="signin-email"
+                      type="email"
+                      inputMode="email"
+                      autoComplete="email"
+                      placeholder="you@company.co.uk"
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      onBlur={field.handleBlur}
+                      className={cn(
+                        'h-[46px] rounded-md border-[1.5px] bg-surface-card px-3.5 text-base text-strong outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
+                        invalid ? 'border-status-danger' : 'border-border-default',
+                      )}
+                    />
+                    {invalid ? (
+                      <p className="text-sm text-status-danger">
+                        {field.state.meta.errors[0]?.message}
+                      </p>
+                    ) : null}
+                  </div>
+                );
+              }}
             </sendForm.Field>
 
             {captchaEnabled && siteKey ? (
@@ -248,36 +183,27 @@ function LoginPage() {
               selector={(s) => ({ canSubmit: s.canSubmit, isSubmitting: s.isSubmitting })}
             >
               {({ canSubmit, isSubmitting }) => (
-                <CdButton
+                <Button
                   type="submit"
                   variant="primary"
                   size="lg"
-                  fullWidth
                   shape="square"
+                  fullWidth
                   disabled={!canSubmit || isSubmitting}
-                  style={{ fontWeight: 700 }}
                 >
                   {isSubmitting ? 'Sending…' : 'Email me a sign-in code'}
-                </CdButton>
+                </Button>
               )}
             </sendForm.Subscribe>
           </form>
 
-          <p
-            style={{
-              margin: 0,
-              fontSize: 'var(--text-xs)',
-              color: 'var(--text-muted)',
-              lineHeight: 1.55,
-              textAlign: 'center',
-            }}
-          >
+          <p className="text-center text-xs leading-[1.55] text-muted">
             Employees sign in with their Microsoft work account. Agency and external workers use the
             email address their invitation was sent to.
           </p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div className="flex flex-col gap-5">
           <OTPEntry email={email} onComplete={verifyOtp} onResend={resendOtp} error={otpError} />
           <button
             type="button"
@@ -285,15 +211,7 @@ function LoginPage() {
               setStep('signin');
               setOtpError(null);
             }}
-            style={{
-              background: 'none',
-              border: 'none',
-              padding: 0,
-              cursor: 'pointer',
-              alignSelf: 'center',
-              font: '600 var(--text-sm)/1.2 var(--font-sans)',
-              color: 'var(--text-link)',
-            }}
+            className="self-center font-sans text-sm font-semibold text-link"
           >
             Use a different email
           </button>

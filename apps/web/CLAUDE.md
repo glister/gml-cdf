@@ -35,6 +35,27 @@ kits are the visual spec for every route. shadcn/ui + Tailwind v4 are the build
 tools, but stock defaults are not the design — match the system, and flag
 genuine gaps rather than improvising styling or component patterns.
 
+**Translate the design to Tailwind — never port inline styles.** The design
+project authors its components as reference JSX with inline `style={{ … }}`
+referencing CSS variables (`var(--brand)` …). That is the _spec's_ idiom, not
+ours: the DS is framework-neutral because it also feeds `apps/mobile`
+(NativeWind). On web you **translate** it to Tailwind utility classes. Inline
+`style` is reserved for genuinely dynamic values a class can't express (e.g. a
+prop-driven `url()`), and even then the _behaviour_ (breakpoints, hover, focus)
+stays in classes — inline styles can't do media queries or `:hover`.
+
+- The design tokens are bridged into Tailwind's theme via a `@theme` block in
+  `src/app.css`, so every token is a first-class utility: `bg-brand`,
+  `text-muted`/`text-strong` (text _colors_ live under `--color-*`; `text-xl` etc.
+  remain font _sizes_), `rounded-lg`, `shadow-xl`, `font-sans`, `tracking-tight`,
+  and the custom `auth:` breakpoint. Keep `@theme` in sync with the design
+  project's `tokens/*.css`.
+- One design-system button: `src/components/ui/button.tsx` (`cva` over the tokens
+  — variants `primary`/`secondary`/`neutral`/`ghost`/`danger`, `shape`
+  pill/square). Use it; there is no separate `CdButton`.
+- Reference implementations of the translation: `src/components/auth/*` and
+  `src/routes/login.tsx`.
+
 ## Data, tables and forms
 
 The three TanStack libraries below are **mandatory** patterns (see the root

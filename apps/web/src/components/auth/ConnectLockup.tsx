@@ -1,25 +1,33 @@
 import * as React from 'react';
+import { cva, type VariantProps } from 'class-variance-authority';
+import { cn } from '~/lib/utils';
 
-/* Ported from the CD Fencing Design System (components/auth/ConnectLockup).
-   App icon + "Connect" wordmark + the "Business Operating System" strapline. */
+/* Ported from the CD Fencing Design System (components/auth/ConnectLockup),
+   translated to Tailwind. App icon + "Connect" wordmark + the "Business
+   Operating System" strapline. Discrete sizes (the design's runtime-numeric
+   sizing collapses to the sm/md/lg actually used). */
 
-function FallbackMark({ size }: { size: number }) {
+const ICON = {
+  sm: 'size-11 rounded-[11px]',
+  md: 'size-14 rounded-[13px]',
+  lg: 'size-[72px] rounded-[17px]',
+};
+const WORDMARK = { sm: 'text-[37px]', md: 'text-[47px]', lg: 'text-[60px]' };
+const STRAPLINE = { sm: 'mt-2 text-[10px]', md: 'mt-2.5 text-[13px]', lg: 'mt-3 text-[17px]' };
+
+const lockupVariants = cva('inline-flex items-center font-sans', {
+  variants: {
+    orientation: { horizontal: 'flex-row', stacked: 'flex-col' },
+    size: { sm: 'gap-3.5', md: 'gap-5', lg: 'gap-6' },
+  },
+  defaultVariants: { orientation: 'horizontal', size: 'md' },
+});
+
+function FallbackMark({ className }: { className: string }) {
   return (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: size,
-        height: size,
-        flexShrink: 0,
-        background: 'var(--brand)',
-        borderRadius: size * 0.24,
-      }}
-    >
+    <span className={cn('inline-flex shrink-0 items-center justify-center bg-brand', className)}>
       <svg
-        width={size * 0.6}
-        height={size * 0.6}
+        className="size-[60%]"
         viewBox="0 0 24 24"
         fill="none"
         stroke="#fff"
@@ -35,83 +43,55 @@ function FallbackMark({ size }: { size: number }) {
   );
 }
 
-export interface ConnectLockupProps {
+export interface ConnectLockupProps extends VariantProps<typeof lockupVariants> {
   iconSrc?: string | null;
-  orientation?: 'horizontal' | 'stacked';
   tone?: 'light' | 'dark';
-  size?: number;
-  wordmarkSize?: number | null;
   showStrapline?: boolean;
   strapline?: string;
-  style?: React.CSSProperties;
+  className?: string;
 }
 
 export function ConnectLockup({
   iconSrc = null,
   orientation = 'horizontal',
   tone = 'light',
-  size = 56,
-  wordmarkSize = null,
+  size = 'md',
   showStrapline = true,
   strapline = 'Business Operating System',
-  style = {},
+  className,
 }: ConnectLockupProps) {
-  const stacked = orientation === 'stacked';
-  const wm = wordmarkSize || Math.round(size * (stacked ? 0.5 : 0.84));
-  const sl = Math.max(9, Math.round(wm * 0.28));
   const light = tone === 'light';
+  const s = size ?? 'md';
+  const iconCls = ICON[s];
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        flexDirection: stacked ? 'column' : 'row',
-        gap: stacked ? size * 0.26 : size * 0.34,
-        fontFamily: 'var(--font-sans)',
-        ...style,
-      }}
-    >
+    <div className={cn(lockupVariants({ orientation, size }), className)}>
       {iconSrc ? (
-        <img
-          src={iconSrc}
-          alt="Connect"
-          style={{
-            width: size,
-            height: size,
-            flexShrink: 0,
-            borderRadius: size * 0.24,
-            display: 'block',
-          }}
-        />
+        <img src={iconSrc} alt="Connect" className={cn('block shrink-0 object-cover', iconCls)} />
       ) : (
-        <FallbackMark size={size} />
+        <FallbackMark className={iconCls} />
       )}
       <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: stacked ? 'center' : 'flex-start',
-          lineHeight: 1,
-        }}
+        className={cn(
+          'flex flex-col leading-none',
+          orientation === 'stacked' ? 'items-center' : 'items-start',
+        )}
       >
         <span
-          style={{
-            font: `800 ${wm}px/1 var(--font-sans)`,
-            letterSpacing: 'var(--tracking-tight)',
-            color: light ? '#FFFFFF' : 'var(--text-strong)',
-          }}
+          className={cn(
+            'font-extrabold leading-none tracking-tight',
+            WORDMARK[s],
+            light ? 'text-white' : 'text-strong',
+          )}
         >
           Connect
         </span>
         {showStrapline && (
           <span
-            style={{
-              marginTop: Math.round(wm * 0.24),
-              font: `700 ${sl}px/1 var(--font-sans)`,
-              letterSpacing: '0.16em',
-              textTransform: 'uppercase',
-              color: light ? 'var(--green-400)' : 'var(--brand)',
-            }}
+            className={cn(
+              'font-bold uppercase leading-none tracking-[0.16em]',
+              STRAPLINE[s],
+              light ? 'text-green-400' : 'text-brand',
+            )}
           >
             {strapline}
           </span>
