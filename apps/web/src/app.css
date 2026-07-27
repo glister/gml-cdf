@@ -1,4 +1,8 @@
+/* CD Fencing webfonts (Hanken Grotesk + IBM Plex Mono) — see tokens/fonts.css
+   in the design project. Swap for self-hosted files if offline use is required. */
+@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 @import 'tailwindcss';
+@import './styles/tokens.css';
 
 :root {
   color-scheme: light dark;
