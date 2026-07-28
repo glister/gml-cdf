@@ -431,15 +431,27 @@ If a screenshot shows the login page (`/login`) instead of the expected authenti
 ./scripts/refresh-auth.sh
 ```
 
-The script uses Mailpit to intercept the OTP email and completes the sign-in flow automatically. It takes a few seconds. After it succeeds, retake the screenshot with the same `agent-browser --session dev` command.
+The script authenticates via better-auth's HTTP API and injects the resulting
+session cookie into the `dev` session — it does **not** drive the login form, so
+it's immune to login-UI changes and to the Turnstile widget (a client-side gate
+the API path doesn't hit). It reads the OTP from Mailpit and signs in as the
+seeded admin (`admin@cdf.local`; override with `DEV_AUTH_EMAIL=...`). It takes a
+few seconds. After it succeeds, retake the screenshot with the same
+`agent-browser --session dev` command.
 
-Do not attempt to fill in the login form manually. Do not attempt to bypass authentication. Always use the refresh script.
+Do not attempt to fill in the login form manually. Do not attempt to bypass
+authentication. Always use the refresh script.
 
 ### If refresh-auth.sh fails
 
-- Check that the dev server is running on the expected port
-- Check that Mailpit is running (default: `http://localhost:8025`)
-- Check the login form selectors in the script match the current UI — if the login form was recently changed, the script's `fill` selectors may need updating
+- Check that the dev server is running (both the web app on `PORT_WEB` and the
+  api app on `PORT_API` — auth lives on the api app).
+- Check that Mailpit is running (`http://localhost:$PORT_MAILPIT_UI`, `17021` at
+  the default prefix).
+- If the OTP request is rejected: confirm the account is seeded, and that
+  `TURNSTILE_SECRET_KEY` is **not** set in `.env.secrets` — if it is, the server
+  enforces the captcha on OTP send (use the Cloudflare test key, or unset it for
+  dev).
 
 ### When NOT to screenshot
 
