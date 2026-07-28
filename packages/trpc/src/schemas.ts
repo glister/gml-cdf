@@ -1,10 +1,14 @@
 import { z } from 'zod';
 import {
+  FIELD_CLASSES,
+  GRANT_STATES,
+  MODULE_KEYS,
   PERSON_FLAG_TYPES,
   PERSON_SORTS,
   PERSON_STATUSES,
   PROFILE_STATUSES,
   RELATIONSHIP_TYPES,
+  ROLE_KEYS,
   SORT_DIRECTIONS,
   USER_ROLES,
 } from './lib/constants.js';
@@ -174,3 +178,65 @@ export const invitePersonInput = z.object({
   personId: z.uuid(),
   email: z.string().trim().toLowerCase().max(320),
 });
+
+// --- platform.authz router (core plan 04 §5.1) ---
+
+export const roleKeySchema = z.enum(ROLE_KEYS);
+export type RoleKeyInput = z.infer<typeof roleKeySchema>;
+export const moduleKeySchema = z.enum(MODULE_KEYS);
+export type ModuleKeyInput = z.infer<typeof moduleKeySchema>;
+export const grantStateSchema = z.enum(GRANT_STATES);
+export const fieldClassSchema = z.enum(FIELD_CLASSES);
+
+export const grantRoleInput = z.object({
+  personId: z.uuid(),
+  roleKey: roleKeySchema,
+  module: moduleKeySchema,
+  validFrom: z.iso.datetime().optional(),
+  validUntil: z.iso.datetime().optional(),
+});
+export type GrantRoleInput = z.infer<typeof grantRoleInput>;
+
+export const revokeGrantInput = z.object({
+  grantId: z.uuid(),
+  reason: z.string().trim().min(1).max(500),
+});
+export type RevokeGrantInput = z.infer<typeof revokeGrantInput>;
+
+export const listGrantsInput = z.object({
+  personId: z.uuid().optional(),
+  roleKey: roleKeySchema.optional(),
+  module: moduleKeySchema.optional(),
+  // Derived in SQL (CASE over the timestamps) and filtered in SQL — the same
+  // expression drives display and filter, never computed client-side.
+  state: grantStateSchema.optional(),
+  search: z.string().trim().max(200).optional(),
+  cursor: z.string().optional(),
+  limit: z.number().int().min(1).max(100).default(25),
+  sortDir: z.enum(SORT_DIRECTIONS).default('desc'),
+});
+export type ListGrantsInput = z.infer<typeof listGrantsInput>;
+
+export const addAllocationInput = z.object({
+  adminPersonId: z.uuid(),
+  personId: z.uuid(),
+  validFrom: z.iso.datetime().optional(),
+  validUntil: z.iso.datetime().optional(),
+});
+export type AddAllocationInput = z.infer<typeof addAllocationInput>;
+
+export const endAllocationInput = z.object({
+  allocationId: z.uuid(),
+  reason: z.string().trim().min(1).max(500),
+});
+export type EndAllocationInput = z.infer<typeof endAllocationInput>;
+
+export const listAllocationsInput = z.object({
+  adminPersonId: z.uuid().optional(),
+  personId: z.uuid().optional(),
+  liveOnly: z.boolean().default(true),
+  cursor: z.string().optional(),
+  limit: z.number().int().min(1).max(100).default(25),
+  sortDir: z.enum(SORT_DIRECTIONS).default('desc'),
+});
+export type ListAllocationsInput = z.infer<typeof listAllocationsInput>;
