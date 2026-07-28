@@ -6,7 +6,14 @@ import { appRouter } from '../../router.js';
 import type { ContextGrant, TRPCContext } from '../../trpc.js';
 import type { ModuleKey, RoleKey } from '../../lib/constants.js';
 import { scopeFor, scopePersons } from '../../lib/scope.js';
-import { personFlagOutputRestricted, personOutputRestricted } from '../../schemas.js';
+import { fieldsUpTo } from '../../lib/field-classification.js';
+import {
+  personClassification,
+  personFlagClassification,
+  personFlagOutputRestricted,
+  personOutputRestricted,
+} from '../../schemas.js';
+import { personColumnVariants } from './identity.js';
 
 /**
  * Authorisation integration tests (core plan 04 §10). Real Postgres throughout:
@@ -701,7 +708,138 @@ describe('record scoping ladder (scopeFor / scopePersons)', () => {
   });
 });
 
+describe('the converted identity surface (§9.5 reference conversion)', () => {
+  /** Grant a role and return the caller bound to the resulting grants. */
+  async function readerWith(roleKey: RoleKey, personId: string) {
+    await insertGrant({ personId, roleKey, module: 'platform' });
+    return callerFor(personId);
+  }
+
+  it('AC-D5/ON AC-10 — a restricted reader never receives sensitive fields', async () => {
+    await insertPerson({
+      display_name: 'Subject',
+      contact_email: 'subject@example.test',
+      date_of_birth: '1985-03-04',
+    });
+
+    const director = await insertPerson({ display_name: 'A Director' });
+    const page = await (
+      await readerWith('director', director)
+    ).platform.identity.listPersons({ limit: 50 });
+
+    expect(page.items.length).toBeGreaterThan(0);
+    const serialised = JSON.stringify(page.items);
+    // Not merely absent from the payload — never selected in SQL.
+    expect(serialised).not.toContain('subject@example.test');
+    expect(serialised).not.toContain('1985-03-04');
+    for (const item of page.items) {
+      expect(item).not.toHaveProperty('contact_email');
+      expect(item).not.toHaveProperty('date_of_birth');
+    }
+  });
+
+  it('an HR User does receive the sensitive fields', async () => {
+    await insertPerson({ display_name: 'Subject', contact_email: 'subject@example.test' });
+    const hr = await insertPerson({ display_name: 'HR' });
+    const page = await (
+      await readerWith('hr_user', hr)
+    ).platform.identity.listPersons({
+      limit: 50,
+    });
+    expect(JSON.stringify(page.items)).toContain('subject@example.test');
+  });
+
+  it('AC-D7 — an external administrator lists only their allocated people', async () => {
+    const extAdmin = await insertPerson({ display_name: 'Ext Admin' });
+    await insertGrant({
+      personId: extAdmin,
+      roleKey: 'external_administrator',
+      module: 'platform',
+    });
+    const allocated = await insertPerson({ display_name: 'Allocated Worker' });
+    const other = await insertPerson({ display_name: 'Unrelated Worker' });
+
+    await insertGrant({ personId: actorPersonId, roleKey: 'administrator', module: 'platform' });
+    await (
+      await callerFor(actorPersonId)
+    ).platform.authz.allocations.add({ adminPersonId: extAdmin, personId: allocated });
+
+    const caller = await callerFor(extAdmin);
+    const page = await caller.platform.identity.listPersons({ limit: 50 });
+    expect(page.items.map((p) => p.id)).toEqual([allocated]);
+
+    // Detail of a non-allocated person is NOT_FOUND, not FORBIDDEN — a
+    // "forbidden" would confirm the record exists.
+    await expect(caller.platform.identity.getPerson({ personId: other })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    const detail = await caller.platform.identity.getPerson({ personId: allocated });
+    expect(detail.person.id).toBe(allocated);
+  });
+
+  it('a line manager sees nothing until plan 05 lands the team tables', async () => {
+    await insertPerson({ display_name: 'Somebody' });
+    const manager = await insertPerson({ display_name: 'Manager' });
+    const page = await (
+      await readerWith('line_manager', manager)
+    ).platform.identity.listPersons({
+      limit: 50,
+    });
+    expect(page.items).toHaveLength(0);
+  });
+
+  it('special-category flag detail is withheld from a restricted reader, and journalled for an authorised one', async () => {
+    const subject = await insertPerson({ display_name: 'Flagged' });
+    await insertGrant({ personId: actorPersonId, roleKey: 'administrator', module: 'platform' });
+    const admin = await callerFor(actorPersonId);
+    await admin.platform.identity.addFlag({
+      personId: subject,
+      flagType: 'safeguarding',
+      reason: 'a rationale that must not leak',
+    });
+
+    // Authorised: sees the detail, and the read is journalled exactly once.
+    const full = await admin.platform.identity.getPerson({ personId: subject });
+    expect(full.flags[0]).toHaveProperty('flag_type', 'safeguarding');
+    const reads = await eventsForStream(subject, 'platform.data.special_category.accessed');
+    expect(reads).toHaveLength(1);
+    expect(reads[0]?.kind).toBe('security');
+    expect(reads[0]?.payload).toMatchObject({
+      entity: 'platform.person_flag',
+      fields: ['end_reason', 'flag_type', 'reason'],
+      readerPersonId: actorPersonId,
+    });
+    // Field NAMES only — the rationale itself is never in the payload.
+    expect(JSON.stringify(reads[0]?.payload)).not.toContain('must not leak');
+
+    // Restricted: a director gets no flags at all — the existence of a
+    // safeguarding flag is itself special-category — and emits no read event.
+    const director = await insertPerson({ display_name: 'Director' });
+    const restricted = await (
+      await readerWith('director', director)
+    ).platform.identity.getPerson({ personId: subject });
+    expect(restricted.flags).toHaveLength(0);
+    expect(JSON.stringify(restricted.flags)).not.toContain('must not leak');
+    expect(await eventsForStream(subject, 'platform.data.special_category.accessed')).toHaveLength(
+      1,
+    );
+  });
+});
+
 describe('field classification (PL-003, PL-043, ON AC-10)', () => {
+  it('the column variants match the classification map (drift guard)', () => {
+    const strip = (cols: readonly string[]) => cols.map((c) => c.replace(/^p\./, '')).sort();
+    expect(strip(personColumnVariants.restricted)).toEqual(
+      fieldsUpTo(personClassification, 'internal').sort(),
+    );
+    expect(strip(personColumnVariants.full)).toEqual(
+      fieldsUpTo(personClassification, 'sensitive').sort(),
+    );
+    expect(strip(personColumnVariants.flagFull)).toEqual(
+      fieldsUpTo(personFlagClassification, 'special-category').sort(),
+    );
+  });
+
   it('the restricted person variant drops sensitive fields', () => {
     const shape = Object.keys(personOutputRestricted.shape);
     expect(shape).toContain('display_name');

@@ -117,3 +117,23 @@ export type GrantState = (typeof GRANT_STATES)[number];
 /** The record-visibility ladder a viewer holds for a module (ADR-0015). */
 export const PERSON_SCOPES = ['all', 'team', 'allocated', 'self'] as const;
 export type PersonScope = (typeof PERSON_SCOPES)[number];
+
+/**
+ * Authorisation config items (core plan 04 §6), shipped as constants with their
+ * config keys **reserved**.
+ *
+ * Plan 06 (the config store) depends on plan 04, so the store cannot be consumed
+ * here at build time — the chicken-and-egg recorded as §12.2 Q4. When plan 06
+ * lands, move these to `platform.config_entry` under exactly these keys and
+ * replace the reads; the keys are the migration contract.
+ *
+ * Neither is a business threshold that changes behaviour silently: the TTL only
+ * pre-fills a form field, and the reason requirement is already enforced by the
+ * Zod schema (`revokeGrantInput.reason` is `min(1)`).
+ */
+export const AUTHZ_CONFIG_DEFAULTS = {
+  /** Pre-filled `validUntil` when granting to an external-role holder (PL-042/043). */
+  'authz.external.default_grant_ttl_days': 90,
+  /** Whether revoking demands a reason. Enforced by the input schema today. */
+  'authz.grants.revoke_requires_reason': true,
+} as const;

@@ -15,7 +15,10 @@ import {
   repointUsers,
   restoreUsers,
 } from '@repo/identity';
-import { adminProcedure, protectedProcedure, router, type TRPCContext } from '../../trpc.js';
+import { protectedProcedure, roleProcedure, router, type TRPCContext } from '../../trpc.js';
+import { ceilingForRoles, journalSpecialCategoryRead } from '../../lib/field-classification.js';
+import { scopeFor, scopePersons } from '../../lib/scope.js';
+import { personFlagClassification } from '../../schemas.js';
 import {
   addFlagInput,
   checkExistingInput,
@@ -37,14 +40,44 @@ import {
 import { decodeCursor, encodeCursor, keysetBoundary, timestampSortKey } from '../../lib/keyset.js';
 
 /**
- * Identity & person model tRPC surface (core plan 03 §5.1). The security
- * boundary: every admin operation is an `adminProcedure`. All journal appends go
- * through core plan 02's `appendEvent` in the SAME transaction as their state
- * change (ADR-0010); Better Auth tables are touched only via `@repo/identity`.
+ * Identity & person model tRPC surface (core plan 03 §5.1).
+ *
+ * The security boundary, re-based onto core plan 04 (Q1, resolved 2026-07-28):
+ * every operation authorises with `roleProcedure` against `platform.role_grant`.
+ * `adminProcedure` (Better Auth's `admin` flag) is now reserved for framework
+ * operations only, so there is exactly one authorisation system on product
+ * surfaces.
+ *
+ * Reads are additionally **record-scoped** and **field-classified** (plan 04
+ * §5.1): the caller's scope narrows which people they can see at all, and their
+ * classification ceiling narrows which columns are selected — the restricted
+ * path never pulls a sensitive value out of Postgres.
+ *
+ * All journal appends go through core plan 02's `appendEvent` in the SAME
+ * transaction as their state change (ADR-0010); Better Auth tables are touched
+ * only via `@repo/identity`.
  */
 
-/** The person columns returned by list/detail reads. */
-const PERSON_COLUMNS = [
+/** Mutating a person record: Administrator or HR User, in the platform module. */
+const identityAdmin = roleProcedure(['administrator', 'hr_user'], { module: 'platform' });
+
+/**
+ * Reading people. Wider than the mutation set, because record scoping — not the
+ * role list — is what limits reach here: a Line Manager sees their team, an
+ * external administrator sees exactly their allocations (CORE-05, AC-D7), and
+ * everyone sees only the field classes their role permits (PL-043, AC-D5).
+ */
+const personReader = roleProcedure(
+  ['administrator', 'hr_user', 'director', 'line_manager', 'external_administrator'],
+  { module: 'platform' },
+);
+
+/**
+ * The person columns of each role variant. Kept as literal tuples so Kysely
+ * keeps its types, and asserted against `personClassification` in the tests, so
+ * they cannot drift from the classification map (§12.3, classification drift).
+ */
+const PERSON_COLUMNS_RESTRICTED = [
   'p.id',
   'p.relationship_type',
   'p.profile_status',
@@ -52,13 +85,62 @@ const PERSON_COLUMNS = [
   'p.display_name',
   'p.given_name',
   'p.family_name',
-  'p.contact_email',
-  'p.date_of_birth',
   'p.agency_worker_reference',
   'p.access_valid_until',
   'p.created_at',
   'p.updated_at',
 ] as const;
+
+/** The restricted set plus the `sensitive` class — HR User / Administrator. */
+const PERSON_COLUMNS_FULL = [
+  ...PERSON_COLUMNS_RESTRICTED,
+  'p.contact_email',
+  'p.date_of_birth',
+] as const;
+
+/**
+ * Every classified flag column — the special-category pilot's full variant.
+ * There is no restricted flag variant: see `getPerson`, where the collection is
+ * gated as a whole.
+ */
+const PERSON_FLAG_COLUMNS_FULL = [
+  'id',
+  'person_id',
+  'flag_type',
+  'reason',
+  'raised_at',
+  'raised_by',
+  'ended_at',
+  'ended_by',
+  'end_reason',
+  'source_merge_id',
+  'source_flag_id',
+] as const;
+
+/** Exported for the drift test that pins these against the classification maps. */
+export const personColumnVariants = {
+  restricted: PERSON_COLUMNS_RESTRICTED,
+  full: PERSON_COLUMNS_FULL,
+  flagFull: PERSON_FLAG_COLUMNS_FULL,
+};
+
+/** The columns the caller's roles permit — the only ones the query will select. */
+function personColumnsFor(ctx: TRPCContext) {
+  const ceiling = ceilingForRoles(ctx.grants.map((g) => g.roleKey));
+  return ceiling === 'special-category' || ceiling === 'sensitive'
+    ? PERSON_COLUMNS_FULL
+    : PERSON_COLUMNS_RESTRICTED;
+}
+
+/** The caller's record scope in the platform module. */
+function personScopeFor(ctx: TRPCContext) {
+  return scopeFor(ctx.grants, 'platform', new Date());
+}
+
+/** The special-category flag fields, for the read-journalling payload. */
+const fieldsOfSpecialCategory = Object.entries(personFlagClassification.map)
+  .filter(([, cls]) => cls === 'special-category')
+  .map(([field]) => field);
 
 /** The acting admin's person id — required to stamp actor columns. */
 function requireActor(ctx: TRPCContext): string {
@@ -113,8 +195,15 @@ function attrs(p: {
 export const identityRouter = router({
   // --- Reads --------------------------------------------------------------
 
-  /** Keyset-paginated person list; every facet applied in SQL (ADR data-tables). */
-  listPersons: adminProcedure.input(listPersonsInput).query(async ({ ctx, input }) => {
+  /**
+   * Keyset-paginated person list; every facet applied in SQL (ADR data-tables).
+   *
+   * The reference conversion for core plan 04 (§9.5): record scope is a SQL
+   * predicate inside the query, and the selected columns are the caller's field
+   * variant — so a restricted caller's sensitive columns are never read, let
+   * alone serialised.
+   */
+  listPersons: personReader.input(listPersonsInput).query(async ({ ctx, input }) => {
     const sortKey =
       input.sort === 'family_name'
         ? sql<string>`coalesce(lower(p.family_name), '')`
@@ -124,9 +213,11 @@ export const identityRouter = router({
 
     let query = ctx.db
       .selectFrom('platform.person as p')
-      .select(PERSON_COLUMNS)
+      .select(personColumnsFor(ctx))
       .select(sortKey.as('sort_key'))
-      .where('p.deleted_at', 'is', null);
+      .where('p.deleted_at', 'is', null)
+      // Record scoping in SQL, never over the loaded page (ADR-0004).
+      .where(scopePersons('p.id', ctx.actorPersonId, personScopeFor(ctx)));
 
     if (input.relationshipType)
       query = query.where('p.relationship_type', '=', input.relationshipType);
@@ -171,15 +262,64 @@ export const identityRouter = router({
     return { items: items.map(({ sort_key: _sk, ...rest }) => rest), nextCursor };
   }),
 
-  /** Person detail: attributes, flags, linked credentials, and merge lineage. */
-  getPerson: adminProcedure.input(personIdInput).query(async ({ ctx, input }) => {
-    const person = await loadPerson(ctx, input.personId);
-    const flags = await ctx.db
-      .selectFrom('platform.person_flag')
-      .selectAll()
-      .where('person_id', '=', input.personId)
-      .orderBy('raised_at', 'desc')
-      .execute();
+  /**
+   * Person detail: attributes, flags, linked credentials, and merge lineage.
+   *
+   * Three plan-04 controls apply together: the record must be inside the
+   * caller's scope (out of scope reads as NOT_FOUND — never "forbidden", which
+   * would confirm the record exists), the person columns come from the caller's
+   * field variant, and safeguarding flags — the special-category pilot — return
+   * their type and rationale only to a caller whose ceiling reaches
+   * special-category, journalled when they do (ADR-0015).
+   */
+  getPerson: personReader.input(personIdInput).query(async ({ ctx, input }) => {
+    const scope = personScopeFor(ctx);
+    const inScope = await ctx.db
+      .selectFrom('platform.person as p')
+      .select('p.id')
+      .where('p.id', '=', input.personId)
+      .where('p.deleted_at', 'is', null)
+      .where(scopePersons('p.id', ctx.actorPersonId, scope))
+      .executeTakeFirst();
+    if (!inScope) throw new TRPCError({ code: 'NOT_FOUND', message: 'Person not found' });
+
+    const person = await ctx.db
+      .selectFrom('platform.person as p')
+      .select(personColumnsFor(ctx))
+      .where('p.id', '=', input.personId)
+      .executeTakeFirstOrThrow();
+
+    const ceiling = ceilingForRoles(ctx.grants.map((g) => g.roleKey));
+    const seesSpecialCategory = ceiling === 'special-category';
+
+    // The whole flag collection is gated, not just its columns: the *existence*
+    // of a safeguarding flag is itself special-category information (ADR-0019).
+    // Returning bare ids and dates would still disclose "this person has
+    // safeguarding concerns" to a reader who may not know that, so a restricted
+    // caller gets an empty list rather than a redacted one.
+    const flags = seesSpecialCategory
+      ? await ctx.db
+          .selectFrom('platform.person_flag')
+          .select(PERSON_FLAG_COLUMNS_FULL)
+          .where('person_id', '=', input.personId)
+          .orderBy('raised_at', 'desc')
+          .execute()
+      : [];
+
+    // One event per (request, entity, record) — never per field, never with
+    // values (plan 13 §4.2 semantics, enforced by the helper).
+    if (seesSpecialCategory && flags.length > 0) {
+      await journalSpecialCategoryRead(ctx.db, {
+        entity: 'platform.person_flag',
+        streamType: 'platform.person',
+        streamId: input.personId,
+        fields: fieldsOfSpecialCategory,
+        readerPersonId: ctx.actorPersonId,
+        procedure: 'platform.identity.getPerson',
+        correlationId: ctx.correlationId,
+      });
+    }
+
     const credentials = await listCredentials(ctx.db, input.personId);
     const lineage = await personLineage(ctx.db, input.personId);
     // The merges this person survives — the ids the unmerge affordance needs
@@ -216,12 +356,15 @@ export const identityRouter = router({
   // --- Duplicate detection & review --------------------------------------
 
   /** Pre-creation existing-profile check (PL-047): candidate matches for attrs. */
-  checkExisting: adminProcedure.input(checkExistingInput).query(async ({ ctx, input }) => {
+  checkExisting: identityAdmin.input(checkExistingInput).query(async ({ ctx, input }) => {
     // Which match branches the probe can even satisfy is a JS decision — never
     // bind an untyped NULL into SQL (Postgres 42P18). Empty probe → no matches.
+    // The full variant explicitly: the duplicate matcher compares date of birth,
+    // a `sensitive` field. `identityAdmin` is Administrator/HR User only, whose
+    // ceiling reaches it — but stating it beats inferring it from the builder.
     const rows = await ctx.db
       .selectFrom('platform.person as p')
-      .select(PERSON_COLUMNS)
+      .select(PERSON_COLUMNS_FULL)
       .where('p.deleted_at', 'is', null)
       .where('p.status', '<>', 'superseded')
       .where((eb) => {
@@ -259,7 +402,7 @@ export const identityRouter = router({
   }),
 
   /** Advisory duplicate-candidate pairs (live SQL match, dismissed pairs excluded). */
-  listDuplicateCandidates: adminProcedure
+  listDuplicateCandidates: identityAdmin
     .input(listDuplicateCandidatesInput)
     .query(async ({ ctx, input }) => {
       const sortKey = sql<string>`a.id::text`;
@@ -344,7 +487,7 @@ export const identityRouter = router({
     }),
 
   /** Mark a pair "not a duplicate" — excluded from future signals (canonical order). */
-  dismissDuplicate: adminProcedure.input(dismissDuplicateInput).mutation(async ({ ctx, input }) => {
+  dismissDuplicate: identityAdmin.input(dismissDuplicateInput).mutation(async ({ ctx, input }) => {
     const [min, max] = [input.personIdA, input.personIdB].sort();
     const actor = requireActor(ctx);
     await ctx.db.transaction().execute((trx) =>
@@ -364,7 +507,7 @@ export const identityRouter = router({
   // --- Mutations: attributes ---------------------------------------------
 
   /** Create a person after the PL-047 check; proceeding past matches needs an override. */
-  createPerson: adminProcedure.input(createPersonInput).mutation(async ({ ctx, input }) => {
+  createPerson: identityAdmin.input(createPersonInput).mutation(async ({ ctx, input }) => {
     if (input.relationshipType === 'employee' && input.accessValidUntil) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'Employees have no access-expiry date' });
     }
@@ -447,7 +590,7 @@ export const identityRouter = router({
   }),
 
   /** Edit natural-identity attributes; runs the on-write duplicate check. */
-  updatePerson: adminProcedure.input(updatePersonInput).mutation(async ({ ctx, input }) => {
+  updatePerson: identityAdmin.input(updatePersonInput).mutation(async ({ ctx, input }) => {
     const actor = requireActor(ctx);
     await loadPerson(ctx, input.personId);
 
@@ -520,7 +663,7 @@ export const identityRouter = router({
   // --- Mutations: lifecycle transitions ----------------------------------
 
   /** Guard-checked profile-status transition (CORE-01); journals the history record. */
-  setProfileStatus: adminProcedure.input(setProfileStatusInput).mutation(async ({ ctx, input }) => {
+  setProfileStatus: identityAdmin.input(setProfileStatusInput).mutation(async ({ ctx, input }) => {
     const actor = requireActor(ctx);
     const person = await loadPerson(ctx, input.personId);
     if (!canTransition(person.profile_status, input.to)) {
@@ -551,7 +694,7 @@ export const identityRouter = router({
   }),
 
   /** Non-employee→employee conversion: keeps the id/history, clears access expiry. */
-  convertToEmployee: adminProcedure
+  convertToEmployee: identityAdmin
     .input(convertToEmployeeInput)
     .mutation(async ({ ctx, input }) => {
       const actor = requireActor(ctx);
@@ -585,7 +728,7 @@ export const identityRouter = router({
 
   // --- Mutations: safeguarding flags -------------------------------------
 
-  addFlag: adminProcedure.input(addFlagInput).mutation(async ({ ctx, input }) => {
+  addFlag: identityAdmin.input(addFlagInput).mutation(async ({ ctx, input }) => {
     const actor = requireActor(ctx);
     await loadPerson(ctx, input.personId);
     const flagId = newUuidV7();
@@ -614,7 +757,7 @@ export const identityRouter = router({
     return { flagId };
   }),
 
-  endFlag: adminProcedure.input(endFlagInput).mutation(async ({ ctx, input }) => {
+  endFlag: identityAdmin.input(endFlagInput).mutation(async ({ ctx, input }) => {
     const actor = requireActor(ctx);
     const flag = await ctx.db
       .selectFrom('platform.person_flag')
@@ -645,7 +788,7 @@ export const identityRouter = router({
 
   // --- Mutations: access window & merge ----------------------------------
 
-  setAccessValidUntil: adminProcedure
+  setAccessValidUntil: identityAdmin
     .input(setAccessValidUntilInput)
     .mutation(async ({ ctx, input }) => {
       const actor = requireActor(ctx);
@@ -676,7 +819,7 @@ export const identityRouter = router({
     }),
 
   /** Reactivate an expired external against the SAME person (PL-042). */
-  reengage: adminProcedure.input(reengageInput).mutation(async ({ ctx, input }) => {
+  reengage: identityAdmin.input(reengageInput).mutation(async ({ ctx, input }) => {
     const actor = requireActor(ctx);
     const person = await loadPerson(ctx, input.personId);
     if (person.status !== 'inactive') {
@@ -710,7 +853,7 @@ export const identityRouter = router({
   }),
 
   /** Merge two persons onto one surrogate id — reversible, flags unioned (PL-038/040). */
-  merge: adminProcedure.input(mergePersonsInput).mutation(async ({ ctx, input }) => {
+  merge: identityAdmin.input(mergePersonsInput).mutation(async ({ ctx, input }) => {
     const actor = requireActor(ctx);
     if (input.survivingPersonId === input.supersededPersonId) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'Cannot merge a person with itself' });
@@ -814,7 +957,7 @@ export const identityRouter = router({
   }),
 
   /** Reverse a merge: restore users, reactivate the superseded person (PL-039). */
-  unmerge: adminProcedure.input(unmergeInput).mutation(async ({ ctx, input }) => {
+  unmerge: identityAdmin.input(unmergeInput).mutation(async ({ ctx, input }) => {
     const actor = requireActor(ctx);
     const merge = await ctx.db
       .selectFrom('platform.person_merge')
@@ -853,7 +996,7 @@ export const identityRouter = router({
 
   // --- Invitation (PL-036) — the only external account-creation path ------
 
-  invite: adminProcedure.input(invitePersonInput).mutation(async ({ ctx, input }) => {
+  invite: identityAdmin.input(invitePersonInput).mutation(async ({ ctx, input }) => {
     const actor = requireActor(ctx);
     await loadPerson(ctx, input.personId);
     const { reused } = await ctx.db.transaction().execute(async (trx) => {

@@ -1,5 +1,5 @@
 import { appendEvent, newUuidV7 } from '@repo/db';
-import { adminProcedure, router } from '../../trpc.js';
+import { roleProcedure, router } from '../../trpc.js';
 import { demoPingInput, demoPingOutput } from '../../schemas.js';
 
 /**
@@ -13,7 +13,9 @@ import { demoPingInput, demoPingOutput } from '../../schemas.js';
  * it idempotently.
  */
 export const journalRouter = router({
-  demoPing: adminProcedure
+  // Re-based off `adminProcedure` onto the domain role model (core plan 04 Q1):
+  // Better Auth's admin flag now guards framework operations only.
+  demoPing: roleProcedure(['administrator'], { module: 'platform' })
     .input(demoPingInput)
     .output(demoPingOutput)
     .mutation(async ({ ctx, input }) => {
