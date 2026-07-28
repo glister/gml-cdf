@@ -24,7 +24,11 @@ prod Node server.
 - `src/lib/route-guards.ts` — UX-only gates (real enforcement is in `@repo/trpc`).
 - `src/routes/` — file-convention routes: `__root`, `login`, `index` (→
   dashboard), `_authenticated/` group + `dashboard`.
-- `src/env.client.ts` (import.meta.env) / `src/env.server.ts` (lazy, server-only).
+- `src/env.ts` (isomorphic public `import.meta.env` VITE_ vars — safe in
+  server-reachable routes/loaders) / `src/env.server.ts` (lazy, server-only
+  secrets; `.server.` is import-protected from the client bundle). Note: an
+  isomorphic public-env module must **not** be named `*.client.*` — TanStack
+  Start's import-protection forbids `.client.` imports in the server environment.
 
 ## UI — design system (mandatory)
 
@@ -34,6 +38,27 @@ Design project read via DesignSync): tokens, component prop contracts
 kits are the visual spec for every route. shadcn/ui + Tailwind v4 are the build
 tools, but stock defaults are not the design — match the system, and flag
 genuine gaps rather than improvising styling or component patterns.
+
+**Translate the design to Tailwind — never port inline styles.** The design
+project authors its components as reference JSX with inline `style={{ … }}`
+referencing CSS variables (`var(--brand)` …). That is the _spec's_ idiom, not
+ours: the DS is framework-neutral because it also feeds `apps/mobile`
+(NativeWind). On web you **translate** it to Tailwind utility classes. Inline
+`style` is reserved for genuinely dynamic values a class can't express (e.g. a
+prop-driven `url()`), and even then the _behaviour_ (breakpoints, hover, focus)
+stays in classes — inline styles can't do media queries or `:hover`.
+
+- The design tokens are bridged into Tailwind's theme via a `@theme` block in
+  `src/app.css`, so every token is a first-class utility: `bg-brand`,
+  `text-muted`/`text-strong` (text _colors_ live under `--color-*`; `text-xl` etc.
+  remain font _sizes_), `rounded-lg`, `shadow-xl`, `font-sans`, `tracking-tight`,
+  and the custom `auth:` breakpoint. Keep `@theme` in sync with the design
+  project's `tokens/*.css`.
+- One design-system button: `src/components/ui/button.tsx` (`cva` over the tokens
+  — variants `primary`/`secondary`/`neutral`/`ghost`/`danger`, `shape`
+  pill/square). Use it; there is no separate `CdButton`.
+- Reference implementations of the translation: `src/components/auth/*` and
+  `src/routes/login.tsx`.
 
 ## Data, tables and forms
 

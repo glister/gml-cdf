@@ -8,9 +8,16 @@
   },
   "files": [
     "vitest.config.ts",
-    "setup-env.ts"
+    "setup-env.ts",
+    "ensure-db.ts"
   ],
   "peerDependencies": {
     "vitest": "^3"
+  },
+  "dependencies": {
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.20.0"
   }
 }

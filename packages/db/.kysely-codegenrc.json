@@ -4,7 +4,11 @@
   "overrides": {
     "columns": {
       "user.role": "Generated<'admin' | 'agent'>",
-      "platform.domain_event.kind": "Generated<'domain' | 'admin' | 'security'>"
+      "platform.domain_event.kind": "Generated<'domain' | 'admin' | 'security'>",
+      "platform.person.relationship_type": "'employee' | 'agency' | 'subcontractor' | 'self_employed' | 'external_org_employee' | 'candidate'",
+      "platform.person.profile_status": "Generated<'draft_shell' | 'information_requested' | 'information_submitted' | 'pending_review' | 'incomplete_rejected' | 'approved_not_active' | 'active' | 'active_with_restrictions' | 'inactive' | 'leaver' | 'reactivated'>",
+      "platform.person.status": "Generated<'active' | 'inactive' | 'superseded'>",
+      "platform.person_flag.flag_type": "'do_not_rehire' | 'safeguarding' | 'safety' | 'other'"
     }
   }
 }

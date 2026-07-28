@@ -1,0 +1,28 @@
+{
+  "name": "@repo/identity",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@repo/vitest-config": "workspace:*",
+    "@types/node": "^22.13.10",
+    "eslint": "^9.22.0",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.0"
+  },
+  "dependencies": {
+    "@repo/db": "workspace:*",
+    "kysely": "^0.29.0",
+    "zod": "^4.0.0"
+  }
+}

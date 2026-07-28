@@ -1,4 +1,7 @@
-import { mergeConfig, defineConfig } from 'vitest/config';
-import { baseConfig } from '@repo/vitest-config/vitest.config';
+import { mergeConfig } from 'vitest/config';
+import { baseConfig, dbIntegrationConfig } from '@repo/vitest-config/vitest.config';
 
-export default mergeConfig(baseConfig, defineConfig({}));
+// Procedure suites run against this package's own test database (keyset/merge/
+// transition correctness needs real SQL); offline suites (keyset.test.ts) don't
+// connect. Isolated so turbo's concurrent `test` tasks never collide.
+export default mergeConfig(baseConfig, dbIntegrationConfig('cdf_test_trpc'));

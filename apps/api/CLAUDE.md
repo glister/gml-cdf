@@ -11,10 +11,15 @@ does not define procedures.
   mounted via `@hono/trpc-server`. `createContext` injects `db`, `logger`, email/
   sms senders, and an in-memory rate limiter. Health check at `/`.
   Exports `app` for tests; only calls `serve()` when `VITEST` is unset.
-- `src/lib/auth.ts` — `betterAuth({ database: pool })`. Email/password +
-  `emailOTP` (6-digit/300s, sends via `@repo/email`) + `admin` (roles
-  admin/agent, `defaultRole: 'agent'`) + `customSession`. Snake_case column
-  mapping per model + admin plugin `schema`. No social provider.
+- `src/lib/auth.ts` — `betterAuth({ database: pool })` (core plan 03, ADR-0014).
+  SSO + OTP only (password removed): Entra ID (Microsoft social provider) for
+  employees + `emailOTP` (6-digit/300s, `disableSignUp: true` — invitation-only,
+  PL-036) + `admin` + `customSession` (adds `personId`). DB-backed `rateLimit`
+  - Turnstile `captcha` on OTP send (PL-044). `databaseHooks` attach a
+    `platform.person` on first Entra sign-in and journal `signed_in`. The Entra
+    provider and captcha ship **inert** until `ENTRA_CLIENT_SECRET` /
+    `TURNSTILE_SECRET_KEY` are set. Better Auth tables are reached only via
+    `@repo/identity` (the adapter boundary).
 - `src/instrument.ts` — OTel init (imported via `--import`).
 - `src/logger.ts` — Winston logger via `@repo/logging`.
 

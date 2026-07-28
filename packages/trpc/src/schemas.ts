@@ -1,5 +1,13 @@
 import { z } from 'zod';
-import { SORT_DIRECTIONS, USER_ROLES } from './lib/constants.js';
+import {
+  PERSON_FLAG_TYPES,
+  PERSON_SORTS,
+  PERSON_STATUSES,
+  PROFILE_STATUSES,
+  RELATIONSHIP_TYPES,
+  SORT_DIRECTIONS,
+  USER_ROLES,
+} from './lib/constants.js';
 
 /**
  * Flat module of Zod input/output schemas + inferred types. Enums are derived
@@ -55,3 +63,114 @@ export type DemoPingInput = z.infer<typeof demoPingInput>;
 
 export const demoPingOutput = z.object({ eventId: z.uuid() });
 export type DemoPingOutput = z.infer<typeof demoPingOutput>;
+
+// --- platform.identity router (core plan 03 §5.1) ---
+
+export const relationshipTypeSchema = z.enum(RELATIONSHIP_TYPES);
+export type RelationshipTypeInput = z.infer<typeof relationshipTypeSchema>;
+export const profileStatusSchema = z.enum(PROFILE_STATUSES);
+export type ProfileStatusInput = z.infer<typeof profileStatusSchema>;
+export const personStatusSchema = z.enum(PERSON_STATUSES);
+export const personFlagTypeSchema = z.enum(PERSON_FLAG_TYPES);
+
+/** Free-text audit rationale required by state-changing identity actions. */
+const reasonSchema = z.string().trim().min(1).max(2000);
+
+export const listPersonsInput = z.object({
+  cursor: z.string().optional(),
+  limit: z.number().int().min(1).max(100).default(25),
+  relationshipType: relationshipTypeSchema.optional(),
+  profileStatus: profileStatusSchema.optional(),
+  status: personStatusSchema.optional(),
+  search: z.string().trim().max(200).optional(),
+  expiringWithinDays: z.number().int().positive().optional(),
+  sort: z.enum(PERSON_SORTS).default('created_at'),
+  sortDir: z.enum(SORT_DIRECTIONS).default('desc'),
+});
+export type ListPersonsInput = z.infer<typeof listPersonsInput>;
+
+export const personIdInput = z.object({ personId: z.uuid() });
+
+export const updatePersonInput = z.object({
+  personId: z.uuid(),
+  displayName: z.string().trim().min(1).max(400).optional(),
+  givenName: z.string().trim().max(200).nullish(),
+  familyName: z.string().trim().max(200).nullish(),
+  dateOfBirth: z.iso.date().nullish(),
+  contactEmail: z.string().trim().max(320).nullish(),
+  agencyWorkerReference: z.string().trim().max(100).nullish(),
+});
+export type UpdatePersonInput = z.infer<typeof updatePersonInput>;
+
+export const mergePersonsInput = z.object({
+  survivingPersonId: z.uuid(),
+  supersededPersonId: z.uuid(),
+  reason: reasonSchema,
+});
+export const unmergeInput = z.object({ mergeId: z.uuid(), reason: reasonSchema });
+
+export const addFlagInput = z.object({
+  personId: z.uuid(),
+  flagType: personFlagTypeSchema,
+  reason: reasonSchema,
+});
+export const endFlagInput = z.object({ flagId: z.uuid(), reason: reasonSchema });
+
+export const setAccessValidUntilInput = z.object({
+  personId: z.uuid(),
+  accessValidUntil: z.iso.datetime(),
+});
+export const reengageInput = z.object({
+  personId: z.uuid(),
+  accessValidUntil: z.iso.datetime(),
+});
+
+export const dismissDuplicateInput = z.object({
+  personIdA: z.uuid(),
+  personIdB: z.uuid(),
+  reason: z.string().trim().max(2000).optional(),
+});
+export const listDuplicateCandidatesInput = z.object({
+  cursor: z.string().optional(),
+  limit: z.number().int().min(1).max(100).default(25),
+});
+
+export const checkExistingInput = z.object({
+  givenName: z.string().trim().max(200).optional(),
+  familyName: z.string().trim().max(200).optional(),
+  dateOfBirth: z.iso.date().optional(),
+  contactEmail: z.string().trim().max(320).optional(),
+  agencyWorkerReference: z.string().trim().max(100).optional(),
+});
+export type CheckExistingInput = z.infer<typeof checkExistingInput>;
+
+export const createPersonInput = z.object({
+  displayName: z.string().trim().min(1).max(400),
+  givenName: z.string().trim().max(200).optional(),
+  familyName: z.string().trim().max(200).optional(),
+  dateOfBirth: z.iso.date().optional(),
+  contactEmail: z.string().trim().max(320).optional(),
+  agencyWorkerReference: z.string().trim().max(100).optional(),
+  relationshipType: relationshipTypeSchema,
+  accessValidUntil: z.iso.datetime().optional(),
+  // Creating despite candidate matches demands an explicit, journalled override.
+  overrideMatches: z
+    .object({
+      candidatePersonIds: z.array(z.uuid()).min(1),
+      reason: reasonSchema,
+    })
+    .optional(),
+});
+export type CreatePersonInput = z.infer<typeof createPersonInput>;
+
+export const setProfileStatusInput = z.object({
+  personId: z.uuid(),
+  to: profileStatusSchema,
+  reason: reasonSchema,
+});
+export const convertToEmployeeInput = z.object({ personId: z.uuid(), reason: reasonSchema });
+
+export const invitePersonInput = z.object({
+  personId: z.uuid(),
+  email: z.string().trim().toLowerCase().max(320),
+});

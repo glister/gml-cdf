@@ -16,6 +16,7 @@ import { logger } from './logger.js';
 type Variables = {
   user: User | null;
   session: Session | null;
+  personId: string | null;
 };
 
 const env = parse(
@@ -89,11 +90,14 @@ app.use(
 // Better Auth routes.
 app.on(['GET', 'POST'], '/api/auth/*', (c) => auth.handler(c.req.raw));
 
-// Resolve the session for tRPC (and any other protected routes).
+// Resolve the session for tRPC (and any other protected routes). The
+// customSession plugin augments the payload with `personId` (the resolved
+// platform.person), so no second query is needed here.
 app.use('/trpc/*', async (c, next) => {
-  const session = await auth.api.getSession({ headers: c.req.raw.headers });
-  c.set('user', session?.user ?? null);
-  c.set('session', session?.session ?? null);
+  const result = await auth.api.getSession({ headers: c.req.raw.headers });
+  c.set('user', result?.user ?? null);
+  c.set('session', result?.session ?? null);
+  c.set('personId', (result as { personId?: string | null } | null)?.personId ?? null);
   await next();
 });
 
@@ -114,7 +118,7 @@ function buildContext(c: Context<{ Variables: Variables }>): TRPCContext {
     sms,
     rateLimit,
     correlationId,
-    actorPersonId: null,
+    actorPersonId: c.get('personId') ?? null,
     user: user
       ? {
           id: user.id,

@@ -3,6 +3,7 @@ import nodemailer from 'nodemailer';
 import { Resend } from 'resend';
 import { parse, z } from '@repo/env';
 import { createLogger, type Logger } from '@repo/logging';
+import { InvitationEmail } from './templates/invitation.js';
 import { OtpEmail } from './templates/otp.js';
 
 /**
@@ -16,6 +17,8 @@ const envSchema = z.object({
   EMAIL_SMTP_HOST: z.string().optional(),
   EMAIL_SMTP_PORT: z.coerce.number().int().positive().optional(),
   RESEND_API_KEY: z.string().optional(),
+  // The web base URL, for the invitation sign-in link (PL-036).
+  APP_URL: z.string().optional(),
 });
 
 export interface SendEmailInput {
@@ -27,6 +30,8 @@ export interface SendEmailInput {
 export interface EmailClient {
   send(input: SendEmailInput): Promise<void>;
   sendOtp(to: string, code: string): Promise<void>;
+  /** Send an account invitation (PL-036). The invitee signs in with an email OTP. */
+  sendInvitation(to: string): Promise<void>;
 }
 
 export interface CreateEmailClientOptions {
@@ -36,6 +41,11 @@ export interface CreateEmailClientOptions {
 /** Render the OTP email template to an HTML string. */
 export function renderOtpEmail(code: string, expiresInMinutes = 5): Promise<string> {
   return render(OtpEmail({ code, expiresInMinutes }));
+}
+
+/** Render the invitation email template to an HTML string. */
+export function renderInvitationEmail(signInUrl: string): Promise<string> {
+  return render(InvitationEmail({ signInUrl }));
 }
 
 export function createEmailClient(options: CreateEmailClientOptions = {}): EmailClient {
@@ -84,6 +94,11 @@ export function createEmailClient(options: CreateEmailClientOptions = {}): Email
     async sendOtp(to, code) {
       const html = await renderOtpEmail(code);
       await send({ to, subject: 'Your verification code', html });
+    },
+    async sendInvitation(to) {
+      const signInUrl = `${env.APP_URL ?? ''}/login`;
+      const html = await renderInvitationEmail(signInUrl);
+      await send({ to, subject: 'You’ve been invited to CD Fencing', html });
     },
   };
 }

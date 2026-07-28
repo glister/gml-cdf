@@ -20,6 +20,7 @@ export interface ContextLogger {
 
 export interface EmailSender {
   sendOtp(to: string, code: string): Promise<void>;
+  sendInvitation(to: string): Promise<void>;
 }
 
 export interface SmsSender {

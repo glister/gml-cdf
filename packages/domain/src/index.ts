@@ -5,6 +5,24 @@
  */
 export { isWithinPeriod, overlaps } from './lib/period.js';
 export {
+  matchDuplicate,
+  normaliseIdentityValue,
+  type DuplicateMatchReason,
+  type DuplicateMatchResult,
+  type PersonIdentityAttributes,
+} from './identity/duplicate-match.js';
+export {
+  planFlagUnion,
+  type ActiveFlag,
+  type FlagCopyPlan,
+  type PersonFlagType,
+} from './identity/flag-union.js';
+export {
+  allowedTransitions,
+  canTransition,
+  type ProfileStatus,
+} from './identity/profile-status.js';
+export {
   defineEvent,
   EVENT_TYPE_PATTERN,
   eventTypes,

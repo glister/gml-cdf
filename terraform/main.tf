@@ -48,10 +48,10 @@ module "service_bus" {
 
   # The domain-event journal relay (core plan 02 §5.2) publishes to the
   # domain-events topic; Phase 1 has the single pilot-demo subscription (later
-  # plans/modules add their own). The hello-world queue stays until plan 07
-  # replaces it with the effects queue. These replace the module's placeholder
-  # events/events-sub defaults.
-  queues        = ["hello-world"]
+  # plans/modules add their own). The `effects` queue carries scheduled command
+  # messages (core plan 03 §5.2 — the identity sweeps); plan 07's scheduled-action
+  # mechanism will own it later, but this plan lands it now (see §5.2 sequencing).
+  queues        = ["hello-world", "effects"]
   topics        = ["domain-events"]
   subscriptions = { "pilot-demo" = "domain-events" }
 

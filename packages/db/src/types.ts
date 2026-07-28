@@ -9,6 +9,8 @@ export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
   ? ColumnType<S, I | undefined, U>
   : ColumnType<T, T | undefined, T>;
 
+export type Int8 = ColumnType<string, bigint | number | string, bigint | number | string>;
+
 export type Json = JsonValue;
 
 export type JsonArray = JsonValue[];
@@ -62,6 +64,63 @@ export interface PlatformEventConsumption {
   event_id: string;
 }
 
+export interface PlatformPerson {
+  access_valid_until: Timestamp | null;
+  agency_worker_reference: string | null;
+  contact_email: string | null;
+  created_at: Generated<Timestamp>;
+  created_by: string | null;
+  date_of_birth: string | null;
+  deleted_at: Timestamp | null;
+  display_name: string;
+  family_name: string | null;
+  given_name: string | null;
+  id: string;
+  profile_status: Generated<"draft_shell" | "information_requested" | "information_submitted" | "pending_review" | "incomplete_rejected" | "approved_not_active" | "active" | "active_with_restrictions" | "inactive" | "leaver" | "reactivated">;
+  relationship_type: "employee" | "agency" | "subcontractor" | "self_employed" | "external_org_employee" | "candidate";
+  status: Generated<"active" | "inactive" | "superseded">;
+  updated_at: Generated<Timestamp>;
+  updated_by: string | null;
+}
+
+export interface PlatformPersonFlag {
+  created_at: Generated<Timestamp>;
+  end_reason: string | null;
+  ended_at: Timestamp | null;
+  ended_by: string | null;
+  flag_type: "do_not_rehire" | "safeguarding" | "safety" | "other";
+  id: string;
+  person_id: string;
+  raised_at: Timestamp;
+  raised_by: string;
+  reason: string;
+  source_flag_id: string | null;
+  source_merge_id: string | null;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface PlatformPersonMerge {
+  created_at: Generated<Timestamp>;
+  id: string;
+  merged_at: Timestamp;
+  merged_by: string;
+  moved_user_ids: Json;
+  reason: string;
+  reversal_reason: string | null;
+  reversed_at: Timestamp | null;
+  reversed_by: string | null;
+  superseded_person_id: string;
+  surviving_person_id: string;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface RateLimit {
+  count: number;
+  id: string;
+  key: string;
+  last_request: Int8;
+}
+
 export interface Session {
   created_at: Generated<Timestamp>;
   expires_at: Timestamp;
@@ -84,6 +143,7 @@ export interface User {
   id: string;
   image: string | null;
   name: string;
+  person_id: string | null;
   role: Generated<"admin" | "agent">;
   updated_at: Generated<Timestamp>;
 }
@@ -101,6 +161,10 @@ export interface DB {
   account: Account;
   "platform.domain_event": PlatformDomainEvent;
   "platform.event_consumption": PlatformEventConsumption;
+  "platform.person": PlatformPerson;
+  "platform.person_flag": PlatformPersonFlag;
+  "platform.person_merge": PlatformPersonMerge;
+  rate_limit: RateLimit;
   session: Session;
   user: User;
   verification: Verification;

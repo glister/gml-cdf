@@ -1,10 +1,174 @@
+/* CD Fencing webfonts (Hanken Grotesk + IBM Plex Mono) — see tokens/fonts.css
+   in the design project. Swap for self-hosted files if offline use is required.
+   A url() @import must precede all other statements, so it sits above Tailwind. */
+@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 @import 'tailwindcss';
+
+/* ==========================================================================
+   CD Fencing Design System — token layer, bridged into Tailwind v4's theme.
+   Mirrored from the Claude Design project (23b5e330-deb3-4365-8d26-171f9fcd95b1,
+   read via DesignSync); keep in sync with its tokens/*.css. Declaring the tokens
+   INSIDE @theme (rather than a plain :root) makes them first-class Tailwind
+   utilities — `bg-brand`, `text-muted`, `rounded-lg`, `shadow-xl`, `font-sans`,
+   `text-xl`, `tracking-tight`, `auth:flex-row`, … — while Tailwind still emits
+   each as a CSS custom property, so a future `.dark`/@media override themes
+   everything. Design-system UI is TRANSLATED to these utilities, never authored
+   as inline `style={{ var(--…) }}` (see apps/web/CLAUDE.md).
+   ========================================================================== */
+@theme {
+  /* --- Breakpoints -------------------------------------------------------- */
+  /* The login shell's split↔stacked point (a real media query, `auth:`). */
+  --breakpoint-auth: 860px;
+
+  /* --- Font families ------------------------------------------------------ */
+  --font-sans: 'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  /* --- Type scale (1.20 minor-third, base 16px) --------------------------- */
+  --text-2xs: 0.6875rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-md: 1.125rem;
+  --text-lg: 1.375rem;
+  --text-xl: 1.75rem;
+  --text-2xl: 2.25rem;
+  --text-3xl: 3rem;
+  --text-4xl: 3.75rem;
+
+  /* --- Letter spacing / line height --------------------------------------- */
+  --tracking-tight: -0.02em;
+  --tracking-wide: 0.04em;
+  --tracking-caps: 0.08em;
+  --leading-tight: 1.1;
+  --leading-snug: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+
+  /* --- Radius ------------------------------------------------------------- */
+  --radius-xs: 3px;
+  --radius-sm: 5px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 18px;
+  --radius-pill: 999px;
+
+  /* --- Shadows (warm-tinted, low spread) ---------------------------------- */
+  --shadow-xs: 0 1px 2px rgba(33, 31, 29, 0.06);
+  --shadow-sm: 0 1px 3px rgba(33, 31, 29, 0.08), 0 1px 2px rgba(33, 31, 29, 0.05);
+  --shadow-md: 0 4px 12px rgba(33, 31, 29, 0.08), 0 2px 4px rgba(33, 31, 29, 0.05);
+  --shadow-lg: 0 12px 28px rgba(33, 31, 29, 0.12), 0 4px 10px rgba(33, 31, 29, 0.06);
+  --shadow-xl: 0 24px 48px rgba(33, 31, 29, 0.16);
+
+  /* --- Motion ------------------------------------------------------------- */
+  --ease-standard: cubic-bezier(0.2, 0, 0.1, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* --- Palette: brand green ----------------------------------------------- */
+  --color-green-50: #ecf7ef;
+  --color-green-100: #d2edd8;
+  --color-green-200: #a6dcb2;
+  --color-green-300: #78c98a;
+  --color-green-400: #5cc06a;
+  --color-green-500: #1e7e34;
+  --color-green-600: #1a6c2d;
+  --color-green-700: #155726;
+  --color-green-800: #0f4720;
+  --color-green-900: #0b3d1e;
+
+  /* --- Palette: cool slate ------------------------------------------------ */
+  --color-gray-50: #f6f7f9;
+  --color-gray-100: #edeff2;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #cbd2d9;
+  --color-gray-400: #9aa5b1;
+  --color-gray-500: #6b7684;
+  --color-gray-600: #4a5561;
+  --color-gray-700: #323f4b;
+  --color-gray-800: #1f2933;
+  --color-gray-900: #131a21;
+
+  /* --- Palette: hi-vis amber ---------------------------------------------- */
+  --color-amber-50: #fdf3e3;
+  --color-amber-100: #fae2bd;
+  --color-amber-200: #f5c97e;
+  --color-amber-300: #efae45;
+  --color-amber-400: #e8961e;
+  --color-amber-500: #c97c10;
+  --color-amber-600: #9e5f0b;
+
+  /* --- Status ------------------------------------------------------------- */
+  --color-status-success: #1e7e34;
+  --color-status-success-bg: #e7f4ea;
+  --color-status-warning: #e8961e;
+  --color-status-warning-bg: #fcf0dc;
+  --color-status-danger: #d64545;
+  --color-status-danger-bg: #fbeaea;
+  --color-status-info: #2a6fb0;
+  --color-status-info-bg: #e8f0f9;
+
+  /* --- Semantic: brand ---------------------------------------------------- */
+  --color-brand: var(--color-green-500);
+  --color-brand-hover: var(--color-green-600);
+  --color-brand-press: var(--color-green-700);
+  --color-brand-subtle: var(--color-green-50);
+  --color-brand-contrast: #ffffff;
+  --color-accent: var(--color-amber-400);
+  --color-accent-subtle: var(--color-amber-50);
+
+  /* --- Semantic: text (colors; sizes are --text-* above) ------------------ */
+  --color-strong: var(--color-gray-900);
+  --color-body: var(--color-gray-700);
+  --color-muted: var(--color-gray-500);
+  --color-disabled: var(--color-gray-400);
+  --color-on-brand: #ffffff;
+  --color-on-dark: var(--color-gray-50);
+  --color-link: var(--color-green-600);
+
+  /* --- Semantic: surfaces ------------------------------------------------- */
+  --color-surface-page: var(--color-gray-50);
+  --color-surface-card: #ffffff;
+  --color-surface-sunken: var(--color-gray-100);
+  --color-surface-brand: var(--color-green-500);
+  --color-surface-brand-soft: var(--color-green-50);
+  --color-surface-dark: var(--color-gray-800);
+  --color-surface-inverse: var(--color-gray-900);
+
+  /* --- Semantic: borders (shadcn-style `border-border-*`) ----------------- */
+  --color-border-subtle: var(--color-gray-200);
+  --color-border-default: var(--color-gray-300);
+  --color-border-strong: var(--color-gray-400);
+  --color-border-brand: var(--color-green-500);
+  --color-border-focus: var(--color-brand);
+
+  /* --- State taxonomy tones (tokens/states.css) — for StatusPill etc. ------
+     Each tone: base (dot/rail), -bg (tint surface), -border, -text (AA on bg). */
+  --color-state-neutral: var(--color-gray-500);
+  --color-state-neutral-bg: var(--color-gray-100);
+  --color-state-neutral-border: var(--color-gray-300);
+  --color-state-neutral-text: var(--color-gray-700);
+  --color-state-info: var(--color-status-info);
+  --color-state-info-bg: var(--color-status-info-bg);
+  --color-state-info-border: #b9d2ed;
+  --color-state-info-text: #235c97;
+  --color-state-pending: var(--color-status-warning);
+  --color-state-pending-bg: var(--color-status-warning-bg);
+  --color-state-pending-border: #f0d090;
+  --color-state-pending-text: var(--color-amber-600);
+  --color-state-success: var(--color-status-success);
+  --color-state-success-bg: var(--color-status-success-bg);
+  --color-state-success-border: #a9d8bf;
+  --color-state-success-text: var(--color-green-700);
+  --color-state-danger: var(--color-status-danger);
+  --color-state-danger-bg: var(--color-status-danger-bg);
+  --color-state-danger-border: #eeb6b0;
+  --color-state-danger-text: #b23a31;
+}
 
 :root {
   color-scheme: light dark;
 }
 
 body {
-  font-family:
-    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--font-sans);
 }

@@ -1,7 +1,7 @@
 import { createIsomorphicFn } from '@tanstack/react-start';
 import { createAuthClient } from 'better-auth/react';
 import { adminClient, emailOTPClient } from 'better-auth/client/plugins';
-import { clientEnv } from './env.client.js';
+import { clientEnv } from './env.js';
 import { getServerApiUrl } from './env.server.js';
 
 // Browser → VITE_API_URL; SSR → internal API URL. createIsomorphicFn keeps the

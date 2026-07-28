@@ -26,6 +26,48 @@ describe('event registry', () => {
     // The length cap holds.
     expect(def!.payloadSchema.safeParse({ note: 'x'.repeat(201) }).success).toBe(false);
   });
+
+  it('registers every identity lifecycle event at schema version 1', () => {
+    const identityEvents = Object.keys(eventTypes).filter((t) => t.startsWith('platform.person.'));
+    // The full §4.3 set — a regression guard against dropping one.
+    expect(identityEvents.length).toBe(16);
+    for (const t of identityEvents) {
+      expect(eventDefinition(t)?.schemaVersion).toBe(1);
+    }
+  });
+
+  it('the merged payload accepts IDs/deltas and rejects a spread profile field (PII-minimal)', () => {
+    const def = eventDefinition('platform.person.merged');
+    expect(def).toBeDefined();
+    const ok = {
+      mergeId: '00000000-0000-7000-8000-000000000001',
+      supersededPersonId: '00000000-0000-7000-8000-000000000002',
+      movedUserIds: ['u1'],
+      copiedFlagIds: [],
+    };
+    expect(def!.payloadSchema.safeParse(ok).success).toBe(true);
+    // A name leaking into the payload is rejected structurally (ADR-0019).
+    expect(def!.payloadSchema.safeParse({ ...ok, familyName: 'Smith' }).success).toBe(false);
+  });
+
+  it('the profile_status_changed payload requires from/to and a non-empty reason', () => {
+    const def = eventDefinition('platform.person.profile_status_changed');
+    expect(
+      def!.payloadSchema.safeParse({
+        from: 'draft_shell',
+        to: 'information_requested',
+        reason: 'intake',
+      }).success,
+    ).toBe(true);
+    expect(
+      def!.payloadSchema.safeParse({ from: 'draft_shell', to: 'information_requested', reason: '' })
+        .success,
+    ).toBe(false);
+    // An unknown status literal is rejected by the enum.
+    expect(def!.payloadSchema.safeParse({ from: 'nope', to: 'active', reason: 'x' }).success).toBe(
+      false,
+    );
+  });
 });
 
 describe('defineEvent name and version validation', () => {
