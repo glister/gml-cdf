@@ -5,6 +5,14 @@
  */
 export { isWithinPeriod, overlaps } from './lib/period.js';
 export {
+  activeModulesFor,
+  grantState,
+  hasRole,
+  isGrantActive,
+  type Grant,
+  type GrantState,
+} from './authz/grants.js';
+export {
   matchDuplicate,
   normaliseIdentityValue,
   type DuplicateMatchReason,
