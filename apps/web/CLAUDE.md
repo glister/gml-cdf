@@ -24,7 +24,11 @@ prod Node server.
 - `src/lib/route-guards.ts` — UX-only gates (real enforcement is in `@repo/trpc`).
 - `src/routes/` — file-convention routes: `__root`, `login`, `index` (→
   dashboard), `_authenticated/` group + `dashboard`.
-- `src/env.client.ts` (import.meta.env) / `src/env.server.ts` (lazy, server-only).
+- `src/env.ts` (isomorphic public `import.meta.env` VITE_ vars — safe in
+  server-reachable routes/loaders) / `src/env.server.ts` (lazy, server-only
+  secrets; `.server.` is import-protected from the client bundle). Note: an
+  isomorphic public-env module must **not** be named `*.client.*` — TanStack
+  Start's import-protection forbids `.client.` imports in the server environment.
 
 ## UI — design system (mandatory)
 
