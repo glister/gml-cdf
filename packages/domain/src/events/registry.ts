@@ -1,9 +1,12 @@
 import type { z } from 'zod';
 import type { EventDefinition } from './define.js';
 import {
+  platformDataSpecialCategoryAccessed,
   platformDemoPinged,
   platformPersonAccessExpired,
   platformPersonAccessExpirySet,
+  platformPersonAllocationAdded,
+  platformPersonAllocationEnded,
   platformPersonCreated,
   platformPersonCredentialLinked,
   platformPersonDuplicateDismissed,
@@ -18,6 +21,8 @@ import {
   platformPersonReengaged,
   platformPersonRelationshipChanged,
   platformPersonSignedIn,
+  platformRoleGranted,
+  platformRoleRevoked,
 } from './platform.js';
 
 /**
@@ -50,6 +55,12 @@ export const eventTypes = {
   'platform.person.profile_status_changed': platformPersonProfileStatusChanged,
   'platform.person.relationship_changed': platformPersonRelationshipChanged,
   'platform.person.precreation_check_overridden': platformPersonPrecreationCheckOverridden,
+  // Authorisation — role, record and field level (core plan 04, PL-002/003).
+  'platform.role.granted': platformRoleGranted,
+  'platform.role.revoked': platformRoleRevoked,
+  'platform.data.special_category.accessed': platformDataSpecialCategoryAccessed,
+  'platform.person.allocation_added': platformPersonAllocationAdded,
+  'platform.person.allocation_ended': platformPersonAllocationEnded,
 } as const;
 
 /** The union of all registered event-type names. */

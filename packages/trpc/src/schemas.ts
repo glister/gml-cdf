@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { defineFieldClassification, schemaUpTo } from './lib/field-classification.js';
 import {
   FIELD_CLASSES,
   GRANT_STATES,
@@ -240,3 +241,104 @@ export const listAllocationsInput = z.object({
   sortDir: z.enum(SORT_DIRECTIONS).default('desc'),
 });
 export type ListAllocationsInput = z.infer<typeof listAllocationsInput>;
+
+// --- Field classification pilot (core plan 04 §5.1, PL-003, ADR-0015) ---
+//
+// The pattern every entity follows: one classification map covering EVERY
+// exposed column (an unclassified column is a compile error, not a silently
+// visible field), and role-variant output schemas derived from it. HR entities
+// adopt the same shape later — `employeeProfileFull` vs
+// `employeeProfileRestricted`, `hr.employee_sensitive`, `hr.absence_medical`.
+
+/** Every column `platform.person` exposes through the API. */
+const personFields = z.object({
+  id: z.uuid(),
+  relationship_type: relationshipTypeSchema,
+  profile_status: profileStatusSchema,
+  status: personStatusSchema,
+  display_name: z.string(),
+  given_name: z.string().nullable(),
+  family_name: z.string().nullable(),
+  contact_email: z.string().nullable(),
+  date_of_birth: z.string().nullable(),
+  agency_worker_reference: z.string().nullable(),
+  access_valid_until: z.union([z.string(), z.date()]).nullable(),
+  created_at: z.union([z.string(), z.date()]),
+  updated_at: z.union([z.string(), z.date()]),
+});
+
+/**
+ * `platform.person` carries no special-category column by design — safeguarding
+ * detail lives in `platform.person_flag`, a separate table (ADR-0015/0019), so a
+ * `select *` here cannot leak it. Contact detail and date of birth are
+ * `sensitive`: needed by HR, not by a peer.
+ */
+export const personClassification = defineFieldClassification('platform.person', personFields, {
+  id: 'internal',
+  relationship_type: 'internal',
+  profile_status: 'internal',
+  status: 'internal',
+  display_name: 'internal',
+  given_name: 'internal',
+  family_name: 'internal',
+  contact_email: 'sensitive',
+  date_of_birth: 'sensitive',
+  agency_worker_reference: 'internal',
+  access_valid_until: 'internal',
+  created_at: 'internal',
+  updated_at: 'internal',
+});
+
+/** HR User / Administrator variant — everything up to and including sensitive. */
+export const personOutputFull = schemaUpTo(personClassification, 'sensitive');
+/** Everyone else, including `external` (PL-043) — internal and below only. */
+export const personOutputRestricted = schemaUpTo(personClassification, 'internal');
+
+/** Every column `platform.person_flag` exposes — the special-category pilot. */
+const personFlagFields = z.object({
+  id: z.uuid(),
+  person_id: z.uuid(),
+  flag_type: personFlagTypeSchema,
+  reason: z.string(),
+  raised_at: z.union([z.string(), z.date()]),
+  raised_by: z.uuid(),
+  ended_at: z.union([z.string(), z.date()]).nullable(),
+  ended_by: z.uuid().nullable(),
+  end_reason: z.string().nullable(),
+  source_merge_id: z.uuid().nullable(),
+  source_flag_id: z.uuid().nullable(),
+});
+
+/**
+ * A safeguarding flag's *type and rationale* are special-category: they concern
+ * criminal-adjacent and safeguarding matters (ADR-0019). The bookkeeping around
+ * it (who raised it, when, merge lineage) is sensitive but not special-category
+ * — so an authorised HR reader can see that a flag exists and its provenance
+ * without the read being journalled twice over.
+ */
+export const personFlagClassification = defineFieldClassification(
+  'platform.person_flag',
+  personFlagFields,
+  {
+    id: 'internal',
+    person_id: 'internal',
+    flag_type: 'special-category',
+    reason: 'special-category',
+    end_reason: 'special-category',
+    raised_at: 'sensitive',
+    raised_by: 'sensitive',
+    ended_at: 'sensitive',
+    ended_by: 'sensitive',
+    source_merge_id: 'internal',
+    source_flag_id: 'internal',
+  },
+);
+
+/** Administrator / HR User variant — includes the special-category detail. */
+export const personFlagOutputFull = schemaUpTo(personFlagClassification, 'special-category');
+/**
+ * Everyone else. Note what survives: the *existence* of a flag and its
+ * provenance, never its type or rationale — the PL-003 shape of "separate
+ * sensitive detail from the operational output".
+ */
+export const personFlagOutputRestricted = schemaUpTo(personFlagClassification, 'sensitive');

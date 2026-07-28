@@ -1,5 +1,6 @@
 import { router } from './trpc.js';
 import { usersRouter } from './routers/users.js';
+import { authzRouter } from './routers/platform/authz.js';
 import { identityRouter } from './routers/platform/identity.js';
 import { journalRouter } from './routers/platform/journal.js';
 
@@ -12,6 +13,7 @@ export const appRouter = router({
   platform: router({
     journal: journalRouter,
     identity: identityRouter,
+    authz: authzRouter,
   }),
 });
 

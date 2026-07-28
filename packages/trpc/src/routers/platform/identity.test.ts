@@ -42,6 +42,7 @@ function makeCtx(overrides: Partial<TRPCContext> = {}): TRPCContext {
     rateLimit: { check: () => true },
     correlationId: newUuidV7(),
     actorPersonId: adminPersonId,
+    grants: [],
     ...overrides,
   };
 }

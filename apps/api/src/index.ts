@@ -9,7 +9,13 @@ import { createCloudStorage } from '@repo/cloud-storage';
 import { createEmailClient } from '@repo/email';
 import { createSmsClient } from '@repo/sms';
 import { parse, z } from '@repo/env';
-import { appRouter, type RateLimiter, type TRPCContext } from '@repo/trpc';
+import {
+  appRouter,
+  loadGrantsForPerson,
+  type ContextGrant,
+  type RateLimiter,
+  type TRPCContext,
+} from '@repo/trpc';
 import { auth, type Session, type User } from './lib/auth.js';
 import { logger } from './logger.js';
 
@@ -17,6 +23,7 @@ type Variables = {
   user: User | null;
   session: Session | null;
   personId: string | null;
+  grants: ContextGrant[];
 };
 
 const env = parse(
@@ -92,12 +99,19 @@ app.on(['GET', 'POST'], '/api/auth/*', (c) => auth.handler(c.req.raw));
 
 // Resolve the session for tRPC (and any other protected routes). The
 // customSession plugin augments the payload with `personId` (the resolved
-// platform.person), so no second query is needed here.
+// platform.person), so no second query is needed for identity.
+//
+// Authorisation grants are loaded here too — one indexed query per authenticated
+// request (core plan 04 §9.3). They are loaded unfiltered by time window on
+// purpose: `roleProcedure` checks the window per call, so a grant expiring
+// mid-session stops authorising without a re-login.
 app.use('/trpc/*', async (c, next) => {
   const result = await auth.api.getSession({ headers: c.req.raw.headers });
+  const personId = (result as { personId?: string | null } | null)?.personId ?? null;
   c.set('user', result?.user ?? null);
   c.set('session', result?.session ?? null);
-  c.set('personId', (result as { personId?: string | null } | null)?.personId ?? null);
+  c.set('personId', personId);
+  c.set('grants', await loadGrantsForPerson(db, personId));
   await next();
 });
 
@@ -107,8 +121,7 @@ function buildContext(c: Context<{ Variables: Variables }>): TRPCContext {
   // The admin plugin adds `role` to the user; it isn't on the base inferred type.
   const role = (user as { role?: string | null } | null)?.role === 'admin' ? 'admin' : 'agent';
   // Accept a caller-supplied correlation id when it is a valid UUID, else mint
-  // one per request (core plan 02). actor_person_id is null until plan 03 links
-  // the session user to a person.
+  // one per request (core plan 02).
   const inbound = c.req.header('x-correlation-id');
   const correlationId = inbound && UUID_RE.test(inbound) ? inbound : newUuidV7();
   return {
@@ -119,6 +132,7 @@ function buildContext(c: Context<{ Variables: Variables }>): TRPCContext {
     rateLimit,
     correlationId,
     actorPersonId: c.get('personId') ?? null,
+    grants: c.get('grants') ?? [],
     user: user
       ? {
           id: user.id,

@@ -23,6 +23,12 @@ export {
   type AppendEventInput,
 } from './journal.js';
 export { relayOutboxBatch, recordConsumptionOnce } from './outbox.js';
+export {
+  revokeGrant,
+  revokeAllGrantsForPerson,
+  type RevokeGrantInput,
+  type RevokedGrantSummary,
+} from './authz.js';
 export type { DB } from './types.js';
 export type {
   Account,

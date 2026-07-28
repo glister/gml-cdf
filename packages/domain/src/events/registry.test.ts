@@ -28,12 +28,63 @@ describe('event registry', () => {
   });
 
   it('registers every identity lifecycle event at schema version 1', () => {
-    const identityEvents = Object.keys(eventTypes).filter((t) => t.startsWith('platform.person.'));
-    // The full §4.3 set — a regression guard against dropping one.
-    expect(identityEvents.length).toBe(16);
+    // Core plan 03 §4.3, listed explicitly rather than matched by prefix: the
+    // list catches a rename as well as a deletion, and core plan 04's
+    // allocation events share the `platform.person.` namespace without being
+    // part of this set.
+    const identityEvents = [
+      'platform.person.created',
+      'platform.person.invited',
+      'platform.person.credential_linked',
+      'platform.person.signed_in',
+      'platform.person.duplicate_flagged',
+      'platform.person.duplicate_dismissed',
+      'platform.person.merged',
+      'platform.person.merge_reversed',
+      'platform.person.flag_added',
+      'platform.person.flag_ended',
+      'platform.person.access_expiry_set',
+      'platform.person.access_expired',
+      'platform.person.reengaged',
+      'platform.person.profile_status_changed',
+      'platform.person.relationship_changed',
+      'platform.person.precreation_check_overridden',
+    ];
+    expect(identityEvents).toHaveLength(16);
     for (const t of identityEvents) {
+      expect(isEventType(t), `${t} is not registered`).toBe(true);
       expect(eventDefinition(t)?.schemaVersion).toBe(1);
     }
+  });
+
+  it('registers every authorisation event at schema version 1 (core plan 04 §4.2)', () => {
+    const authzEvents = [
+      'platform.role.granted',
+      'platform.role.revoked',
+      'platform.data.special_category.accessed',
+      'platform.person.allocation_added',
+      'platform.person.allocation_ended',
+    ];
+    for (const t of authzEvents) {
+      expect(isEventType(t), `${t} is not registered`).toBe(true);
+      expect(eventDefinition(t)?.schemaVersion).toBe(1);
+    }
+  });
+
+  it('the special-category read payload carries field NAMES only (ADR-0015/0019)', () => {
+    const def = eventDefinition('platform.data.special_category.accessed');
+    expect(def).toBeDefined();
+    const ok = {
+      entity: 'platform.person_flag',
+      fields: ['flag_type', 'reason'],
+      readerPersonId: '00000000-0000-7000-8000-000000000001',
+      procedure: 'platform.identity.getPerson',
+    };
+    expect(def!.payloadSchema.safeParse(ok).success).toBe(true);
+    // A values map alongside the names is rejected structurally.
+    expect(
+      def!.payloadSchema.safeParse({ ...ok, values: { flag_type: 'safeguarding' } }).success,
+    ).toBe(false);
   });
 
   it('the merged payload accepts IDs/deltas and rejects a spread profile field (PII-minimal)', () => {

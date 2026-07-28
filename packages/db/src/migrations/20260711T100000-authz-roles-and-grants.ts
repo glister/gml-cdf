@@ -165,10 +165,13 @@ export async function up(db: Kysely<any>): Promise<void> {
       'role_grant_window_ordered',
       sql`valid_until IS NULL OR valid_until > valid_from`,
     )
-    // A revocation is a complete stamp: timestamp and actor travel together.
+    // An actor may only be recorded on an actual revocation. The converse is NOT
+    // required: `revoked_by IS NULL` on a revoked grant means the *system* did
+    // it (the plan-03 expiry sweep), matching the repo-wide NULL-actor
+    // convention for `created_by`/`updated_by` and `appendEvent`.
     .addCheckConstraint(
-      'role_grant_revocation_complete',
-      sql`(revoked_at IS NULL) = (revoked_by IS NULL)`,
+      'role_grant_revoker_needs_revocation',
+      sql`revoked_by IS NULL OR revoked_at IS NOT NULL`,
     )
     .execute();
 
@@ -239,8 +242,8 @@ export async function up(db: Kysely<any>): Promise<void> {
       sql`valid_until IS NULL OR valid_until > valid_from`,
     )
     .addCheckConstraint(
-      'person_allocation_end_complete',
-      sql`(ended_at IS NULL) = (ended_by IS NULL)`,
+      'person_allocation_ender_needs_ending',
+      sql`ended_by IS NULL OR ended_at IS NOT NULL`,
     )
     .execute();
 
