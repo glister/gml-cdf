@@ -1,3 +1,4 @@
+import { CircleAlert } from 'lucide-react';
 import * as React from 'react';
 import { cn } from '~/lib/utils';
 
@@ -158,18 +159,7 @@ export function OTPEntry({
             role="alert"
             className="mt-2.5 flex items-center gap-1.5 text-sm font-medium text-status-danger"
           >
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.25"
-              strokeLinecap="round"
-            >
-              <circle cx="12" cy="12" r="9" />
-              <path d="M12 8v4M12 16h.01" />
-            </svg>
+            <CircleAlert size={15} strokeWidth={2.25} aria-hidden="true" />
             {errText}
           </p>
         )}
