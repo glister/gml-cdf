@@ -351,3 +351,190 @@ describe('RBAC boundary', () => {
     expect(me?.id).toBe(adminPersonId);
   });
 });
+
+// §10 "Append-only/immutability" — the DB-level guards on the two history tables
+// (migration 20260710T100100). The guard permits exactly one lifecycle stamp
+// (reversal / close-out); every other UPDATE, and every DELETE, is rejected. The
+// erasure role isn't present in the test DB, so the guard enforces here.
+describe('append-only guards (immutability, PL-039/040)', () => {
+  it('person_merge: DELETE + non-reversal UPDATE + second reversal are all rejected', async () => {
+    const survivor = await insertPerson({ display_name: 'S' });
+    const loser = await insertPerson({ display_name: 'L' });
+    const { mergeId } = await caller().platform.identity.merge({
+      survivingPersonId: survivor,
+      supersededPersonId: loser,
+      reason: 'same person',
+    });
+
+    // DELETE is blocked outright.
+    await expect(
+      db.deleteFrom('platform.person_merge').where('id', '=', mergeId).execute(),
+    ).rejects.toThrow(/append-only/i);
+    // A non-reversal UPDATE (tampering with the reason) is blocked.
+    await expect(
+      db
+        .updateTable('platform.person_merge')
+        .set({ reason: 'tampered' })
+        .where('id', '=', mergeId)
+        .execute(),
+    ).rejects.toThrow(/append-only/i);
+
+    // The one permitted UPDATE — the reversal stamp — succeeds via unmerge.
+    await caller().platform.identity.unmerge({ mergeId, reason: 'undo' });
+    // A second reversal is rejected by the router (already reversed) …
+    await expect(
+      caller().platform.identity.unmerge({ mergeId, reason: 'again' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    // … and a raw second stamp is rejected by the DB guard (reversed_at already set).
+    await expect(
+      db
+        .updateTable('platform.person_merge')
+        .set({ reversed_at: new Date(), reversed_by: adminPersonId, reversal_reason: 'x' })
+        .where('id', '=', mergeId)
+        .execute(),
+    ).rejects.toThrow(/append-only/i);
+  });
+
+  it('person_flag: DELETE + non-close-out UPDATE are rejected; the close-out stamp is permitted once', async () => {
+    const p = await insertPerson({ display_name: 'Flagged' });
+    const { flagId } = await caller().platform.identity.addFlag({
+      personId: p,
+      flagType: 'safety',
+      reason: 'incident',
+    });
+
+    // Never deleted (never-lose, PL-040).
+    await expect(
+      db.deleteFrom('platform.person_flag').where('id', '=', flagId).execute(),
+    ).rejects.toThrow(/never deleted/i);
+    // A non-close-out UPDATE (tampering with the reason) is blocked.
+    await expect(
+      db
+        .updateTable('platform.person_flag')
+        .set({ reason: 'tampered' })
+        .where('id', '=', flagId)
+        .execute(),
+    ).rejects.toThrow(/append-only/i);
+
+    // The one permitted UPDATE — the close-out stamp — succeeds via endFlag, once.
+    await caller().platform.identity.endFlag({ flagId, reason: 'resolved' });
+    const row = await db
+      .selectFrom('platform.person_flag')
+      .select('ended_at')
+      .where('id', '=', flagId)
+      .executeTakeFirstOrThrow();
+    expect(row.ended_at).not.toBeNull();
+    await expect(
+      caller().platform.identity.endFlag({ flagId, reason: 'again' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+});
+
+// §10 "Event-ledger test" — a person's lifecycle is fully reconstructable from the
+// journal, in order, with nothing overwritten (AC-D5 event production; CORE-01).
+describe('event-ledger reconstruction (AC-D5, CORE-01)', () => {
+  it('reconstructs the ordered lifecycle from the journal; state changes never overwrite history', async () => {
+    const p = await insertPerson({ relationship_type: 'agency', display_name: 'Ledger' });
+    const future = new Date(Date.now() + 90 * 86_400_000).toISOString();
+
+    await caller().platform.identity.setProfileStatus({
+      personId: p,
+      to: 'information_requested',
+      reason: 'intake',
+    });
+    await caller().platform.identity.setProfileStatus({
+      personId: p,
+      to: 'information_submitted',
+      reason: 'submitted',
+    });
+    const { flagId } = await caller().platform.identity.addFlag({
+      personId: p,
+      flagType: 'safety',
+      reason: 'ppe',
+    });
+    await caller().platform.identity.setAccessValidUntil({ personId: p, accessValidUntil: future });
+    await caller().platform.identity.endFlag({ flagId, reason: 'cleared' });
+
+    // UUIDv7 ids are time-ordered, so ordering by id replays creation order.
+    const events = await db
+      .selectFrom('platform.domain_event')
+      .select(['event_type', 'payload', 'kind'])
+      .where('stream_id', '=', p)
+      .orderBy('id', 'asc')
+      .execute();
+
+    // The person was also created via insertPerson (no journal there), so the
+    // ledger holds exactly the five actions above, in order.
+    expect(events.map((e) => e.event_type)).toEqual([
+      'platform.person.profile_status_changed',
+      'platform.person.profile_status_changed',
+      'platform.person.flag_added',
+      'platform.person.access_expiry_set',
+      'platform.person.flag_ended',
+    ]);
+    // Every identity fact is a security event.
+    expect(events.every((e) => e.kind === 'security')).toBe(true);
+
+    // The status chain reconstructs without overwriting: each event carries the
+    // exact from→to edge, and the two transitions are distinct rows.
+    const statusEdges = events
+      .filter((e) => e.event_type === 'platform.person.profile_status_changed')
+      .map((e) => e.payload as { from: string; to: string });
+    expect(statusEdges).toEqual([
+      { from: 'draft_shell', to: 'information_requested', reason: 'intake' },
+      { from: 'information_requested', to: 'information_submitted', reason: 'submitted' },
+    ]);
+
+    const current = await db
+      .selectFrom('platform.person')
+      .select('profile_status')
+      .where('id', '=', p)
+      .executeTakeFirstOrThrow();
+    expect(current.profile_status).toBe('information_submitted');
+  });
+});
+
+// §10 "Account containment" (testable slice — the `role_grant` clause and the
+// first-Entra-SSO path are plan 04 / the api-layer auth flow). An invited account
+// is an inert shell: draft_shell, and its own (non-admin) caller cannot read other
+// records or escalate its own profile status (PL-036/043, AC-D10/D11).
+describe('account containment (PL-036/043)', () => {
+  it('a freshly invited person is a draft_shell that cannot self-escalate or read others', async () => {
+    const p = await insertPerson({ relationship_type: 'agency', display_name: 'Shell' });
+    await caller().platform.identity.invite({ personId: p, email: 'shell@example.com' });
+
+    const shell = await db
+      .selectFrom('platform.person')
+      .select(['profile_status', 'status'])
+      .where('id', '=', p)
+      .executeTakeFirstOrThrow();
+    expect(shell.profile_status).toBe('draft_shell');
+
+    // The invited person's own (non-admin) session.
+    const invitee = appRouter.createCaller(
+      makeCtx({
+        user: { id: 'shell-user', name: 'Shell', email: 'shell@example.com', role: 'agent' },
+        actorPersonId: p,
+      }),
+    );
+    // No admin surface: cannot read others, cannot move its own profile status.
+    await expect(invitee.platform.identity.listPersons({})).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    await expect(invitee.platform.identity.getPerson({ personId: p })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    await expect(
+      invitee.platform.identity.setProfileStatus({
+        personId: p,
+        to: 'information_requested',
+        reason: 'self',
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    // Only its own summary is visible, still a draft_shell.
+    const me = await invitee.platform.identity.me();
+    expect(me?.id).toBe(p);
+    expect(me?.profile_status).toBe('draft_shell');
+  });
+});

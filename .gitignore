@@ -11,3 +11,8 @@ dist
 .env.*.local
 .DS_Store
 .vscode
+
+# Playwright
+test-results
+playwright-report
+apps/web/e2e/.auth
