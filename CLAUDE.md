@@ -7,37 +7,20 @@ Each app and package also has its own `CLAUDE.md` with package-specific details.
 
 ## Tech Stack
 
-- **Monorepo**: Turborepo with pnpm workspaces
-- **Package Manager**: pnpm 11.10.0 (via corepack)
-- **Language**: TypeScript 5.8+ (ESM throughout, `"type": "module"`)
-- **Web App**: TanStack Start v1.168+ / TanStack Router / React 19 / Vite 7
-- **Mobile App**: Expo SDK 57 / React Native / expo-router / NativeWind v4
-  (ADR-0023); push via Expo Push (ADR-0024, trails in-app + email)
-- **Data fetching**: TanStack Query v5 (via `@trpc/react-query`) — all
-  server-state reads and mutations
-- **Tables**: TanStack Table v8 — all paginated/list data
-- **Forms**: TanStack Form v1 — all forms
-- **UI**: Tailwind CSS v4 + shadcn/ui
-- **Auth**: Better Auth (email/password + email OTP + admin roles, session cookies)
-- **API App**: Hono / tRPC v11 / Winston
-- **Worker**: Azure Service Bus consumer
-- **Database**: PostgreSQL + Kysely (type-safe query builder)
-- **Shared RPC**: tRPC v11 with Zod schemas in `packages/trpc`
-- **Testing**: Vitest and Playwright
-- **Linting**: ESLint 9 (flat config) + Prettier
-- **Git Hooks**: Husky + lint-staged
-- **Docker**: dev + production Dockerfiles in `docker/`
+Stack and versions are in the `package.json` manifests. The non-obvious parts:
+
+- **Mobile App**: Expo / React Native / expo-router / NativeWind v4 (ADR-0023);
+  push via Expo Push (ADR-0024, trails in-app + email).
+- **Auth**: Better Auth (email/password + email OTP + admin roles, session
+  cookies) — mounted on the **api** app, not web.
 
 ## Layout
 
-- `apps/*` — deployable apps: `api` (Hono+tRPC+Better Auth), `web` (TanStack
-  Start), `mobile` (Expo/React Native), `worker` (Service Bus consumer). Apps
-  are never imported by other workspace members.
-- `packages/*` — shared libraries and config.
-- `docs/` — `docs/adr/` (architecture decision records) and
-  `docs/plan/phase-01/` (the Phase 1 build contract: core, HR and mobile plan
-  sets). Plan documents are the source of truth for feature work — implement
-  them via `/implement-plan`.
+- **Apps (`apps/*`) are never imported by other workspace members.** Shared code
+  belongs in `packages/*`.
+- `docs/adr/` holds architecture decision records; `docs/plan/phase-01/` is the
+  Phase 1 build contract (core, HR and mobile plan sets). **Plan documents are
+  the source of truth for feature work** — implement them via `/implement-plan`.
 
 ## Design system
 
@@ -54,26 +37,8 @@ defines — match it, and flag genuine gaps rather than improvising.
 
 ## Commands
 
-| Command             | Description                                          |
-| ------------------- | ---------------------------------------------------- |
-| `pnpm dev`          | Start all apps via turbo (incl. the Expo dev server) |
-| `pnpm build`        | Build all apps and packages                          |
-| `pnpm lint`         | Lint all packages via turbo                          |
-| `pnpm typecheck`    | Type-check all packages via turbo                    |
-| `pnpm test`         | Run vitest in all packages via turbo                 |
-| `pnpm format`       | Format all files with Prettier                       |
-| `pnpm format:check` | Check formatting without writing                     |
-| `pnpm migrate`      | Run DB migrations (`@repo/db`)                       |
-| `pnpm seed`         | Seed the DB                                          |
-| `docker compose up` | Start the dev environment in Docker                  |
-
-Every task delegates to `turbo run <task>`. Filter to a single package with
-`--filter`:
-
-```
-pnpm turbo build --filter=@repo/api
-pnpm turbo test --filter=@repo/web
-```
+Root `package.json` scripts are the entry point. Every task delegates to
+`turbo run <task>`; filter to one package with `--filter=@repo/<pkg>`.
 
 ### Adding a dependency while the dev container is running
 
@@ -145,19 +110,9 @@ caching).
 
 ### GitHub Actions security
 
-- **SHA-pin all third-party actions.** Every `uses:` for an external action must
-  reference a full 40-char commit SHA (immutable), with the version as a trailing
-  comment, e.g. `uses: actions/checkout@<sha> # v4.2.2`. Tags like `@v4` are
-  mutable and a supply-chain risk. Local actions (`uses: ./...`) are exempt.
-  Resolve a SHA with `gh api repos/<owner>/<repo>/commits/<tag> --jq .sha`.
-- **`pnpm lint:pins`** (`scripts/check-action-pins.sh`) enforces this —
-  dependency-free, run in pre-commit and the `workflow-lint` CI gate.
-- **Dependabot** (`.github/dependabot.yml`, `github-actions` ecosystem) opens
-  weekly PRs bumping each SHA and its version comment.
-- **`.github/workflows/workflow-lint.yml`** runs on PRs touching `.github/**`: pin
-  check + actionlint + a [zizmor](https://docs.zizmor.sh) audit
-  (`--min-severity=medium --offline`), all **blocking**. A legitimate finding is
-  dismissed with a documented `# zizmor: ignore[<audit>]` comment.
+**SHA-pin all third-party actions** — never a mutable `@v4` tag. Full rules
+(pinning, `pnpm lint:pins`, Dependabot, the blocking `workflow-lint` gate) are
+in `.github/CLAUDE.md`, loaded whenever you work under `.github/`.
 
 ## Coding Guidelines
 
@@ -282,15 +237,8 @@ repo: `170`); each project picks a distinct one. The formula and slot convention
 (the last two digits — stable across all projects) are:
 
 `external port = portPrefix * 100 + slot`. Bands: apps `00–09`, datastores /
-messaging `10–19`, tooling / UI `20–29`.
-
-| Slot | Service | @170 | | Slot | Service | @170 |
-| ---- | ------------- | ----- | | ----- | ------------------ | ----- |
-| 00 | web | 17000 | | 12 | servicebus (AMQP) | 17012 |
-| 01 | api | 17001 | | 13 | azurite (blob) | 17013 |
-| 02 | worker | 17002 | | 20 | mailpit SMTP | 17020 |
-| 10 | postgres dev | 17010 | | 21 | mailpit UI | 17021 |
-| 11 | postgres test | 17011 | | 22/23 | reserved (hyperdx) | — |
+messaging `10–19`, tooling / UI `20–29`. The slot map lives in
+`scripts/gen-ports.mjs` (`SLOTS`).
 
 The real values are materialised as literals into `.env` / `.env.test` (dotenv
 does not interpolate, and `compose.yml`, `psql`, migrations, and the env schemas
@@ -402,61 +350,11 @@ test `5433`).
 - `.env.test` — committed test-safe defaults (keep in sync with every new var).
 - `.env.secrets` — git-ignored real secrets, loaded into containers via compose.
 
-## Visual verification with agent-browser
+## Visual verification
 
-When making UI changes, take a screenshot to verify your work looks correct before considering the task done. Use `agent-browser` (already installed globally).
-
-### Basic screenshot workflow
-
-Screenshots use a persistent authenticated session named `dev`. Always use `--session dev` so cookies persist between commands.
-
-```bash
-agent-browser --session dev open http://localhost:3000/some/route
-agent-browser --session dev screenshot .screenshots/some-route.png --viewport 1280x800
-```
-
-For mobile checks, use `--viewport 375x812`. For full-page (scrolling) shots, add `--full-page`.
-
-Save all screenshots to `.screenshots/` (gitignored). Use descriptive filenames like `dashboard-after-fix.png`, not `test.png`.
-
-### After taking a screenshot
-
-Read it back with the Read tool and check that the change you made is actually visible and correct. If it looks wrong, iterate. Do not mark a UI task complete without visually confirming.
-
-### Handling expired auth
-
-If a screenshot shows the login page (`/login`) instead of the expected authenticated content, the dev session has expired. Refresh it and retake the shot:
-
-```bash
-./scripts/refresh-auth.sh
-```
-
-The script authenticates via better-auth's HTTP API and injects the resulting
-session cookie into the `dev` session — it does **not** drive the login form, so
-it's immune to login-UI changes and to the Turnstile widget (a client-side gate
-the API path doesn't hit). It reads the OTP from Mailpit and signs in as the
-seeded admin (`admin@cdf.local`; override with `DEV_AUTH_EMAIL=...`). It takes a
-few seconds. After it succeeds, retake the screenshot with the same
-`agent-browser --session dev` command.
-
-Do not attempt to fill in the login form manually. Do not attempt to bypass
-authentication. Always use the refresh script.
-
-### If refresh-auth.sh fails
-
-- Check that the dev server is running (both the web app on `PORT_WEB` and the
-  api app on `PORT_API` — auth lives on the api app).
-- Check that Mailpit is running (`http://localhost:$PORT_MAILPIT_UI`, `17021` at
-  the default prefix).
-- If the OTP request is rejected: confirm the account is seeded, and that
-  `TURNSTILE_SECRET_KEY` is **not** set in `.env.secrets` — if it is, the server
-  enforces the captcha on OTP send (use the Cloudflare test key, or unset it for
-  dev).
-
-### When NOT to screenshot
-
-- Backend-only changes (API routes, DB migrations, non-UI logic)
-- Small refactors with no visual output
-- Text-only changes (copy edits are fine to verify via code diff)
-
-Screenshotting has a cost — do it when it adds real signal, not reflexively.
+**After any UI change (web or mobile), screenshot it and confirm it looks
+correct before treating the task as done** — use the `visual-verification`
+skill, which covers the `agent-browser` commands, the `dev` auth session and
+`./scripts/refresh-auth.sh`. Never fill in the login form by hand or bypass
+authentication. Skip screenshots for backend-only, non-visual or copy-only
+changes.
