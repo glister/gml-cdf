@@ -11,19 +11,19 @@ import type { inferRouterOutputs } from '@trpc/server';
 import type { AppRouter } from '@repo/trpc';
 import { z } from 'zod';
 import { ChevronLeft, ChevronRight, KeyRound, Search, ShieldOff } from 'lucide-react';
-import { trpcReact } from '../../../../trpc.js';
-import { PageHeader } from '../../../../components/nav/PageHeader.js';
-import { PersonCell } from '../../../../components/data-display/PersonCell.js';
-import { StatusPill } from '../../../../components/data-display/StatusPill.js';
-import { Callout } from '../../../../components/feedback/Callout.js';
-import { Modal } from '../../../../components/feedback/Modal.js';
-import { Field } from '../../../../components/forms/Field.js';
-import { Input } from '../../../../components/forms/Input.js';
-import { Select } from '../../../../components/forms/Select.js';
-import { Textarea } from '../../../../components/forms/Textarea.js';
-import { Button } from '../../../../components/ui/button.js';
-import { cn } from '../../../../lib/utils.js';
-import { formatDate } from '../../../../lib/people.js';
+import { trpcReact } from '~/trpc';
+import { PageHeader } from '~/components/nav/PageHeader';
+import { PersonCell } from '~/components/data-display/PersonCell';
+import { StatusPill } from '~/components/data-display/StatusPill';
+import { Callout } from '~/components/feedback/Callout';
+import { Modal } from '~/components/feedback/Modal';
+import { Field } from '~/components/forms/Field';
+import { Input } from '~/components/forms/Input';
+import { Select } from '~/components/forms/Select';
+import { Textarea } from '~/components/forms/Textarea';
+import { Button } from '~/components/ui/button';
+import { cn } from '~/lib/utils';
+import { formatDate } from '~/lib/people';
 import {
   GRANT_STATE_LABELS,
   GRANT_STATE_OPTIONS,
@@ -35,7 +35,7 @@ import {
   type GrantState,
   type ModuleKey,
   type RoleKey,
-} from '../../../../lib/authz.js';
+} from '~/lib/authz';
 
 export const Route = createFileRoute('/_authenticated/admin/authz/grants')({
   component: GrantsScreen,

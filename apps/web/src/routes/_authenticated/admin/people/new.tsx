@@ -6,16 +6,16 @@ import type { inferRouterOutputs } from '@trpc/server';
 import type { AppRouter } from '@repo/trpc';
 import { z } from 'zod';
 import { ArrowRight, UserPlus } from 'lucide-react';
-import { trpcReact } from '../../../../trpc.js';
-import { PageHeader } from '../../../../components/nav/PageHeader.js';
-import { PersonCell } from '../../../../components/data-display/PersonCell.js';
-import { StatusPill } from '../../../../components/data-display/StatusPill.js';
-import { Callout } from '../../../../components/feedback/Callout.js';
-import { Field } from '../../../../components/forms/Field.js';
-import { Input } from '../../../../components/forms/Input.js';
-import { Select } from '../../../../components/forms/Select.js';
-import { Textarea } from '../../../../components/forms/Textarea.js';
-import { Button } from '../../../../components/ui/button.js';
+import { trpcReact } from '~/trpc';
+import { PageHeader } from '~/components/nav/PageHeader';
+import { PersonCell } from '~/components/data-display/PersonCell';
+import { StatusPill } from '~/components/data-display/StatusPill';
+import { Callout } from '~/components/feedback/Callout';
+import { Field } from '~/components/forms/Field';
+import { Input } from '~/components/forms/Input';
+import { Select } from '~/components/forms/Select';
+import { Textarea } from '~/components/forms/Textarea';
+import { Button } from '~/components/ui/button';
 import {
   dateToEndOfDayIso,
   MATCH_REASON_LABELS,
@@ -25,7 +25,7 @@ import {
   type DuplicateMatchReason,
   type ProfileStatus,
   type RelationshipType,
-} from '../../../../lib/people.js';
+} from '~/lib/people';
 
 export const Route = createFileRoute('/_authenticated/admin/people/new')({
   component: NewPerson,

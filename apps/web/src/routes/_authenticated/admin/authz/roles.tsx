@@ -1,16 +1,16 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { ShieldCheck } from 'lucide-react';
-import { trpcReact } from '../../../../trpc.js';
-import { PageHeader } from '../../../../components/nav/PageHeader.js';
-import { StatusPill } from '../../../../components/data-display/StatusPill.js';
-import { Button } from '../../../../components/ui/button.js';
+import { trpcReact } from '~/trpc';
+import { PageHeader } from '~/components/nav/PageHeader';
+import { StatusPill } from '~/components/data-display/StatusPill';
+import { Button } from '~/components/ui/button';
 import {
   MODULE_LABELS,
   MODULE_OPTIONS,
   ROLE_LABELS,
   type ModuleKey,
   type RoleKey,
-} from '../../../../lib/authz.js';
+} from '~/lib/authz';
 
 export const Route = createFileRoute('/_authenticated/admin/authz/roles')({
   component: RolesScreen,

@@ -1,17 +1,17 @@
 import * as React from 'react';
 import { createRootRouteWithContext, HeadContent, Outlet, Scripts } from '@tanstack/react-router';
 import { QueryClientProvider } from '@tanstack/react-query';
-import type { RouterContext } from '../router.js';
-import { trpcReact, makeTrpcReactClient } from '../trpc.js';
-import { resolveSession } from '../lib/resolve-session.js';
-import appCss from '../app.css?url';
+import type { RouterContext } from '~/router';
+import { trpcReact, makeTrpcReactClient } from '~/trpc';
+import { resolveSession } from '~/lib/resolve-session';
+import appCss from '~/app.css?url';
 
 export const Route = createRootRouteWithContext<RouterContext>()({
   head: () => ({
     meta: [
       { charSet: 'utf-8' },
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'cdf-platform' },
+      { title: 'cdf-connect' },
     ],
     links: [{ rel: 'stylesheet', href: appCss }],
   }),

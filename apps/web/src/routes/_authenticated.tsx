@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet, redirect, useRouter } from '@tanstack/react-router';
-import { AppShell } from '../components/nav/AppShell.js';
-import { authClient } from '../auth-client.js';
+import { AppShell } from '~/components/nav/AppShell';
+import { authClient } from '~/auth-client';
 
 /**
  * Pathless layout that gates its children on an authenticated session and wraps

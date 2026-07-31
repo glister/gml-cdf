@@ -98,6 +98,36 @@ const moduleBoundaries = [
     },
   },
   {
+    // `apps/web` resolves its own source through the `~/*` alias (declared in
+    // `apps/web/tsconfig.json`, wired into Vite by `vite-tsconfig-paths`).
+    //
+    // Parent traversal is banned rather than merely discouraged because route
+    // files are the ones that need it most and drift the fastest: TanStack Start
+    // derives URLs from file position, so moving a route one directory changes
+    // the correct depth of every `../` in the file. `~/components/ui/button` is
+    // invariant under that move; `../../../../components/ui/button` is not.
+    //
+    // Sibling imports (`./Foo`) stay — they are unaffected by depth and read
+    // better than an alias for a file in the same folder.
+    files: ['apps/web/src/**/*.{ts,tsx}'],
+    ignores: ['apps/web/src/routeTree.gen.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            appsImportBan,
+            {
+              group: ['../*'],
+              message:
+                "import app source through the '~/' alias (e.g. '~/components/ui/button'), not a parent-relative path — depth changes when a route moves",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // @repo/domain is pure (ADR-0009): no I/O, DB, env, clock or randomness.
     files: ['packages/domain/**/*.ts'],
     rules: {
