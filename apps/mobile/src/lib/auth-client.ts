@@ -2,7 +2,7 @@ import { createAuthClient } from 'better-auth/react';
 import { adminClient, emailOTPClient } from 'better-auth/client/plugins';
 import { expoClient } from '@better-auth/expo/client';
 import * as SecureStore from 'expo-secure-store';
-import { env } from '../env';
+import { env } from '@/env';
 
 /**
  * Better Auth client for the mobile app. Mirrors the web `auth-client` (admin +

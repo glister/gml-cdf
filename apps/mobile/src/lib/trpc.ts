@@ -1,7 +1,7 @@
 import { createTRPCClient, httpBatchLink, type TRPCLink } from '@trpc/client';
 import { createTRPCReact } from '@trpc/react-query';
 import type { AppRouter } from '@repo/trpc';
-import { env } from '../env';
+import { env } from '@/env';
 import { authClient } from './auth-client';
 
 /**

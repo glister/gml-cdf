@@ -128,6 +128,34 @@ const moduleBoundaries = [
     },
   },
   {
+    // Same rule for `apps/mobile`, which resolves its own source through `@/*`
+    // (declared in `apps/mobile/tsconfig.json`; Metro reads tsconfig paths via
+    // `expo/metro-config`). The alias prefix differs from web's `~/` on purpose:
+    // `@/` is the Expo template convention and the app already uses it
+    // throughout, so unifying the two would be churn for no gain. Each app is
+    // internally consistent, which is what matters at a call site.
+    //
+    // The same drift risk applies here: expo-router derives routes from file
+    // position under `src/app/`, so a moved screen invalidates every `../` in
+    // it. Asset requires already use `@/assets/*`, so they are unaffected.
+    files: ['apps/mobile/src/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            appsImportBan,
+            {
+              group: ['../*'],
+              message:
+                "import app source through the '@/' alias (e.g. '@/components/themed-text'), not a parent-relative path — depth changes when a screen moves",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // @repo/domain is pure (ADR-0009): no I/O, DB, env, clock or randomness.
     files: ['packages/domain/**/*.ts'],
     rules: {
