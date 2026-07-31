@@ -1,4 +1,4 @@
-# cdf-platform — monorepo guide
+# cdf-connect — monorepo guide
 
 Turborepo + pnpm workspaces. ESM everywhere, TypeScript 5.8+ strict. Node 24
 (via corepack). pnpm pinned through `packageManager`.

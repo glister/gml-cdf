@@ -1,5 +1,5 @@
 {
-  "name": "cdf-platform",
+  "name": "cdf-connect",
   "private": true,
   "type": "module",
   "portPrefix": 170,
