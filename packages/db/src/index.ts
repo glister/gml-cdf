@@ -4,8 +4,11 @@ import type {
   PlatformDomainEvent,
   PlatformEventConsumption,
   PlatformPerson,
+  PlatformPersonAllocation,
   PlatformPersonFlag,
   PlatformPersonMerge,
+  PlatformRole,
+  PlatformRoleGrant,
   Session,
   User,
   Verification,
@@ -20,14 +23,23 @@ export {
   type AppendEventInput,
 } from './journal.js';
 export { relayOutboxBatch, recordConsumptionOnce } from './outbox.js';
+export {
+  revokeGrant,
+  revokeAllGrantsForPerson,
+  type RevokeGrantInput,
+  type RevokedGrantSummary,
+} from './authz.js';
 export type { DB } from './types.js';
 export type {
   Account,
   PlatformDomainEvent,
   PlatformEventConsumption,
   PlatformPerson,
+  PlatformPersonAllocation,
   PlatformPersonFlag,
   PlatformPersonMerge,
+  PlatformRole,
+  PlatformRoleGrant,
   Session,
   User,
   Verification,
@@ -71,3 +83,16 @@ export type PersonMergeUpdate = Updateable<PlatformPersonMerge>;
 export type PersonFlagRecord = Selectable<PlatformPersonFlag>;
 export type NewPersonFlag = Insertable<PlatformPersonFlag>;
 export type PersonFlagUpdate = Updateable<PlatformPersonFlag>;
+
+// Authorisation — role, record and field level (core plan 04, ADR-0015).
+export type RoleRecord = Selectable<PlatformRole>;
+export type NewRole = Insertable<PlatformRole>;
+export type RoleUpdate = Updateable<PlatformRole>;
+
+export type RoleGrantRecord = Selectable<PlatformRoleGrant>;
+export type NewRoleGrant = Insertable<PlatformRoleGrant>;
+export type RoleGrantUpdate = Updateable<PlatformRoleGrant>;
+
+export type PersonAllocationRecord = Selectable<PlatformPersonAllocation>;
+export type NewPersonAllocation = Insertable<PlatformPersonAllocation>;
+export type PersonAllocationUpdate = Updateable<PlatformPersonAllocation>;

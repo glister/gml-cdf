@@ -186,3 +186,107 @@ export const platformPersonPrecreationCheckOverridden = defineEvent(
   1,
   z.strictObject({ candidatePersonIds: z.array(z.uuid()).min(1), reason }),
 );
+
+// --- Authorisation (core plan 04, PL-002/003, CORE-05, kind='security') ------
+//
+// Grant/revoke stream on ('platform.role_grant', grant_id) and allocation
+// changes on ('platform.person_allocation', allocation_id) — so the stream is
+// the thing whose lifecycle is being recorded, and `personId` in the payload
+// identifies the *subject* (the envelope's actor is the granter). Payload keys
+// are camelCase, matching the rest of the registry; §4.2 of the plan sketched
+// them snake_case, which would have been the only snake_case payload in the
+// system. Special-category read events carry field NAMES only — never values
+// (ADR-0015/0019).
+
+const roleKeyValues = z.enum([
+  'administrator',
+  'hr_user',
+  'line_manager',
+  'finance',
+  'it',
+  'transport',
+  'office_admin',
+  'director',
+  'employee',
+  'external',
+  'external_administrator',
+]);
+const moduleKeyValues = z.enum([
+  'platform',
+  'hr.core',
+  'hr.onboarding',
+  'hr.holiday_leave',
+  'hr.sickness_absence',
+  'hr.er',
+  'hr.ld',
+  'hr.offboarding',
+  'hr.wellbeing',
+  'hr.reporting',
+]);
+
+/** A role was granted to a person in one module (PL-002). */
+export const platformRoleGranted = defineEvent(
+  'platform.role.granted',
+  1,
+  z.strictObject({
+    personId: z.uuid(),
+    roleKey: roleKeyValues,
+    module: moduleKeyValues,
+    validFrom: z.iso.datetime(),
+    validUntil: z.iso.datetime().nullable(),
+  }),
+);
+
+/**
+ * A grant was revoked — manually, or by plan 03's expiry sweep with
+ * `revokeReason='expired'` (PL-002, PL-042). Grants are never un-revoked;
+ * re-engagement appends a new grant row and a new `granted` event.
+ */
+export const platformRoleRevoked = defineEvent(
+  'platform.role.revoked',
+  1,
+  z.strictObject({
+    personId: z.uuid(),
+    roleKey: roleKeyValues,
+    module: moduleKeyValues,
+    revokeReason: z.string().min(1).max(500),
+  }),
+);
+
+/**
+ * A procedure returned special-category fields to a reader (ADR-0015; consumed
+ * by plan 13's audit view). The stream is the SUBJECT entity, not the reader.
+ * `fields` holds column names only — a value here would defeat the purpose.
+ */
+export const platformDataSpecialCategoryAccessed = defineEvent(
+  'platform.data.special_category.accessed',
+  1,
+  z.strictObject({
+    entity: z.string().max(100),
+    fields: z.array(z.string().max(100)).min(1),
+    readerPersonId: z.uuid(),
+    procedure: z.string().max(200),
+  }),
+);
+
+/** A person was allocated to a restricted external administrator (CORE-05). */
+export const platformPersonAllocationAdded = defineEvent(
+  'platform.person.allocation_added',
+  1,
+  z.strictObject({
+    adminPersonId: z.uuid(),
+    personId: z.uuid(),
+    validUntil: z.iso.datetime().nullable(),
+  }),
+);
+
+/** An allocation was ended — visibility closes, the row survives (CORE-05). */
+export const platformPersonAllocationEnded = defineEvent(
+  'platform.person.allocation_ended',
+  1,
+  z.strictObject({
+    adminPersonId: z.uuid(),
+    personId: z.uuid(),
+    endReason: z.string().min(1).max(500),
+  }),
+);

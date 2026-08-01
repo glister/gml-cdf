@@ -25,7 +25,7 @@ export function initObservability(opts: { serviceName?: string } = {}): void {
   if (sdk) return;
 
   const env = parse(otelEnvSchema);
-  const serviceName = opts.serviceName ?? env.OTEL_SERVICE_NAME ?? 'cdf-service';
+  const serviceName = opts.serviceName ?? env.OTEL_SERVICE_NAME ?? 'cdf-connect-service';
 
   let traceExporter: OTLPTraceExporter | undefined;
   if (env.HYPERDX_API_KEY) {

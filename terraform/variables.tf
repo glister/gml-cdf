@@ -4,9 +4,15 @@ variable "subscription_id" {
 }
 
 variable "project" {
-  description = "Short project name used as a resource-name prefix."
+  description = <<-DESC
+    Short project name used as a resource-name prefix. Modules that build
+    alphanumeric-only names (ACR, Storage) strip the hyphen via `replace()`, so
+    `cdf-connect` yields `cdfconnect<env>acr` / `cdfconnect<env>stor`. Anything
+    deriving a resource name outside Terraform must strip it the same way —
+    see `.github/workflows/build-and-push.yml`.
+  DESC
   type        = string
-  default     = "cdf"
+  default     = "cdf-connect"
 }
 
 variable "environment" {
@@ -19,9 +25,12 @@ variable "environment" {
 }
 
 variable "location" {
+  # UK region: employee HR data, including special-category data, stays in the UK
+  # (ADR-0019). `uksouth` over `ukwest` — ukwest has no availability zones, and
+  # the postgres module pins `zone = "1"`.
   description = "Azure region."
   type        = string
-  default     = "eastus"
+  default     = "uksouth"
 }
 
 variable "resource_group_name" {
@@ -48,7 +57,7 @@ variable "postgres_version" {
 
 variable "postgres_admin_login" {
   type    = string
-  default = "cdfadmin"
+  default = "cdfconnectadmin"
 }
 
 variable "postgres_admin_password" {
@@ -58,8 +67,10 @@ variable "postgres_admin_password" {
 }
 
 variable "database_name" {
+  # Underscore, not hyphen: a hyphenated Postgres identifier needs quoting
+  # everywhere it appears (psql, connection strings, migrations).
   type    = string
-  default = "cdf"
+  default = "cdf_connect"
 }
 
 # --- Container images ---

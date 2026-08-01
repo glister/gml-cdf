@@ -83,6 +83,22 @@ export interface PlatformPerson {
   updated_by: string | null;
 }
 
+export interface PlatformPersonAllocation {
+  admin_person_id: string;
+  created_at: Generated<Timestamp>;
+  created_by: string;
+  deleted_at: Timestamp | null;
+  end_reason: string | null;
+  ended_at: Timestamp | null;
+  ended_by: string | null;
+  id: string;
+  person_id: string;
+  updated_at: Generated<Timestamp>;
+  updated_by: string | null;
+  valid_from: Generated<Timestamp>;
+  valid_until: Timestamp | null;
+}
+
 export interface PlatformPersonFlag {
   created_at: Generated<Timestamp>;
   end_reason: string | null;
@@ -112,6 +128,36 @@ export interface PlatformPersonMerge {
   superseded_person_id: string;
   surviving_person_id: string;
   updated_at: Generated<Timestamp>;
+}
+
+export interface PlatformRole {
+  created_at: Generated<Timestamp>;
+  created_by: string | null;
+  deleted_at: Timestamp | null;
+  description: string | null;
+  id: string;
+  is_system: Generated<boolean>;
+  key: string;
+  name: string;
+  updated_at: Generated<Timestamp>;
+  updated_by: string | null;
+}
+
+export interface PlatformRoleGrant {
+  created_at: Generated<Timestamp>;
+  created_by: string;
+  deleted_at: Timestamp | null;
+  id: string;
+  module: "platform" | "hr.core" | "hr.onboarding" | "hr.holiday_leave" | "hr.sickness_absence" | "hr.er" | "hr.ld" | "hr.offboarding" | "hr.wellbeing" | "hr.reporting";
+  person_id: string;
+  revoke_reason: string | null;
+  revoked_at: Timestamp | null;
+  revoked_by: string | null;
+  role_id: string;
+  updated_at: Generated<Timestamp>;
+  updated_by: string | null;
+  valid_from: Generated<Timestamp>;
+  valid_until: Timestamp | null;
 }
 
 export interface RateLimit {
@@ -162,8 +208,11 @@ export interface DB {
   "platform.domain_event": PlatformDomainEvent;
   "platform.event_consumption": PlatformEventConsumption;
   "platform.person": PlatformPerson;
+  "platform.person_allocation": PlatformPersonAllocation;
   "platform.person_flag": PlatformPersonFlag;
   "platform.person_merge": PlatformPersonMerge;
+  "platform.role": PlatformRole;
+  "platform.role_grant": PlatformRoleGrant;
   rate_limit: RateLimit;
   session: Session;
   user: User;

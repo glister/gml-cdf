@@ -1,7 +1,7 @@
 environment         = "dev"
-location            = "eastus"
-resource_group_name = "cdf-dev-rg"
-project             = "cdf"
+location            = "uksouth"
+resource_group_name = "cdf-connect-dev-rg"
+project             = "cdf-connect"
 
 postgres_sku_name   = "B_Standard_B1ms"
 postgres_storage_mb = 32768
@@ -11,9 +11,10 @@ image_tag    = "latest"
 min_replicas = 1
 max_replicas = 2
 
-email_from = "noreply@dev.cdf.example"
-app_url    = "https://cdf-dev-web.example.com"
-api_url    = "https://cdf-dev-api.example.com"
+# See prod.tfvars: api_url must stay same-site with app_url for session cookies.
+email_from = "noreply@dev.connect.cdfencing.co.uk"
+app_url    = "https://dev.connect.cdfencing.co.uk"
+api_url    = "https://api.dev.connect.cdfencing.co.uk"
 
 # Sensitive values (subscription_id, postgres_admin_password, resend_api_key,
 # better_auth_secret) come from TF_VAR_* in CI.

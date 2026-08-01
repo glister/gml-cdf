@@ -98,6 +98,64 @@ const moduleBoundaries = [
     },
   },
   {
+    // `apps/web` resolves its own source through the `~/*` alias (declared in
+    // `apps/web/tsconfig.json`, wired into Vite by `vite-tsconfig-paths`).
+    //
+    // Parent traversal is banned rather than merely discouraged because route
+    // files are the ones that need it most and drift the fastest: TanStack Start
+    // derives URLs from file position, so moving a route one directory changes
+    // the correct depth of every `../` in the file. `~/components/ui/button` is
+    // invariant under that move; `../../../../components/ui/button` is not.
+    //
+    // Sibling imports (`./Foo`) stay — they are unaffected by depth and read
+    // better than an alias for a file in the same folder.
+    files: ['apps/web/src/**/*.{ts,tsx}'],
+    ignores: ['apps/web/src/routeTree.gen.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            appsImportBan,
+            {
+              group: ['../*'],
+              message:
+                "import app source through the '~/' alias (e.g. '~/components/ui/button'), not a parent-relative path — depth changes when a route moves",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // Same rule for `apps/mobile`, which resolves its own source through `@/*`
+    // (declared in `apps/mobile/tsconfig.json`; Metro reads tsconfig paths via
+    // `expo/metro-config`). The alias prefix differs from web's `~/` on purpose:
+    // `@/` is the Expo template convention and the app already uses it
+    // throughout, so unifying the two would be churn for no gain. Each app is
+    // internally consistent, which is what matters at a call site.
+    //
+    // The same drift risk applies here: expo-router derives routes from file
+    // position under `src/app/`, so a moved screen invalidates every `../` in
+    // it. Asset requires already use `@/assets/*`, so they are unaffected.
+    files: ['apps/mobile/src/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            appsImportBan,
+            {
+              group: ['../*'],
+              message:
+                "import app source through the '@/' alias (e.g. '@/components/themed-text'), not a parent-relative path — depth changes when a screen moves",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // @repo/domain is pure (ADR-0009): no I/O, DB, env, clock or randomness.
     files: ['packages/domain/**/*.ts'],
     rules: {

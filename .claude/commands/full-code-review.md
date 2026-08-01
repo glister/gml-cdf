@@ -1,10 +1,10 @@
 ---
-description: Thorough whole-app code-quality review of the cdf-platform, with prioritised findings and fixes
+description: Thorough whole-app code-quality review of the cdf-connect, with prioritised findings and fixes
 argument-hint: [optional scope, e.g. "packages/trpc" or "apps/web routes"]
 ---
 
 You are running `/full-code-review` — a **code-quality review of the whole
-cdf-platform application** (or the scope named here: **$1** — if empty, review
+cdf-connect application** (or the scope named here: **$1** — if empty, review
 the entire app).
 
 This is an engineering-quality audit, not a security review (that's

@@ -1,5 +1,5 @@
 import { createFileRoute, Outlet } from '@tanstack/react-router';
-import { requireAdmin } from '../../lib/route-guards.js';
+import { requireAdmin } from '~/lib/route-guards';
 
 /**
  * Admin section layout. Gates all `/admin/*` routes on the admin role (UX-only —

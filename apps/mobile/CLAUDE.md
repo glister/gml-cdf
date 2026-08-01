@@ -31,7 +31,13 @@ Start the API first (`pnpm --filter @repo/api dev`). On a physical device, set
   `babel.config.js`, `tailwind.config.js`) are CommonJS. App source is still
   TypeScript with normal ES `import`/`export`; Metro/Babel transpile it.
 - **Path alias:** `@/*` → `./src/*` (expo-router convention; not the web app's
-  `~/*`).
+  `~/*`). Also `@/assets/*` → `./assets/*`, which asset `require()`s use.
+  **Parent traversal (`../*`) is an ESLint error** in `src/**`: import app source
+  through the alias (`@/components/themed-text`), never `../../components/…`.
+  expo-router derives routes from file position under `src/app/`, so moving a
+  screen silently changes the correct depth of every `../` in it — the alias is
+  invariant under that move. Sibling imports (`./Foo`) are unaffected by depth
+  and stay relative. The web app has the same rule against its own `~/` alias.
 - **Metro monorepo config** (`metro.config.js`) watches the repo root and resolves
   workspace packages' TS source via package `exports`.
 

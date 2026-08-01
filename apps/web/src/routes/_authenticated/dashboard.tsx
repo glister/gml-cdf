@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { trpcReact } from '../../trpc.js';
-import { Button } from '../../components/ui/button.js';
-import { authClient } from '../../auth-client.js';
+import { trpcReact } from '~/trpc';
+import { Button } from '~/components/ui/button';
+import { authClient } from '~/auth-client';
 
 export const Route = createFileRoute('/_authenticated/dashboard')({
   component: Dashboard,

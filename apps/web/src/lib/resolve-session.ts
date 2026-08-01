@@ -1,6 +1,6 @@
 import { createServerFn } from '@tanstack/react-start';
 import { getRequestHeaders } from '@tanstack/react-start/server';
-import { authClient } from '../auth-client.js';
+import { authClient } from '~/auth-client';
 
 export interface SessionData {
   userId: string;

@@ -30,6 +30,28 @@ prod Node server.
   isomorphic public-env module must **not** be named `*.client.*` — TanStack
   Start's import-protection forbids `.client.` imports in the server environment.
 
+## Imports — the `~/` alias (lint-enforced)
+
+App source is imported through the **`~/*` alias** (`~/*` → `./src/*`, declared
+in `tsconfig.json`, wired into Vite by `vite-tsconfig-paths`), never through a
+parent-relative path:
+
+```ts
+import { Button } from '~/components/ui/button'; // yes
+import { Button } from '../../../../components/ui/button.js'; // no — lint error
+import { NavSectionLabel } from './NavSectionLabel'; // yes — siblings stay relative
+```
+
+Parent traversal (`../*`) is an **ESLint error** in `apps/web/src/**`. The reason
+is route files specifically: TanStack Start derives URLs from file position, so
+moving a route one directory silently changes the correct depth of every `../`
+in it. The alias is invariant under that move. Sibling imports (`./Foo`) are
+unaffected by depth and stay as they are.
+
+Aliased imports drop the `.js` extension — `moduleResolution` is `bundler`, so
+the extension is neither needed nor wanted here (unlike the `.js`-suffixed
+relative imports in tsc/tsup-compiled packages).
+
 ## UI — design system (mandatory)
 
 Every screen follows the **CD Fencing Design System** (root `CLAUDE.md`; Claude

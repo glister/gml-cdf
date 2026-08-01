@@ -5,17 +5,17 @@ import type { inferRouterOutputs } from '@trpc/server';
 import type { AppRouter } from '@repo/trpc';
 import { z } from 'zod';
 import { ChevronLeft, ChevronRight, GitMerge, ShieldCheck } from 'lucide-react';
-import { trpcReact } from '../../../../trpc.js';
-import { PageHeader } from '../../../../components/nav/PageHeader.js';
-import { DuplicateSignalCard } from '../../../../components/admin/DuplicateSignalCard.js';
-import { IdentityMergeView } from '../../../../components/admin/IdentityMergeView.js';
-import { Modal } from '../../../../components/feedback/Modal.js';
-import { Callout } from '../../../../components/feedback/Callout.js';
-import { Field } from '../../../../components/forms/Field.js';
-import { Textarea } from '../../../../components/forms/Textarea.js';
-import { Button } from '../../../../components/ui/button.js';
-import { cn } from '../../../../lib/utils.js';
-import { MATCH_REASON_LABELS, type DuplicateMatchReason } from '../../../../lib/people.js';
+import { trpcReact } from '~/trpc';
+import { PageHeader } from '~/components/nav/PageHeader';
+import { DuplicateSignalCard } from '~/components/admin/DuplicateSignalCard';
+import { IdentityMergeView } from '~/components/admin/IdentityMergeView';
+import { Modal } from '~/components/feedback/Modal';
+import { Callout } from '~/components/feedback/Callout';
+import { Field } from '~/components/forms/Field';
+import { Textarea } from '~/components/forms/Textarea';
+import { Button } from '~/components/ui/button';
+import { cn } from '~/lib/utils';
+import { MATCH_REASON_LABELS, type DuplicateMatchReason } from '~/lib/people';
 
 export const Route = createFileRoute('/_authenticated/admin/people/duplicates')({
   component: Duplicates,

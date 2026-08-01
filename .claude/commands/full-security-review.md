@@ -1,10 +1,10 @@
 ---
-description: Thorough whole-app security review of the cdf-platform, with prioritised findings and fixes
+description: Thorough whole-app security review of the cdf-connect, with prioritised findings and fixes
 argument-hint: [optional scope, e.g. "apps/api" or "auth + file upload only"]
 ---
 
 You are running `/full-security-review` — a **security review of the whole
-cdf-platform application** (or the scope named here: **$1** — if empty, review
+cdf-connect application** (or the scope named here: **$1** — if empty, review
 the entire app).
 
 This is an adversarial audit, not a style pass. Assume a motivated attacker with

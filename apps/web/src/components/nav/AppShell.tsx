@@ -1,9 +1,20 @@
 import * as React from 'react';
 import { Link } from '@tanstack/react-router';
-import { ChevronDown, GitMerge, LayoutDashboard, Menu, Users } from 'lucide-react';
+import {
+  ChevronDown,
+  GitMerge,
+  KeyRound,
+  LayoutDashboard,
+  Menu,
+  ShieldCheck,
+  UserCog,
+  Users,
+} from 'lucide-react';
 import { cn } from '~/lib/utils';
 import { ConnectLockup } from '~/components/auth/ConnectLockup';
 import { Avatar } from '~/components/data-display/Avatar';
+import { trpcReact } from '~/trpc';
+import { holdsAnyRole } from '~/lib/authz';
 import { NavSectionLabel } from './NavSectionLabel';
 
 /* The authenticated application shell (CD Fencing Design System —
@@ -48,6 +59,48 @@ function NavItemInner({
   );
 }
 
+/**
+ * The Access section, shown only to holders of the roles that can actually use
+ * it (core plan 04 §9.4).
+ *
+ * **This is UX only** (ADR-0003). Hiding a link is a convenience, never the
+ * control: every procedure behind these routes is a `roleProcedure`, and a
+ * direct API call from someone without the grant is rejected regardless of what
+ * the menu shows. `grants.mine` is a `protectedProcedure` precisely because
+ * seeing your own grants is not privileged.
+ */
+function AccessNavSection() {
+  const mine = trpcReact.platform.authz.grants.mine.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+  });
+  const canAdminister = holdsAnyRole(mine.data, ['administrator']);
+  const canAllocate = holdsAnyRole(mine.data, ['administrator', 'hr_user']);
+  if (!canAdminister && !canAllocate) return null;
+
+  return (
+    <>
+      <NavSectionLabel>Access</NavSectionLabel>
+      <div className="flex flex-col gap-0.5">
+        {canAdminister && (
+          <>
+            <Link to="/admin/authz/grants" className={navItemClass}>
+              <NavItemInner icon={<KeyRound size={20} strokeWidth={1.9} />} label="Role grants" />
+            </Link>
+            <Link to="/admin/authz/roles" className={navItemClass}>
+              <NavItemInner icon={<ShieldCheck size={20} strokeWidth={1.9} />} label="Roles" />
+            </Link>
+          </>
+        )}
+        {canAllocate && (
+          <Link to="/admin/authz/allocations" className={navItemClass}>
+            <NavItemInner icon={<UserCog size={20} strokeWidth={1.9} />} label="Allocations" />
+          </Link>
+        )}
+      </div>
+    </>
+  );
+}
+
 function Sidebar({ user }: { user: AppShellUser | null }) {
   return (
     <aside
@@ -76,6 +129,7 @@ function Sidebar({ user }: { user: AppShellUser | null }) {
             <NavItemInner icon={<GitMerge size={20} strokeWidth={1.9} />} label="Duplicates" />
           </Link>
         </div>
+        <AccessNavSection />
       </nav>
       {user && (
         <div className="shrink-0 border-t border-white/[0.07] p-3">

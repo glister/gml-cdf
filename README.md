@@ -1,4 +1,4 @@
-# cdf-platform
+# cdf-connect
 
 A TypeScript monorepo (Turborepo + pnpm workspaces) with a Hono/tRPC API, a
 TanStack Start web app, and an Azure Service Bus worker. Everything is ESM and
@@ -94,3 +94,15 @@ the host, re-sync inside the container:
 pnpm add <pkg> --filter <target-package>
 docker compose exec dev pnpm install
 ```
+
+## Deployment
+
+Infrastructure is Terraform-managed Azure (`terraform/`), deployed from GitHub
+Actions via OIDC federation — see
+[ADR-0006](docs/adr/0006-cloud-platform-and-infrastructure.md) and
+[ADR-0007](docs/adr/0007-cicd-and-supply-chain-security.md).
+
+The one-time manual setup that has to exist before Terraform can run —
+subscriptions, resource providers, remote-state storage, Entra app registrations
+and federated credentials, role assignments, GitHub Environment secrets — is
+[`docs/runbooks/azure-bootstrap.md`](docs/runbooks/azure-bootstrap.md).

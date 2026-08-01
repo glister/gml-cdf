@@ -2,13 +2,13 @@ import * as React from 'react';
 import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { useForm } from '@tanstack/react-form';
 import { z } from 'zod';
-import { authClient } from '../auth-client.js';
-import { clientEnv } from '../env.js';
-import { AuthShell } from '../components/auth/AuthShell.js';
-import { OTPEntry } from '../components/auth/OTPEntry.js';
-import { Turnstile, type TurnstileHandle } from '../components/auth/Turnstile.js';
-import { Button } from '../components/ui/button.js';
-import { cn } from '../lib/utils.js';
+import { authClient } from '~/auth-client';
+import { clientEnv } from '~/env';
+import { AuthShell } from '~/components/auth/AuthShell';
+import { OTPEntry } from '~/components/auth/OTPEntry';
+import { Turnstile, type TurnstileHandle } from '~/components/auth/Turnstile';
+import { Button } from '~/components/ui/button';
+import { cn } from '~/lib/utils';
 
 export const Route = createFileRoute('/login')({
   component: LoginPage,

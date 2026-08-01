@@ -30,9 +30,19 @@ injected into Container Apps as secret refs via the managed identity.
 - `.github/workflows/build-and-push.yml` — builds api/web/worker images → ACR,
   then `az containerapp update`.
 
+## Bootstrap
+
+Everything above assumes the Azure landing zone already exists. The one-time
+manual setup — subscriptions, resource providers, the remote-state storage
+account, Entra app registrations + OIDC federated credentials, role assignments
+and GitHub Environment secrets — is
+[`docs/runbooks/azure-bootstrap.md`](../docs/runbooks/azure-bootstrap.md).
+
 ## Operational notes
 
 - The CI service principal needs **Key Vault Secrets Officer** on the vault (data
-  plane) to write secrets, plus Contributor on the subscription/RG.
+  plane) to write secrets, Contributor on the subscription/RG, and **Role Based
+  Access Control Administrator** — Contributor cannot create the role assignments
+  in `modules/identity`.
 - Remote state backend config (`resource_group_name`, `storage_account_name`,
   `key`) is passed via `-backend-config` in CI, not committed.

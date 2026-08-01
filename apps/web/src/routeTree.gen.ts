@@ -18,6 +18,9 @@ import { Route as AuthenticatedAdminPeopleIndexRouteImport } from './routes/_aut
 import { Route as AuthenticatedAdminPeopleNewRouteImport } from './routes/_authenticated/admin/people/new';
 import { Route as AuthenticatedAdminPeopleDuplicatesRouteImport } from './routes/_authenticated/admin/people/duplicates';
 import { Route as AuthenticatedAdminPeoplePersonIdRouteImport } from './routes/_authenticated/admin/people/$personId';
+import { Route as AuthenticatedAdminAuthzRolesRouteImport } from './routes/_authenticated/admin/authz/roles';
+import { Route as AuthenticatedAdminAuthzGrantsRouteImport } from './routes/_authenticated/admin/authz/grants';
+import { Route as AuthenticatedAdminAuthzAllocationsRouteImport } from './routes/_authenticated/admin/authz/allocations';
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -67,12 +70,33 @@ const AuthenticatedAdminPeoplePersonIdRoute =
     path: '/people/$personId',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any);
+const AuthenticatedAdminAuthzRolesRoute =
+  AuthenticatedAdminAuthzRolesRouteImport.update({
+    id: '/authz/roles',
+    path: '/authz/roles',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any);
+const AuthenticatedAdminAuthzGrantsRoute =
+  AuthenticatedAdminAuthzGrantsRouteImport.update({
+    id: '/authz/grants',
+    path: '/authz/grants',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any);
+const AuthenticatedAdminAuthzAllocationsRoute =
+  AuthenticatedAdminAuthzAllocationsRouteImport.update({
+    id: '/authz/allocations',
+    path: '/authz/allocations',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any);
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute;
   '/login': typeof LoginRoute;
   '/admin': typeof AuthenticatedAdminRouteWithChildren;
   '/dashboard': typeof AuthenticatedDashboardRoute;
+  '/admin/authz/allocations': typeof AuthenticatedAdminAuthzAllocationsRoute;
+  '/admin/authz/grants': typeof AuthenticatedAdminAuthzGrantsRoute;
+  '/admin/authz/roles': typeof AuthenticatedAdminAuthzRolesRoute;
   '/admin/people/$personId': typeof AuthenticatedAdminPeoplePersonIdRoute;
   '/admin/people/duplicates': typeof AuthenticatedAdminPeopleDuplicatesRoute;
   '/admin/people/new': typeof AuthenticatedAdminPeopleNewRoute;
@@ -83,6 +107,9 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute;
   '/admin': typeof AuthenticatedAdminRouteWithChildren;
   '/dashboard': typeof AuthenticatedDashboardRoute;
+  '/admin/authz/allocations': typeof AuthenticatedAdminAuthzAllocationsRoute;
+  '/admin/authz/grants': typeof AuthenticatedAdminAuthzGrantsRoute;
+  '/admin/authz/roles': typeof AuthenticatedAdminAuthzRolesRoute;
   '/admin/people/$personId': typeof AuthenticatedAdminPeoplePersonIdRoute;
   '/admin/people/duplicates': typeof AuthenticatedAdminPeopleDuplicatesRoute;
   '/admin/people/new': typeof AuthenticatedAdminPeopleNewRoute;
@@ -95,6 +122,9 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute;
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren;
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute;
+  '/_authenticated/admin/authz/allocations': typeof AuthenticatedAdminAuthzAllocationsRoute;
+  '/_authenticated/admin/authz/grants': typeof AuthenticatedAdminAuthzGrantsRoute;
+  '/_authenticated/admin/authz/roles': typeof AuthenticatedAdminAuthzRolesRoute;
   '/_authenticated/admin/people/$personId': typeof AuthenticatedAdminPeoplePersonIdRoute;
   '/_authenticated/admin/people/duplicates': typeof AuthenticatedAdminPeopleDuplicatesRoute;
   '/_authenticated/admin/people/new': typeof AuthenticatedAdminPeopleNewRoute;
@@ -107,6 +137,9 @@ export interface FileRouteTypes {
     | '/login'
     | '/admin'
     | '/dashboard'
+    | '/admin/authz/allocations'
+    | '/admin/authz/grants'
+    | '/admin/authz/roles'
     | '/admin/people/$personId'
     | '/admin/people/duplicates'
     | '/admin/people/new'
@@ -117,6 +150,9 @@ export interface FileRouteTypes {
     | '/login'
     | '/admin'
     | '/dashboard'
+    | '/admin/authz/allocations'
+    | '/admin/authz/grants'
+    | '/admin/authz/roles'
     | '/admin/people/$personId'
     | '/admin/people/duplicates'
     | '/admin/people/new'
@@ -128,6 +164,9 @@ export interface FileRouteTypes {
     | '/login'
     | '/_authenticated/admin'
     | '/_authenticated/dashboard'
+    | '/_authenticated/admin/authz/allocations'
+    | '/_authenticated/admin/authz/grants'
+    | '/_authenticated/admin/authz/roles'
     | '/_authenticated/admin/people/$personId'
     | '/_authenticated/admin/people/duplicates'
     | '/_authenticated/admin/people/new'
@@ -205,10 +244,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminPeoplePersonIdRouteImport;
       parentRoute: typeof AuthenticatedAdminRoute;
     };
+    '/_authenticated/admin/authz/roles': {
+      id: '/_authenticated/admin/authz/roles';
+      path: '/authz/roles';
+      fullPath: '/admin/authz/roles';
+      preLoaderRoute: typeof AuthenticatedAdminAuthzRolesRouteImport;
+      parentRoute: typeof AuthenticatedAdminRoute;
+    };
+    '/_authenticated/admin/authz/grants': {
+      id: '/_authenticated/admin/authz/grants';
+      path: '/authz/grants';
+      fullPath: '/admin/authz/grants';
+      preLoaderRoute: typeof AuthenticatedAdminAuthzGrantsRouteImport;
+      parentRoute: typeof AuthenticatedAdminRoute;
+    };
+    '/_authenticated/admin/authz/allocations': {
+      id: '/_authenticated/admin/authz/allocations';
+      path: '/authz/allocations';
+      fullPath: '/admin/authz/allocations';
+      preLoaderRoute: typeof AuthenticatedAdminAuthzAllocationsRouteImport;
+      parentRoute: typeof AuthenticatedAdminRoute;
+    };
   }
 }
 
 interface AuthenticatedAdminRouteChildren {
+  AuthenticatedAdminAuthzAllocationsRoute: typeof AuthenticatedAdminAuthzAllocationsRoute;
+  AuthenticatedAdminAuthzGrantsRoute: typeof AuthenticatedAdminAuthzGrantsRoute;
+  AuthenticatedAdminAuthzRolesRoute: typeof AuthenticatedAdminAuthzRolesRoute;
   AuthenticatedAdminPeoplePersonIdRoute: typeof AuthenticatedAdminPeoplePersonIdRoute;
   AuthenticatedAdminPeopleDuplicatesRoute: typeof AuthenticatedAdminPeopleDuplicatesRoute;
   AuthenticatedAdminPeopleNewRoute: typeof AuthenticatedAdminPeopleNewRoute;
@@ -216,6 +279,10 @@ interface AuthenticatedAdminRouteChildren {
 }
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
+  AuthenticatedAdminAuthzAllocationsRoute:
+    AuthenticatedAdminAuthzAllocationsRoute,
+  AuthenticatedAdminAuthzGrantsRoute: AuthenticatedAdminAuthzGrantsRoute,
+  AuthenticatedAdminAuthzRolesRoute: AuthenticatedAdminAuthzRolesRoute,
   AuthenticatedAdminPeoplePersonIdRoute: AuthenticatedAdminPeoplePersonIdRoute,
   AuthenticatedAdminPeopleDuplicatesRoute:
     AuthenticatedAdminPeopleDuplicatesRoute,

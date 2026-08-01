@@ -1,10 +1,15 @@
 import { z } from 'zod';
+import { defineFieldClassification, schemaUpTo } from './lib/field-classification.js';
 import {
+  FIELD_CLASSES,
+  GRANT_STATES,
+  MODULE_KEYS,
   PERSON_FLAG_TYPES,
   PERSON_SORTS,
   PERSON_STATUSES,
   PROFILE_STATUSES,
   RELATIONSHIP_TYPES,
+  ROLE_KEYS,
   SORT_DIRECTIONS,
   USER_ROLES,
 } from './lib/constants.js';
@@ -174,3 +179,166 @@ export const invitePersonInput = z.object({
   personId: z.uuid(),
   email: z.string().trim().toLowerCase().max(320),
 });
+
+// --- platform.authz router (core plan 04 §5.1) ---
+
+export const roleKeySchema = z.enum(ROLE_KEYS);
+export type RoleKeyInput = z.infer<typeof roleKeySchema>;
+export const moduleKeySchema = z.enum(MODULE_KEYS);
+export type ModuleKeyInput = z.infer<typeof moduleKeySchema>;
+export const grantStateSchema = z.enum(GRANT_STATES);
+export const fieldClassSchema = z.enum(FIELD_CLASSES);
+
+export const grantRoleInput = z.object({
+  personId: z.uuid(),
+  roleKey: roleKeySchema,
+  module: moduleKeySchema,
+  validFrom: z.iso.datetime().optional(),
+  validUntil: z.iso.datetime().optional(),
+});
+export type GrantRoleInput = z.infer<typeof grantRoleInput>;
+
+export const revokeGrantInput = z.object({
+  grantId: z.uuid(),
+  reason: z.string().trim().min(1).max(500),
+});
+export type RevokeGrantInput = z.infer<typeof revokeGrantInput>;
+
+export const listGrantsInput = z.object({
+  personId: z.uuid().optional(),
+  roleKey: roleKeySchema.optional(),
+  module: moduleKeySchema.optional(),
+  // Derived in SQL (CASE over the timestamps) and filtered in SQL — the same
+  // expression drives display and filter, never computed client-side.
+  state: grantStateSchema.optional(),
+  search: z.string().trim().max(200).optional(),
+  cursor: z.string().optional(),
+  limit: z.number().int().min(1).max(100).default(25),
+  sortDir: z.enum(SORT_DIRECTIONS).default('desc'),
+});
+export type ListGrantsInput = z.infer<typeof listGrantsInput>;
+
+export const addAllocationInput = z.object({
+  adminPersonId: z.uuid(),
+  personId: z.uuid(),
+  validFrom: z.iso.datetime().optional(),
+  validUntil: z.iso.datetime().optional(),
+});
+export type AddAllocationInput = z.infer<typeof addAllocationInput>;
+
+export const endAllocationInput = z.object({
+  allocationId: z.uuid(),
+  reason: z.string().trim().min(1).max(500),
+});
+export type EndAllocationInput = z.infer<typeof endAllocationInput>;
+
+export const listAllocationsInput = z.object({
+  adminPersonId: z.uuid().optional(),
+  personId: z.uuid().optional(),
+  liveOnly: z.boolean().default(true),
+  cursor: z.string().optional(),
+  limit: z.number().int().min(1).max(100).default(25),
+  sortDir: z.enum(SORT_DIRECTIONS).default('desc'),
+});
+export type ListAllocationsInput = z.infer<typeof listAllocationsInput>;
+
+// --- Field classification pilot (core plan 04 §5.1, PL-003, ADR-0015) ---
+//
+// The pattern every entity follows: one classification map covering EVERY
+// exposed column (an unclassified column is a compile error, not a silently
+// visible field), and role-variant output schemas derived from it. HR entities
+// adopt the same shape later — `employeeProfileFull` vs
+// `employeeProfileRestricted`, `hr.employee_sensitive`, `hr.absence_medical`.
+
+/** Every column `platform.person` exposes through the API. */
+const personFields = z.object({
+  id: z.uuid(),
+  relationship_type: relationshipTypeSchema,
+  profile_status: profileStatusSchema,
+  status: personStatusSchema,
+  display_name: z.string(),
+  given_name: z.string().nullable(),
+  family_name: z.string().nullable(),
+  contact_email: z.string().nullable(),
+  date_of_birth: z.string().nullable(),
+  agency_worker_reference: z.string().nullable(),
+  access_valid_until: z.union([z.string(), z.date()]).nullable(),
+  created_at: z.union([z.string(), z.date()]),
+  updated_at: z.union([z.string(), z.date()]),
+});
+
+/**
+ * `platform.person` carries no special-category column by design — safeguarding
+ * detail lives in `platform.person_flag`, a separate table (ADR-0015/0019), so a
+ * `select *` here cannot leak it. Contact detail and date of birth are
+ * `sensitive`: needed by HR, not by a peer.
+ */
+export const personClassification = defineFieldClassification('platform.person', personFields, {
+  id: 'internal',
+  relationship_type: 'internal',
+  profile_status: 'internal',
+  status: 'internal',
+  display_name: 'internal',
+  given_name: 'internal',
+  family_name: 'internal',
+  contact_email: 'sensitive',
+  date_of_birth: 'sensitive',
+  agency_worker_reference: 'internal',
+  access_valid_until: 'internal',
+  created_at: 'internal',
+  updated_at: 'internal',
+});
+
+/** HR User / Administrator variant — everything up to and including sensitive. */
+export const personOutputFull = schemaUpTo(personClassification, 'sensitive');
+/** Everyone else, including `external` (PL-043) — internal and below only. */
+export const personOutputRestricted = schemaUpTo(personClassification, 'internal');
+
+/** Every column `platform.person_flag` exposes — the special-category pilot. */
+const personFlagFields = z.object({
+  id: z.uuid(),
+  person_id: z.uuid(),
+  flag_type: personFlagTypeSchema,
+  reason: z.string(),
+  raised_at: z.union([z.string(), z.date()]),
+  raised_by: z.uuid(),
+  ended_at: z.union([z.string(), z.date()]).nullable(),
+  ended_by: z.uuid().nullable(),
+  end_reason: z.string().nullable(),
+  source_merge_id: z.uuid().nullable(),
+  source_flag_id: z.uuid().nullable(),
+});
+
+/**
+ * A safeguarding flag's *type and rationale* are special-category: they concern
+ * criminal-adjacent and safeguarding matters (ADR-0019). The bookkeeping around
+ * it (who raised it, when, merge lineage) is sensitive but not special-category
+ * — so an authorised HR reader can see that a flag exists and its provenance
+ * without the read being journalled twice over.
+ */
+export const personFlagClassification = defineFieldClassification(
+  'platform.person_flag',
+  personFlagFields,
+  {
+    id: 'internal',
+    person_id: 'internal',
+    flag_type: 'special-category',
+    reason: 'special-category',
+    end_reason: 'special-category',
+    raised_at: 'sensitive',
+    raised_by: 'sensitive',
+    ended_at: 'sensitive',
+    ended_by: 'sensitive',
+    source_merge_id: 'internal',
+    source_flag_id: 'internal',
+  },
+);
+
+/** Administrator / HR User variant — includes the special-category detail. */
+export const personFlagOutputFull = schemaUpTo(personFlagClassification, 'special-category');
+/**
+ * Everyone else. Note what survives: the *existence* of a flag and its
+ * provenance, never its type or rationale — the PL-003 shape of "separate
+ * sensitive detail from the operational output".
+ */
+export const personFlagOutputRestricted = schemaUpTo(personFlagClassification, 'sensitive');

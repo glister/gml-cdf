@@ -2,7 +2,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { type NewPerson, db, newUuidV7 } from '@repo/db';
 import { createMigrator, makeUser, truncateAll } from '@repo/db/test-support';
 import { appRouter } from '../../router.js';
-import type { TRPCContext } from '../../trpc.js';
+import type { ContextGrant, TRPCContext } from '../../trpc.js';
+import { ROLE_KEYS, type RoleKey } from '../../lib/constants.js';
 
 beforeAll(async () => {
   const { error } = await createMigrator(db).migrateToLatest();
@@ -14,11 +15,68 @@ afterAll(async () => {
 });
 
 let adminPersonId: string;
+/**
+ * The acting admin's grants. Since core plan 04, authorisation is
+ * `role_grant`-based — a Better Auth `admin` flag no longer reaches any product
+ * surface, so the test admin must actually hold the Administrator role.
+ */
+let adminGrants: ContextGrant[];
 
 beforeEach(async () => {
   await truncateAll(db);
+  await reseedRoles();
   adminPersonId = await insertPerson({ relationship_type: 'employee', display_name: 'Admin' });
+  adminGrants = await grantRole(adminPersonId, 'administrator');
 });
+
+/** `truncateAll` clears the migration's role seed; restore it per test. */
+async function reseedRoles(): Promise<void> {
+  const existing = await db.selectFrom('platform.role').select('id').executeTakeFirst();
+  if (existing) return;
+  await db
+    .insertInto('platform.role')
+    .values(
+      ROLE_KEYS.map((key, i) => ({
+        id: `019f509e-9d0${i.toString(16)}-7000-8000-00000000000${i.toString(16)}`,
+        key,
+        name: key,
+      })),
+    )
+    .execute();
+}
+
+/** Grant `roleKey` in the platform module and return the caller's grant list. */
+async function grantRole(personId: string, roleKey: RoleKey): Promise<ContextGrant[]> {
+  const role = await db
+    .selectFrom('platform.role')
+    .select('id')
+    .where('key', '=', roleKey)
+    .executeTakeFirstOrThrow();
+  await db
+    .insertInto('platform.role_grant')
+    .values({
+      id: newUuidV7(),
+      person_id: personId,
+      role_id: role.id,
+      module: 'platform',
+      created_by: personId,
+    })
+    .execute();
+  const rows = await db
+    .selectFrom('platform.role_grant as g')
+    .innerJoin('platform.role as r', 'r.id', 'g.role_id')
+    .select(['r.key as roleKey', 'g.module', 'g.valid_from', 'g.valid_until', 'g.revoked_at'])
+    .where('g.person_id', '=', personId)
+    .where('g.revoked_at', 'is', null)
+    .execute();
+  return rows.map((r) => ({
+    roleKey: r.roleKey as RoleKey,
+    module: r.module,
+    validFrom: r.valid_from,
+    validUntil: r.valid_until,
+    revokedAt: r.revoked_at,
+  }));
+}
 
 async function insertPerson(overrides: Partial<NewPerson> = {}): Promise<string> {
   const id = overrides.id ?? newUuidV7();
@@ -42,6 +100,7 @@ function makeCtx(overrides: Partial<TRPCContext> = {}): TRPCContext {
     rateLimit: { check: () => true },
     correlationId: newUuidV7(),
     actorPersonId: adminPersonId,
+    grants: adminGrants,
     ...overrides,
   };
 }
@@ -340,15 +399,29 @@ describe('invite (PL-036)', () => {
 });
 
 describe('RBAC boundary', () => {
-  it('denies every admin procedure to a non-admin and returns own summary from me', async () => {
-    const agentCtx = makeCtx({ user: { id: 'u', name: 'Agent', email: 'a@x', role: 'agent' } });
-    const agent = appRouter.createCaller(agentCtx);
-    await expect(agent.platform.identity.listPersons({})).rejects.toMatchObject({
+  it('denies a caller holding no role grant, and returns own summary from me', async () => {
+    const ungranted = appRouter.createCaller(makeCtx({ grants: [] }));
+    await expect(ungranted.platform.identity.listPersons({})).rejects.toMatchObject({
       code: 'FORBIDDEN',
     });
 
     const me = await appRouter.createCaller(makeCtx()).platform.identity.me();
     expect(me?.id).toBe(adminPersonId);
+  });
+
+  it("Better Auth's admin flag is NOT the control (core plan 04 Q1)", async () => {
+    // Same session that used to pass: `role: 'admin'` on the Better Auth user.
+    // Since the re-base, only a `platform.role_grant` row authorises, so this is
+    // rejected — proving the two role systems are no longer interchangeable.
+    const frameworkAdminOnly = appRouter.createCaller(
+      makeCtx({
+        user: { id: 'admin-user', name: 'Admin', email: 'admin@cdf.test', role: 'admin' },
+        grants: [],
+      }),
+    );
+    await expect(frameworkAdminOnly.platform.identity.listPersons({})).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
   });
 });
 
@@ -510,11 +583,14 @@ describe('account containment (PL-036/043)', () => {
       .executeTakeFirstOrThrow();
     expect(shell.profile_status).toBe('draft_shell');
 
-    // The invited person's own (non-admin) session.
+    // The invited person's own session. `grants: []` is not a convenience here —
+    // it is the real state of a freshly invited person: neither the invitation
+    // nor a first sign-in inserts any role_grant row (§4.1, core plan 04).
     const invitee = appRouter.createCaller(
       makeCtx({
         user: { id: 'shell-user', name: 'Shell', email: 'shell@example.com', role: 'agent' },
         actorPersonId: p,
+        grants: [],
       }),
     );
     // No admin surface: cannot read others, cannot move its own profile status.

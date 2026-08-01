@@ -29,7 +29,7 @@ jobs:
       matrix:
         app: [api, web, worker]
     env:
-      PROJECT: cdf
+      PROJECT: cdf-connect
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -55,9 +55,12 @@ jobs:
           else
             name="$RUN_BRANCH"
           fi
+          # ACR names are alphanumeric-only: terraform builds this one as
+          # replace("${project}${environment}acr", "-", ""), so the hyphen in
+          # PROJECT must be stripped here too or the login target won't exist.
           {
             echo "name=$name"
-            echo "acr=${PROJECT}${name}acr"
+            echo "acr=${PROJECT//-/}${name}acr"
             echo "rg=${PROJECT}-${name}-rg"
           } >> "$GITHUB_OUTPUT"
 

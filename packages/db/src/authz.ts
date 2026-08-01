@@ -1,0 +1,136 @@
+import type { Transaction } from 'kysely';
+import type { EventPayload } from '@repo/domain';
+import { appendEvent } from './journal.js';
+import type { DB } from './types.js';
+
+/**
+ * The single write path for revoking role grants (core plan 04 §9.3, ADR-0022).
+ *
+ * Lives here rather than in `@repo/trpc` because it has **two** callers that must
+ * behave identically: the `platform.authz.grants.revoke` procedure, and plan 03's
+ * access-expiry sweep in `apps/worker`, which de-roles an external whose access
+ * window has passed (PL-042). A second implementation in the worker would be a
+ * second write path — exactly what ADR-0022 exists to prevent. It sits beside
+ * `relayOutboxBatch`/`recordConsumptionOnce`, the existing shared write paths
+ * this package already owns for the same reason.
+ *
+ * Both functions take a `Transaction<DB>`, so "the state change and its journal
+ * event commit together" is structural rather than conventional — the same
+ * guarantee `appendEvent` gives (ADR-0010).
+ *
+ * The *decision* logic (is a grant active? what state is it in?) stays pure in
+ * `@repo/domain`; this module only performs the write (ADR-0009).
+ */
+
+export interface RevokeGrantInput {
+  grantId: string;
+  /** The revoking person, or `null` for a system actor (the expiry sweep). */
+  actorPersonId: string | null;
+  /** Why — free text, or a convention like 'expired' / 'offboarded'. */
+  reason: string;
+  correlationId: string;
+}
+
+export interface RevokedGrantSummary {
+  grantId: string;
+  personId: string;
+  roleKey: string;
+  module: string;
+}
+
+/**
+ * Revoke one grant and journal `platform.role.revoked` in the same transaction.
+ *
+ * Returns `null` when the grant does not exist, is soft-deleted, or is already
+ * revoked — revocation is idempotent, so a redelivered sweep message is a no-op
+ * rather than a duplicate event. Grants are never un-revoked and never deleted;
+ * re-engagement inserts a new row (§4.3).
+ */
+export async function revokeGrant(
+  trx: Transaction<DB>,
+  input: RevokeGrantInput,
+): Promise<RevokedGrantSummary | null> {
+  // Lock the row and read the role key in one step — the event payload needs the
+  // key, and FOR UPDATE keeps a concurrent revoke from double-journalling.
+  const grant = await trx
+    .selectFrom('platform.role_grant as g')
+    .innerJoin('platform.role as r', 'r.id', 'g.role_id')
+    .select(['g.id', 'g.person_id', 'g.module', 'r.key as role_key'])
+    .where('g.id', '=', input.grantId)
+    .where('g.revoked_at', 'is', null)
+    .where('g.deleted_at', 'is', null)
+    .forUpdate()
+    .executeTakeFirst();
+  if (!grant) return null;
+
+  await trx
+    .updateTable('platform.role_grant')
+    .set({
+      revoked_at: new Date(),
+      // NULL = the system did it (the expiry sweep), per the repo-wide actor
+      // convention. Never substitute the subject — that would read as the person
+      // revoking their own access.
+      revoked_by: input.actorPersonId,
+      revoke_reason: input.reason,
+      updated_by: input.actorPersonId,
+    })
+    .where('id', '=', input.grantId)
+    .execute();
+
+  await appendEvent(trx, {
+    kind: 'security',
+    streamType: 'platform.role_grant',
+    streamId: input.grantId,
+    eventType: 'platform.role.revoked',
+    payload: {
+      personId: grant.person_id,
+      // `role.key` is intentionally not CHECK-constrained (roles are data), so
+      // the column type is `string`. The registry's strict schema re-validates
+      // it against the literal union at append time — an unregistered key throws
+      // before insert rather than landing a malformed event.
+      roleKey: grant.role_key as EventPayload<'platform.role.revoked'>['roleKey'],
+      module: grant.module,
+      revokeReason: input.reason,
+    },
+    actorPersonId: input.actorPersonId,
+    correlationId: input.correlationId,
+  });
+
+  return {
+    grantId: grant.id,
+    personId: grant.person_id,
+    roleKey: grant.role_key,
+    module: grant.module,
+  };
+}
+
+/**
+ * Revoke every live grant a person holds — the de-roling half of access expiry
+ * (PL-042) and of offboarding. Each grant is revoked through {@link revokeGrant},
+ * so each gets its own journal event and the trail explains exactly what access
+ * was removed and when.
+ */
+export async function revokeAllGrantsForPerson(
+  trx: Transaction<DB>,
+  input: { personId: string; actorPersonId: string | null; reason: string; correlationId: string },
+): Promise<RevokedGrantSummary[]> {
+  const live = await trx
+    .selectFrom('platform.role_grant')
+    .select('id')
+    .where('person_id', '=', input.personId)
+    .where('revoked_at', 'is', null)
+    .where('deleted_at', 'is', null)
+    .execute();
+
+  const revoked: RevokedGrantSummary[] = [];
+  for (const { id } of live) {
+    const result = await revokeGrant(trx, {
+      grantId: id,
+      actorPersonId: input.actorPersonId,
+      reason: input.reason,
+      correlationId: input.correlationId,
+    });
+    if (result) revoked.push(result);
+  }
+  return revoked;
+}

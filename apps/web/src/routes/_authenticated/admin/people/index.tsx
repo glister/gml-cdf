@@ -17,12 +17,12 @@ import {
   Search,
   UserPlus,
 } from 'lucide-react';
-import { trpcReact } from '../../../../trpc.js';
-import { PageHeader } from '../../../../components/nav/PageHeader.js';
-import { PersonCell } from '../../../../components/data-display/PersonCell.js';
-import { Button } from '../../../../components/ui/button.js';
-import { StatusPill } from '../../../../components/data-display/StatusPill.js';
-import { cn } from '../../../../lib/utils.js';
+import { trpcReact } from '~/trpc';
+import { PageHeader } from '~/components/nav/PageHeader';
+import { PersonCell } from '~/components/data-display/PersonCell';
+import { Button } from '~/components/ui/button';
+import { StatusPill } from '~/components/data-display/StatusPill';
+import { cn } from '~/lib/utils';
 import {
   formatDate,
   PROFILE_STATUS_LABELS,
@@ -30,7 +30,7 @@ import {
   RELATIONSHIP_LABELS,
   type ProfileStatus,
   type RelationshipType,
-} from '../../../../lib/people.js';
+} from '~/lib/people';
 
 export const Route = createFileRoute('/_authenticated/admin/people/')({
   component: PeopleList,
