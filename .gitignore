@@ -9,6 +9,9 @@ dist
 .env.secrets
 .env.local
 .env.*.local
+
+# Per-worktree host port prefix override (see "Port prefix convention" in CLAUDE.md)
+.portPrefix
 .DS_Store
 .vscode
 

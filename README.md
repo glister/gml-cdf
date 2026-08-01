@@ -67,6 +67,11 @@ Host ports derive from `"portPrefix"` in `package.json` (default `170`) — see 
 - API: http://localhost:17001
 - Mailpit UI: http://localhost:17021
 
+To run a second stack from a git worktree, put a different prefix in an untracked
+`.portPrefix` file there (`echo 171 > .portPrefix && pnpm ports:sync`) — it
+overrides `package.json` for that checkout and gives it its own ports and docker
+compose project.
+
 ### Common commands
 
 | Command          | What it does                        |

@@ -4,6 +4,10 @@
 #   docker compose up
 #   pnpm migrate && pnpm seed   # from the host
 
+# Project name comes from COMPOSE_PROJECT_NAME in .env (managed by
+# `pnpm ports:sync`), so a worktree with a local .portPrefix override gets its own
+# containers, network and volumes. This `name:` is only the fallback if that var
+# is ever removed — COMPOSE_PROJECT_NAME takes precedence over it.
 name: cdf
 
 services:

@@ -248,11 +248,40 @@ read the literals). **Never hand-edit a managed port.** Instead:
 - `pnpm ports:check` — verify no drift (runs in pre-commit and the `ports-check`
   CI gate; blocking).
 
+The same mechanism also manages `COMPOSE_PROJECT_NAME` in `.env`, which decides
+which docker stack the checkout drives (it outranks the top-level `name:` in
+`compose.yml`).
+
 Source of truth for the slot map + which vars each port drives (including ports
 embedded inside URLs / connection strings) is `scripts/gen-ports.mjs`
 (`SLOTS` / `FILES`). **Adding a service:** pick the next free slot in its band, add
 it to `SLOTS` and the relevant `FILES` entries, add the `PORT_*` var to `.env` and
 `turbo.json` `globalEnv`, then run `pnpm ports:sync`.
+
+#### Per-worktree override (`.portPrefix`)
+
+To run a second full stack from a git worktree, drop an untracked `.portPrefix`
+file at that worktree's root containing a bare integer, then sync:
+
+```sh
+echo 171 > .portPrefix
+pnpm ports:sync
+docker compose up
+```
+
+The override beats `package.json` for that checkout only, so the worktree gets
+host ports `17100–17129` and its own compose project (`cdf-171`) — separate
+containers, network and volumes from the canonical checkout's `cdf`. Pick a
+prefix no other project on the machine uses. `.portPrefix` is git-ignored.
+
+Because `.env` / `.env.test` are tracked, syncing an override leaves them
+**deliberately dirty** — that is expected, and they must never be committed.
+`pnpm ports:check` (pre-commit) fails if either is staged while an override is
+active, since CI sees no `.portPrefix` and validates against `package.json`.
+
+Two things do not come along automatically: `.env.secrets` is git-ignored, so
+copy it into the new worktree; and the container-side `node_modules` volumes are
+per-project, so the first `docker compose up` there does a full `pnpm install`.
 
 Only host-published ports are prefixed. **Container-internal ports stay fixed**
 (`3000/3001/3002`, `5432`, `1025/8025`, `5672`, `10000`) — so the compose `dev`

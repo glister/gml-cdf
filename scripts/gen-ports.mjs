@@ -14,12 +14,28 @@
 // credentials, hostnames, db names — untouched. Container-internal ports
 // (API_INTERNAL_URL, PORT, the compose in-network overrides) are deliberately NOT
 // managed here: the prefix governs host-published ports only.
+//
+// Worktree override: an untracked `.portPrefix` file at the repo root (a bare
+// integer) takes precedence over package.json, so a git worktree can run the
+// whole stack alongside the canonical checkout without port clashes. It also
+// renames the docker compose project, otherwise both checkouts would drive the
+// same set of containers/volumes regardless of ports. `.portPrefix` is
+// git-ignored and `--check` refuses to let an override-derived `.env` /
+// `.env.test` be committed.
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+const OVERRIDE_FILE = '.portPrefix';
+
+// Base docker compose project name. The canonical checkout keeps it bare so its
+// existing containers/volumes are not orphaned; an overriding worktree gets
+// `<base>-<prefix>` so it owns an entirely separate stack.
+const COMPOSE_PROJECT = 'cdf';
 
 // slot = the last two digits of the derived port.
 const SLOTS = {
@@ -41,6 +57,10 @@ const SLOTS = {
 // port. `url`: substitute the derived port(s) into the existing value, in order.
 const FILES = {
   '.env': [
+    // Compose reads COMPOSE_PROJECT_NAME from this file and it outranks the
+    // top-level `name:` in compose.yml — that is what isolates a worktree's
+    // containers, networks and volumes from the canonical checkout's.
+    { key: 'COMPOSE_PROJECT_NAME', kind: 'project' },
     { key: 'PORT_WEB', kind: 'port', slot: 'web' },
     { key: 'PORT_API', kind: 'port', slot: 'api' },
     { key: 'PORT_WORKER', kind: 'port', slot: 'worker' },
@@ -76,13 +96,25 @@ const FILES = {
   ],
 };
 
-function readPrefix() {
-  const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
-  const prefix = pkg.portPrefix;
+function parsePrefix(raw, source) {
+  const prefix = typeof raw === 'string' ? (/^\d+$/.test(raw) ? Number(raw) : NaN) : raw;
   if (!Number.isInteger(prefix) || prefix < 1) {
-    throw new Error(`package.json "portPrefix" must be a positive integer, got: ${prefix}`);
+    throw new Error(`${source} must be a positive integer, got: ${JSON.stringify(raw)}`);
   }
   return prefix;
+}
+
+// The canonical prefix (package.json) and the effective one (`.portPrefix` when
+// present). They differ only in an overriding worktree.
+function readPrefixes() {
+  const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+  const canonical = parsePrefix(pkg.portPrefix, 'package.json "portPrefix"');
+
+  const overridePath = join(ROOT, OVERRIDE_FILE);
+  if (!existsSync(overridePath)) return { prefix: canonical, canonical, overridden: false };
+
+  const prefix = parsePrefix(readFileSync(overridePath, 'utf8').trim(), OVERRIDE_FILE);
+  return { prefix, canonical, overridden: prefix !== canonical };
 }
 
 const portOf = (prefix, slotName) => {
@@ -105,8 +137,11 @@ function substitutePorts(key, value, ports) {
   return out;
 }
 
-function desiredValue(prefix, target, current) {
+function desiredValue({ prefix, canonical }, target, current) {
   if (target.kind === 'port') return String(portOf(prefix, target.slot));
+  if (target.kind === 'project') {
+    return prefix === canonical ? COMPOSE_PROJECT : `${COMPOSE_PROJECT}-${prefix}`;
+  }
   return substitutePorts(
     target.key,
     current,
@@ -115,7 +150,7 @@ function desiredValue(prefix, target, current) {
 }
 
 // Returns { drift: [...], write?: newText }.
-function processFile(prefix, file, targets, write) {
+function processFile(prefixes, file, targets, write) {
   const path = join(ROOT, file);
   const lines = readFileSync(path, 'utf8').split('\n');
   const drift = [];
@@ -128,7 +163,7 @@ function processFile(prefix, file, targets, write) {
     const current = lines[idx].slice(target.key.length + 1);
     let desired;
     try {
-      desired = desiredValue(prefix, target, current);
+      desired = desiredValue(prefixes, target, current);
     } catch (err) {
       drift.push(`${file}: ${err.message}`);
       continue;
@@ -156,26 +191,53 @@ function checkGlobalEnv() {
     .map((k) => `turbo.json globalEnv is missing managed port var ${k}`);
 }
 
+// An override rewrites tracked files, so committing them would push a worktree's
+// private prefix onto everyone (and fail the ports-check CI gate, which sees no
+// `.portPrefix`). Blocked here because `--check` runs in pre-commit.
+function checkNotStaged() {
+  let staged;
+  try {
+    staged = execFileSync('git', ['diff', '--cached', '--name-only', '--', ...Object.keys(FILES)], {
+      cwd: ROOT,
+      encoding: 'utf8',
+    });
+  } catch {
+    return []; // not a git repo / git unavailable — nothing to guard
+  }
+  return staged
+    .split('\n')
+    .filter(Boolean)
+    .map(
+      (f) =>
+        `${f} is staged while ${OVERRIDE_FILE} overrides the prefix — unstage it (the ` +
+        `override is local to this worktree and must not be committed)`,
+    );
+}
+
 function main() {
   const check = process.argv.includes('--check');
-  const prefix = readPrefix();
+  const prefixes = readPrefixes();
+  const { prefix, canonical, overridden } = prefixes;
+  const origin = overridden ? `${OVERRIDE_FILE} (canonical ${canonical})` : 'package.json';
   const problems = [];
   const writes = [];
 
   for (const [file, targets] of Object.entries(FILES)) {
-    const { drift, text } = processFile(prefix, file, targets, !check);
+    const { drift, text } = processFile(prefixes, file, targets, !check);
     problems.push(...drift);
     if (text !== null) writes.push([join(ROOT, file), text]);
   }
   problems.push(...checkGlobalEnv());
+  if (overridden) problems.push(...checkNotStaged());
 
   if (check) {
     if (problems.length) {
       for (const p of problems) console.error(`✖ ${p}`);
-      console.error(`\n✖ ports out of sync with portPrefix ${prefix}. Run: pnpm ports:sync`);
+      console.error(`\n✖ ports check failed for portPrefix ${prefix} (from ${origin}).`);
+      console.error('  Drift is fixed by: pnpm ports:sync');
       process.exit(1);
     }
-    console.log(`✓ ports are in sync with portPrefix ${prefix}.`);
+    console.log(`✓ ports are in sync with portPrefix ${prefix} (from ${origin}).`);
     return;
   }
 
@@ -186,8 +248,22 @@ function main() {
   }
   for (const [path, text] of writes) writeFileSync(path, text);
   console.log(
-    `✓ synced .env / .env.test to portPrefix ${prefix} (host ports ${prefix}00–${prefix}29).`,
+    `✓ synced .env / .env.test to portPrefix ${prefix} from ${origin} ` +
+      `(host ports ${prefix}00–${prefix}29).`,
   );
+  if (overridden) {
+    console.log(
+      `  ${OVERRIDE_FILE} is a local override: .env / .env.test are now dirty on purpose — ` +
+        'do not commit them.',
+    );
+  }
 }
 
-main();
+try {
+  main();
+} catch (err) {
+  // Config errors (a malformed prefix, an unknown slot) are user-fixable — a
+  // stack trace only obscures them.
+  console.error(`✖ ${err.message}`);
+  process.exit(1);
+}
