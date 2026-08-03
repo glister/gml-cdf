@@ -150,6 +150,25 @@ export async function ensurePersonForNewUser(
   return { personId, created: true };
 }
 
+/**
+ * Set a user's Better Auth **framework** role (`admin`/`agent`) — never product
+ * authorisation, which is `platform.role_grant` and `roleProcedure` (core plan
+ * 04 Q1). Returns null if the user does not exist.
+ */
+export async function setUserRole(
+  db: Db,
+  userId: string,
+  role: 'admin' | 'agent',
+): Promise<{ id: string; role: string | null } | null> {
+  const updated = await db
+    .updateTable('user')
+    .set({ role, updated_at: new Date() })
+    .where('id', '=', userId)
+    .returning(['id', 'role'])
+    .executeTakeFirst();
+  return updated ?? null;
+}
+
 /** Point a user at a person (the one Better Auth column we write). */
 export async function attachUserToPerson(
   trx: Trx,

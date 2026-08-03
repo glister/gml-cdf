@@ -1,6 +1,6 @@
 import { TRPCError } from '@trpc/server';
 import { sql, type SqlBool } from 'kysely';
-import { appendEvent, newUuidV7, revokeGrant } from '@repo/db';
+import { appendEvent, grantRole, newUuidV7, revokeGrant } from '@repo/db';
 import { grantState } from '@repo/domain';
 import { protectedProcedure, roleProcedure, router, type TRPCContext } from '../../trpc.js';
 import {
@@ -220,37 +220,22 @@ export const authzRouter = router({
         });
       }
 
+      // The shared write path (ADR-0022) — `platform.identity.unmerge` restores
+      // merge-revoked grants through the same function.
       const grantId = newUuidV7();
-      await ctx.db.transaction().execute(async (trx) => {
-        await trx
-          .insertInto('platform.role_grant')
-          .values({
-            id: grantId,
-            person_id: input.personId,
-            role_id: role.id,
-            module: input.module,
-            valid_from: validFrom,
-            valid_until: validUntil,
-            created_by: actor,
-            updated_by: actor,
-          })
-          .execute();
-        await appendEvent(trx, {
-          kind: 'security',
-          streamType: 'platform.role_grant',
-          streamId: grantId,
-          eventType: 'platform.role.granted',
-          payload: {
-            personId: input.personId,
-            roleKey: input.roleKey,
-            module: input.module,
-            validFrom: validFrom.toISOString(),
-            validUntil: validUntil ? validUntil.toISOString() : null,
-          },
+      await ctx.db.transaction().execute((trx) =>
+        grantRole(trx, {
+          grantId,
+          personId: input.personId,
+          roleId: role.id,
+          roleKey: input.roleKey,
+          module: input.module,
+          validFrom,
+          validUntil,
           actorPersonId: actor,
           correlationId: ctx.correlationId,
-        });
-      });
+        }),
+      );
       return { grantId };
     }),
 

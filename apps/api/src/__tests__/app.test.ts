@@ -30,7 +30,7 @@ describe('tRPC auth boundary', () => {
   it('rejects a protected procedure without a session (401)', async () => {
     // No auth cookie → getSession returns null → protectedProcedure throws
     // UNAUTHORIZED before any DB access.
-    const res = await app.request('/trpc/users.list');
+    const res = await app.request('/trpc/platform.identity.me');
     expect(res.status).toBe(401);
   });
 

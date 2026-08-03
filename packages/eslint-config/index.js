@@ -80,8 +80,6 @@ const moduleBoundaries = [
     // `@repo/db` (the data layer, seeds, test fixtures) are naturally exempt.
     files: ['apps/**/*.{ts,tsx}', 'packages/trpc/**/*.{ts,tsx}'],
     ignores: [
-      // The `users` example router predates ADR-0014; migrate it to the adapter.
-      'packages/trpc/src/routers/users.ts',
       // Tests seed framework tables directly to build scenarios.
       '**/*.test.{ts,tsx}',
     ],

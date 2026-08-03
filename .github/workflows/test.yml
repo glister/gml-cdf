@@ -1,0 +1,69 @@
+name: test
+
+# The repo-wide quality gate: lint, typecheck, the vitest suites (many of which
+# run against a REAL Postgres — ADR-0004 requires it for keyset/scoping/SQL
+# correctness) and the production build.
+#
+# Until this existed the suites ran only in the pre-commit hook, so a push that
+# skipped hooks was never checked. Core plan 01 §13 and core plan 04 §13 both
+# hold a definition-of-done box open on it.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      # Port 17010 is the committed `.env.test` literal, derived from
+      # package.json "portPrefix" (170) by scripts/gen-ports.mjs and enforced by
+      # the ports-check gate. Never hand-pick a port here — sync the prefix.
+      #
+      # Only Postgres is needed: the suites that would otherwise touch Service
+      # Bus, Azurite or SMTP use in-process fakes.
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 17010:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      # corepack activates the pnpm version pinned in package.json
+      # ("packageManager"), so CI and developers run the same one.
+      - name: Enable corepack
+        run: corepack enable
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm lint
+
+      - run: pnpm typecheck
+
+      # Each package's integration suite creates its own database on the service
+      # container (packages/vitest-config/ensure-db.ts) and migrates it; the
+      # remaining POSTGRES_* values come from the committed .env.test.
+      - run: pnpm test
+
+      # Closes the second of the two CI items in todo.md: the production build
+      # was previously only exercised at deploy time by build-and-push.
+      - run: pnpm build

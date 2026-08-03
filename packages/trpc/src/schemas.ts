@@ -37,29 +37,13 @@ export type CursorPaginationInput = z.infer<typeof cursorPaginationInput>;
 export const byIdInput = z.object({ id: z.string().min(1) });
 export type ByIdInput = z.infer<typeof byIdInput>;
 
-// --- users router ---
-
-export const listUsersInput = cursorPaginationInput.extend({
-  search: z.string().trim().min(1).optional(),
-  role: userRoleEnum.optional(),
-});
-export type ListUsersInput = z.infer<typeof listUsersInput>;
+// --- users router (Better Auth framework operations only — plan 04 Q1) ---
 
 export const updateUserRoleInput = z.object({
   id: z.string().min(1),
   role: userRoleEnum,
 });
 export type UpdateUserRoleInput = z.infer<typeof updateUserRoleInput>;
-
-export const userListItem = z.object({
-  id: z.string(),
-  name: z.string(),
-  email: z.string(),
-  role: userRoleEnum,
-  banned: z.boolean(),
-  created_at: z.union([z.string(), z.date()]),
-});
-export type UserListItem = z.infer<typeof userListItem>;
 
 // --- platform.journal router (core plan 02 pilot slice) ---
 
