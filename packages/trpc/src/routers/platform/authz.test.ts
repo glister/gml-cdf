@@ -102,6 +102,55 @@ async function insertGrant(input: {
   return id;
 }
 
+/** `YYYY-MM-DD` offset from today, matching the `date` columns' raw form. */
+function isoDate(offsetDays = 0): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + offsetDays);
+  return d.toISOString().slice(0, 10);
+}
+const today = () => isoDate(0);
+const tomorrow = () => isoDate(1);
+
+/**
+ * Seed a team directly (core plan 05's tables), so plan 04's record-scoping
+ * tests do not depend on plan 05's procedures to set up their fixture.
+ */
+async function insertTeam(input: { managerPersonId: string; name?: string }): Promise<string> {
+  const id = newUuidV7();
+  await db
+    .insertInto('platform.team')
+    .values({
+      id,
+      name: input.name ?? `Team ${id.slice(0, 8)}`,
+      manager_person_id: input.managerPersonId,
+      created_by: input.managerPersonId,
+      updated_by: input.managerPersonId,
+    })
+    .execute();
+  return id;
+}
+
+async function insertMembership(
+  teamId: string,
+  personId: string,
+  window: { validFrom: string; validTo?: string },
+): Promise<string> {
+  const id = newUuidV7();
+  await db
+    .insertInto('platform.team_membership')
+    .values({
+      id,
+      team_id: teamId,
+      person_id: personId,
+      valid_from: window.validFrom,
+      valid_to: window.validTo ?? null,
+      created_by: personId,
+      updated_by: personId,
+    })
+    .execute();
+  return id;
+}
+
 /** Load a person's live grants the way the API context factory does. */
 async function contextGrants(personId: string): Promise<ContextGrant[]> {
   const rows = await db
@@ -683,17 +732,53 @@ describe('record scoping ladder (scopeFor / scopePersons)', () => {
     expect(rows.map((r) => r.id)).toEqual([me]);
   });
 
-  it("'team' scope is fail-closed until plan 05 lands", async () => {
-    // platform.team does not exist yet, so managedPersonIds returns the empty
-    // set: a Line Manager sees nothing rather than everything.
-    const manager = await insertPerson();
-    await insertPerson();
-    const rows = await db
-      .selectFrom('platform.person as p')
-      .select('p.id')
-      .where(scopePersons('p.id', manager, 'team'))
+  it("'team' scope resolves through effective-dated membership (core plan 05)", async () => {
+    // This helper shipped fail-closed through plan 04 and went live when plan 05
+    // landed platform.team/team_membership. The cases below are exactly the ones
+    // a naive `JOIN team_membership` would get wrong.
+    const manager = await insertPerson({ display_name: 'Manager' });
+    const current = await insertPerson({ display_name: 'Current member' });
+    const departed = await insertPerson({ display_name: 'Left yesterday' });
+    const future = await insertPerson({ display_name: 'Joins tomorrow' });
+    const stranger = await insertPerson({ display_name: 'Another team entirely' });
+
+    const teamId = await insertTeam({ managerPersonId: manager });
+    await insertMembership(teamId, current, { validFrom: '2026-01-01' });
+    // Half-open [from, to): valid_to = today means they are ALREADY out today.
+    await insertMembership(teamId, departed, { validFrom: '2026-01-01', validTo: today() });
+    await insertMembership(teamId, future, { validFrom: tomorrow() });
+
+    const otherTeam = await insertTeam({ managerPersonId: stranger, name: 'Other' });
+    await insertMembership(otherTeam, stranger, { validFrom: '2026-01-01' });
+
+    const visible = async (viewer: string) =>
+      (
+        await db
+          .selectFrom('platform.person as p')
+          .select('p.id')
+          .where(scopePersons('p.id', viewer, 'team'))
+          .execute()
+      ).map((r) => r.id);
+
+    expect(await visible(manager)).toEqual([current]);
+
+    // A deputy covers for the manager, so a deputy who cannot see the team is
+    // not cover (core plan 04 §12.2 Q2's residual half).
+    const deputy = await insertPerson({ display_name: 'Deputy' });
+    await db
+      .updateTable('platform.team')
+      .set({ deputy_person_id: deputy })
+      .where('id', '=', teamId)
       .execute();
-    expect(rows).toHaveLength(0);
+    expect(await visible(deputy)).toEqual([current]);
+
+    // Archiving retires the configuration, and with it the access it conferred.
+    await db
+      .updateTable('platform.team')
+      .set({ deleted_at: new Date() })
+      .where('id', '=', teamId)
+      .execute();
+    expect(await visible(manager)).toEqual([]);
   });
 
   it("'all' scope does not restrict", async () => {
@@ -777,15 +862,20 @@ describe('the converted identity surface (§9.5 reference conversion)', () => {
     expect(detail.person.id).toBe(allocated);
   });
 
-  it('a line manager sees nothing until plan 05 lands the team tables', async () => {
-    await insertPerson({ display_name: 'Somebody' });
+  it('a line manager sees their current team through listPersons, and nobody else', async () => {
+    const outsider = await insertPerson({ display_name: 'Somebody else' });
     const manager = await insertPerson({ display_name: 'Manager' });
+    const member = await insertPerson({ display_name: 'Team member' });
+    const teamId = await insertTeam({ managerPersonId: manager });
+    await insertMembership(teamId, member, { validFrom: '2026-01-01' });
+
     const page = await (
       await readerWith('line_manager', manager)
-    ).platform.identity.listPersons({
-      limit: 50,
-    });
-    expect(page.items).toHaveLength(0);
+    ).platform.identity.listPersons({ limit: 50 });
+    // Note the manager is not in their own team's roster, so they do not appear
+    // either — `team` scope is about who you manage, not who you are.
+    expect(page.items.map((p) => p.id)).toEqual([member]);
+    expect(page.items.map((p) => p.id)).not.toContain(outsider);
   });
 
   it('special-category flag detail is withheld from a restricted reader, and journalled for an authorised one', async () => {
