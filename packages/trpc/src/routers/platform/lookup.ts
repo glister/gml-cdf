@@ -105,6 +105,27 @@ export const lookupRouter = router({
   }),
 
   /**
+   * Per-list totals for the reference-data overview screen (§5.3).
+   *
+   * Added during build (§5.1 deviation, 2026-08-03): the overview needs a count
+   * per list, and the alternative — seven `adminList` queries counted in the
+   * browser — is the client-side aggregation ADR-0004 forbids, over paginated
+   * data that would give the wrong answer anyway. One grouped query instead.
+   */
+  listTypes: refDataAdminProcedure.query(async ({ ctx }) => {
+    return ctx.db
+      .selectFrom('platform.lookup')
+      .select([
+        'list_type',
+        (eb) => eb.fn.countAll<number>().as('total'),
+        () => sql<number>`count(*) FILTER (WHERE active)`.as('active'),
+      ])
+      .where('deleted_at', 'is', null)
+      .groupBy('list_type')
+      .execute();
+  }),
+
+  /**
    * The maintenance table: keyset-paginated, every facet applied in SQL
    * (ADR-0004 hard rule — the client holds one page, so filtering or sorting it
    * client-side would silently operate on a fraction of the set).
