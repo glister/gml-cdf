@@ -137,3 +137,34 @@ export const AUTHZ_CONFIG_DEFAULTS = {
   /** Whether revoking demands a reason. Enforced by the input schema today. */
   'authz.grants.revoke_requires_reason': true,
 } as const;
+
+// --- Reference-data service (core plan 05, ADR-0016) ------------------------
+
+/**
+ * The seven Phase 1 Tier 1 lists (PL-005b). Mirrors the `platform.lookup`
+ * CHECK constraint and the inlined literals in `.kysely-codegenrc.json`.
+ *
+ * CHECK-constrained deliberately: adding a *value* to a list is data entry with
+ * no release (AC-D1), but adding a *list type* assigns a new list to a tier —
+ * a design decision (ADR-0016), so it costs a one-line migration. An open-ended
+ * `list_type` is the first step towards the generic key-value store PL-005c
+ * exists to prohibit.
+ */
+export const LOOKUP_LIST_TYPES = [
+  'department',
+  'job_role',
+  'document_category',
+  'sickness_type',
+  'ppe_type',
+  'leaver_reason',
+  'equipment_type',
+] as const;
+export type LookupListType = (typeof LOOKUP_LIST_TYPES)[number];
+
+/** Sort columns for the lookup admin table. */
+export const LOOKUP_SORTS = ['sort_order', 'label', 'updated_at'] as const;
+export type LookupSort = (typeof LOOKUP_SORTS)[number];
+
+/** Sort columns for the teams list. */
+export const TEAM_SORTS = ['name', 'updated_at'] as const;
+export type TeamSort = (typeof TEAM_SORTS)[number];

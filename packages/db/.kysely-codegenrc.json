@@ -9,7 +9,8 @@
       "platform.person.profile_status": "Generated<'draft_shell' | 'information_requested' | 'information_submitted' | 'pending_review' | 'incomplete_rejected' | 'approved_not_active' | 'active' | 'active_with_restrictions' | 'inactive' | 'leaver' | 'reactivated'>",
       "platform.person.status": "Generated<'active' | 'inactive' | 'superseded'>",
       "platform.person_flag.flag_type": "'do_not_rehire' | 'safeguarding' | 'safety' | 'other'",
-      "platform.role_grant.module": "'platform' | 'hr.core' | 'hr.onboarding' | 'hr.holiday_leave' | 'hr.sickness_absence' | 'hr.er' | 'hr.ld' | 'hr.offboarding' | 'hr.wellbeing' | 'hr.reporting'"
+      "platform.role_grant.module": "'platform' | 'hr.core' | 'hr.onboarding' | 'hr.holiday_leave' | 'hr.sickness_absence' | 'hr.er' | 'hr.ld' | 'hr.offboarding' | 'hr.wellbeing' | 'hr.reporting'",
+      "platform.lookup.list_type": "'department' | 'job_role' | 'document_category' | 'sickness_type' | 'ppe_type' | 'leaver_reason' | 'equipment_type'"
     }
   }
 }
