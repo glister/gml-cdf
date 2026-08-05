@@ -62,7 +62,9 @@ load-bearing:
 - **`POSTGRES_SSL=true` is required against Azure.** Flexible Server sets
   `require_secure_transport = ON`, so an unencrypted connection is refused
   outright. Local and CI-container Postgres speak plaintext, hence the `false`
-  default in `.env`/`.env.test`.
+  default in `.env`/`.env.test`. It is **not only the migrate job**: the running
+  api and worker connect to the same server, so `modules/container-apps` sets it
+  in `common_env` as well. Any new Azure-side consumer of the database must too.
 
 `migrate:ci` exists separately from `migrate` because the latter is
 `tsx --env-file ../../.env`, and `.env` is the committed **dev** config. Node's

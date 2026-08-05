@@ -15,12 +15,16 @@ locals {
   }
 
   common_env = {
-    NODE_ENV                    = "production"
-    LOG_LEVEL                   = var.log_level
-    POSTGRES_HOST               = var.postgres_host
-    POSTGRES_USER               = var.postgres_user
-    POSTGRES_PORT               = tostring(var.postgres_port)
-    POSTGRES_DB                 = var.postgres_db
+    NODE_ENV      = "production"
+    LOG_LEVEL     = var.log_level
+    POSTGRES_HOST = var.postgres_host
+    POSTGRES_USER = var.postgres_user
+    POSTGRES_PORT = tostring(var.postgres_port)
+    POSTGRES_DB   = var.postgres_db
+    # Flexible Server sets `require_secure_transport = ON` and refuses an
+    # unencrypted connection; `@repo/db` defaults this off for the plaintext
+    # local/CI containers. See terraform/CLAUDE.md § Database migrations.
+    POSTGRES_SSL                = "true"
     APP_URL                     = var.app_url
     BETTER_AUTH_URL             = var.api_url
     BETTER_AUTH_TRUSTED_ORIGINS = var.trusted_origins
