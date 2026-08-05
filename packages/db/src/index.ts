@@ -24,8 +24,10 @@ export {
 } from './journal.js';
 export { relayOutboxBatch, recordConsumptionOnce } from './outbox.js';
 export {
+  grantRole,
   revokeGrant,
   revokeAllGrantsForPerson,
+  type GrantRoleInput,
   type RevokeGrantInput,
   type RevokedGrantSummary,
 } from './authz.js';

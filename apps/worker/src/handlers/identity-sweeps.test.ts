@@ -31,6 +31,31 @@ async function insertPerson(overrides: Partial<NewPerson> = {}): Promise<string>
   return id;
 }
 
+/**
+ * Seed one live grant. The sweep must de-role as well as disable — ON AC-9 says
+ * "automatically disabled **and de-roled**", and the two halves are one
+ * transaction in the handler.
+ */
+async function insertGrant(personId: string): Promise<string> {
+  const roleId = newUuidV7();
+  await db
+    .insertInto('platform.role')
+    .values({ id: roleId, key: 'external', name: 'External' })
+    .execute();
+  const grantId = newUuidV7();
+  await db
+    .insertInto('platform.role_grant')
+    .values({
+      id: grantId,
+      person_id: personId,
+      role_id: roleId,
+      module: 'platform',
+      created_by: personId,
+    })
+    .execute();
+  return grantId;
+}
+
 async function eventCount(personId: string, eventType: string): Promise<number> {
   const rows = await db
     .selectFrom('platform.domain_event')
@@ -78,6 +103,48 @@ describe('runAccessExpirySweep (PL-042, ON AC-9)', () => {
     // Re-running the sweep produces no second event.
     await runAccessExpirySweep(ctx);
     expect(await eventCount(expired, 'platform.person.access_expired')).toBe(1);
+  });
+
+  it('de-roles the expired person through the shared revoke path (ADR-0022)', async () => {
+    const expired = await insertPerson({
+      status: 'active',
+      access_valid_until: new Date(Date.now() - 86_400_000),
+    });
+    await db
+      .insertInto('user')
+      .values(makeUser({ person_id: expired }))
+      .execute();
+    const grantId = await insertGrant(expired);
+
+    await runAccessExpirySweep(ctx);
+
+    const grant = await db
+      .selectFrom('platform.role_grant')
+      .select(['revoked_at', 'revoke_reason', 'revoked_by'])
+      .where('id', '=', grantId)
+      .executeTakeFirstOrThrow();
+    expect(grant.revoked_at).not.toBeNull();
+    expect(grant.revoke_reason).toBe('expired');
+    // NULL actor = the system did it, per the repo-wide convention.
+    expect(grant.revoked_by).toBeNull();
+    const revocations = await db
+      .selectFrom('platform.domain_event')
+      .select('id')
+      .where('stream_id', '=', grantId)
+      .where('event_type', '=', 'platform.role.revoked')
+      .execute();
+    expect(revocations).toHaveLength(1);
+
+    // Idempotent: a redelivered sweep message must not journal a second time.
+    await runAccessExpirySweep(ctx);
+    expect(
+      await db
+        .selectFrom('platform.domain_event')
+        .select('id')
+        .where('stream_id', '=', grantId)
+        .where('event_type', '=', 'platform.role.revoked')
+        .execute(),
+    ).toHaveLength(1);
   });
 });
 

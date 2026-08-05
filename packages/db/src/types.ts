@@ -125,6 +125,10 @@ export interface PlatformPersonMerge {
   reversal_reason: string | null;
   reversed_at: Timestamp | null;
   reversed_by: string | null;
+  /**
+   * platform.role_grant ids revoked by this merge (PL-042). Unmerge re-grants them as NEW rows — grants are never un-revoked (core plan 04 §4.3).
+   */
+  revoked_grant_ids: Json;
   superseded_person_id: string;
   surviving_person_id: string;
   updated_at: Generated<Timestamp>;

@@ -3,7 +3,7 @@ import { type NewPerson, db, newUuidV7 } from '@repo/db';
 import { createMigrator, makeUser, truncateAll } from '@repo/db/test-support';
 import { appRouter } from '../../router.js';
 import type { ContextGrant, TRPCContext } from '../../trpc.js';
-import { ROLE_KEYS, type RoleKey } from '../../lib/constants.js';
+import { ROLE_KEYS, type ModuleKey, type RoleKey } from '../../lib/constants.js';
 
 beforeAll(async () => {
   const { error } = await createMigrator(db).migrateToLatest();
@@ -76,6 +76,33 @@ async function grantRole(personId: string, roleKey: RoleKey): Promise<ContextGra
     validUntil: r.valid_until,
     revokedAt: r.revoked_at,
   }));
+}
+
+/** Insert one grant directly and return its id — for asserting on the row itself. */
+async function insertGrant(
+  personId: string,
+  roleKey: RoleKey,
+  opts: { module?: ModuleKey; validFrom?: Date; validUntil?: Date | null } = {},
+): Promise<string> {
+  const role = await db
+    .selectFrom('platform.role')
+    .select('id')
+    .where('key', '=', roleKey)
+    .executeTakeFirstOrThrow();
+  const id = newUuidV7();
+  await db
+    .insertInto('platform.role_grant')
+    .values({
+      id,
+      person_id: personId,
+      role_id: role.id,
+      module: opts.module ?? 'platform',
+      ...(opts.validFrom ? { valid_from: opts.validFrom } : {}),
+      valid_until: opts.validUntil ?? null,
+      created_by: personId,
+    })
+    .execute();
+  return id;
 }
 
 async function insertPerson(overrides: Partial<NewPerson> = {}): Promise<string> {
@@ -280,6 +307,138 @@ describe('merge / unmerge with flag never-lose (ON AC-8, AC-D2, PL-040)', () => 
       .where('ended_at', 'is', null)
       .execute();
     expect(stillThere).toHaveLength(1); // never-lose
+  });
+});
+
+describe('merge de-roles the superseded person (PL-042, core plan 03 §9.5)', () => {
+  /** Live (unrevoked, undeleted) grants for a person, oldest first. */
+  async function liveGrants(personId: string) {
+    return db
+      .selectFrom('platform.role_grant as g')
+      .innerJoin('platform.role as r', 'r.id', 'g.role_id')
+      .select(['g.id', 'g.module', 'g.valid_until', 'r.key as role_key'])
+      .where('g.person_id', '=', personId)
+      .where('g.revoked_at', 'is', null)
+      .where('g.deleted_at', 'is', null)
+      .orderBy('g.id')
+      .execute();
+  }
+
+  it('revokes every live grant on the loser, leaves the survivor untouched, and journals each', async () => {
+    const survivor = await insertPerson({ display_name: 'Survivor' });
+    const loser = await insertPerson({ display_name: 'Loser' });
+    const platformGrant = await insertGrant(loser, 'hr_user');
+    const hrGrant = await insertGrant(loser, 'line_manager', { module: 'hr.core' });
+    const survivorGrant = await insertGrant(survivor, 'hr_user');
+
+    const { mergeId } = await caller().platform.identity.merge({
+      survivingPersonId: survivor,
+      supersededPersonId: loser,
+      reason: 'same person',
+    });
+
+    // The loser holds nothing; the survivor inherits nothing and loses nothing.
+    expect(await liveGrants(loser)).toHaveLength(0);
+    expect((await liveGrants(survivor)).map((g) => g.id)).toEqual([survivorGrant]);
+
+    const revoked = await db
+      .selectFrom('platform.role_grant')
+      .select(['id', 'revoke_reason', 'revoked_by'])
+      .where('person_id', '=', loser)
+      .where('revoked_at', 'is not', null)
+      .execute();
+    expect(revoked.map((r) => r.id).sort()).toEqual([platformGrant, hrGrant].sort());
+    expect(revoked.every((r) => r.revoke_reason === 'merged')).toBe(true);
+    // A person revoked these, not the system — unlike the expiry sweep.
+    expect(revoked.every((r) => r.revoked_by === adminPersonId)).toBe(true);
+
+    // One journal event per grant, and the reversal set recorded on the merge.
+    // (`domain_event` is append-only, so `truncateAll` leaves earlier tests'
+    // rows in place — scope the query to these grants.)
+    const events = await db
+      .selectFrom('platform.domain_event')
+      .select('stream_id')
+      .where('event_type', '=', 'platform.role.revoked')
+      .where('stream_id', 'in', [platformGrant, hrGrant])
+      .execute();
+    expect(events.map((e) => e.stream_id).sort()).toEqual([platformGrant, hrGrant].sort());
+    const mergeRow = await db
+      .selectFrom('platform.person_merge')
+      .select('revoked_grant_ids')
+      .where('id', '=', mergeId)
+      .executeTakeFirstOrThrow();
+    expect((mergeRow.revoked_grant_ids as string[]).sort()).toEqual(
+      [platformGrant, hrGrant].sort(),
+    );
+  });
+
+  it('unmerge re-grants as new rows, leaving the revoked rows revoked', async () => {
+    const survivor = await insertPerson({ display_name: 'Survivor' });
+    const loser = await insertPerson({ display_name: 'Loser' });
+    const original = await insertGrant(loser, 'hr_user', { module: 'hr.core' });
+
+    const { mergeId } = await caller().platform.identity.merge({
+      survivingPersonId: survivor,
+      supersededPersonId: loser,
+      reason: 'same person',
+    });
+    const { restoredGrantIds } = await caller().platform.identity.unmerge({
+      mergeId,
+      reason: 'mistake',
+    });
+
+    // A revoked grant is never un-revoked (core plan 04 §4.3) — a NEW row appears.
+    expect(restoredGrantIds).toHaveLength(1);
+    expect(restoredGrantIds[0]).not.toBe(original);
+    const live = await liveGrants(loser);
+    expect(live).toHaveLength(1);
+    expect(live[0]?.id).toBe(restoredGrantIds[0]);
+    expect(live[0]?.role_key).toBe('hr_user');
+    expect(live[0]?.module).toBe('hr.core');
+    const originalRow = await db
+      .selectFrom('platform.role_grant')
+      .select('revoked_at')
+      .where('id', '=', original)
+      .executeTakeFirstOrThrow();
+    expect(originalRow.revoked_at).not.toBeNull();
+    // Both halves of the round-trip are on the journal.
+    expect(
+      await db
+        .selectFrom('platform.domain_event')
+        .select('id')
+        .where('stream_id', '=', restoredGrantIds[0] as string)
+        .where('event_type', '=', 'platform.role.granted')
+        .execute(),
+    ).toHaveLength(1);
+  });
+
+  it('skips restoring a grant whose window has closed, or one re-granted meanwhile', async () => {
+    const survivor = await insertPerson({ display_name: 'Survivor' });
+    const loser = await insertPerson({ display_name: 'Loser' });
+    const day = 24 * 60 * 60 * 1000;
+    // Expired before the merge: revoked with the rest, but pointless to restore.
+    await insertGrant(loser, 'hr_user', {
+      validFrom: new Date(Date.now() - 2 * day),
+      validUntil: new Date(Date.now() - day),
+    });
+    await insertGrant(loser, 'line_manager', { module: 'hr.core' });
+
+    const { mergeId } = await caller().platform.identity.merge({
+      survivingPersonId: survivor,
+      supersededPersonId: loser,
+      reason: 'same person',
+    });
+    // An administrator re-grants one of them on the superseded record before the
+    // reversal — that live row is the current truth and must not be duplicated.
+    const reGranted = await insertGrant(loser, 'line_manager', { module: 'hr.core' });
+
+    const { restoredGrantIds } = await caller().platform.identity.unmerge({
+      mergeId,
+      reason: 'mistake',
+    });
+
+    expect(restoredGrantIds).toHaveLength(0);
+    expect((await liveGrants(loser)).map((g) => g.id)).toEqual([reGranted]);
   });
 });
 

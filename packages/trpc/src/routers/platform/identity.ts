@@ -1,8 +1,16 @@
 import { TRPCError } from '@trpc/server';
-import { type Expression, type SqlBool, sql } from 'kysely';
-import { appendEvent, newUuidV7, type PersonRecord } from '@repo/db';
+import { type Expression, type SqlBool, type Transaction, sql } from 'kysely';
+import {
+  appendEvent,
+  grantRole,
+  newUuidV7,
+  revokeAllGrantsForPerson,
+  type DB,
+  type PersonRecord,
+} from '@repo/db';
 import {
   type DuplicateMatchReason,
+  type EventPayload,
   canTransition,
   matchDuplicate,
   planFlagUnion,
@@ -162,6 +170,72 @@ async function loadPerson(ctx: TRPCContext, personId: string): Promise<PersonRec
     .executeTakeFirst();
   if (!person) throw new TRPCError({ code: 'NOT_FOUND', message: 'Person not found' });
   return person;
+}
+
+/**
+ * Undo a merge's de-roling (PL-042): re-grant the roles the merge revoked onto
+ * the restored person.
+ *
+ * Restoration inserts **new** grants — a revoked grant is never un-revoked
+ * (core plan 04 §4.3), so the trail reads "revoked on merge, granted again on
+ * unmerge" rather than silently rewinding. Returns the new grant ids.
+ *
+ * Two grants are deliberately skipped: one whose window has since closed
+ * (restoring an already-expired grant is noise), and one whose (person, role,
+ * module) the person has been granted again in the meantime — that live row is
+ * the current truth, and inserting would hit `role_grant_live_uq` anyway.
+ */
+async function restoreMergeRevokedGrants(
+  trx: Transaction<DB>,
+  input: {
+    personId: string;
+    revokedGrantIds: string[];
+    actorPersonId: string;
+    correlationId: string;
+  },
+): Promise<string[]> {
+  if (input.revokedGrantIds.length === 0) return [];
+
+  const revoked = await trx
+    .selectFrom('platform.role_grant as g')
+    .innerJoin('platform.role as r', 'r.id', 'g.role_id')
+    .select(['g.id', 'g.role_id', 'g.module', 'g.valid_until', 'r.key as role_key'])
+    .where('g.id', 'in', input.revokedGrantIds)
+    .execute();
+
+  const now = new Date();
+  const restored: string[] = [];
+  for (const grant of revoked) {
+    if (grant.valid_until && grant.valid_until <= now) continue;
+
+    const live = await trx
+      .selectFrom('platform.role_grant')
+      .select('id')
+      .where('person_id', '=', input.personId)
+      .where('role_id', '=', grant.role_id)
+      .where('module', '=', grant.module)
+      .where('revoked_at', 'is', null)
+      .where('deleted_at', 'is', null)
+      .executeTakeFirst();
+    if (live) continue;
+
+    const grantId = newUuidV7();
+    await grantRole(trx, {
+      grantId,
+      personId: input.personId,
+      roleId: grant.role_id,
+      // As in `revokeGrant`: `role.key` is data, not a CHECK column, so the
+      // registry's strict schema is what re-validates it at append time.
+      roleKey: grant.role_key as EventPayload<'platform.role.granted'>['roleKey'],
+      module: grant.module,
+      validFrom: now,
+      validUntil: grant.valid_until,
+      actorPersonId: input.actorPersonId,
+      correlationId: input.correlationId,
+    });
+    restored.push(grantId);
+  }
+  return restored;
 }
 
 /** SQL predicate: two aliased persons are a strong duplicate (mirrors the matcher). */
@@ -882,6 +956,21 @@ export const identityRouter = router({
         fromPersonId: input.supersededPersonId,
         toPersonId: input.survivingPersonId,
       });
+
+      // De-role the superseded record (PL-042). Revoke only — the survivor
+      // inherits nothing. Never-lose is right for restrictive facts (the flag
+      // union below) and wrong for permissive ones: unioning grants would let a
+      // merge silently escalate the survivor's access. An administrator
+      // re-grants deliberately if the survivor should hold them. Left
+      // un-revoked, these rows stay live on a `superseded` person, and
+      // `loadGrantsForPerson` resolves grants by person_id.
+      const revokedGrants = await revokeAllGrantsForPerson(trx, {
+        personId: input.supersededPersonId,
+        actorPersonId: actor,
+        reason: 'merged',
+        correlationId: ctx.correlationId,
+      });
+
       await trx
         .insertInto('platform.person_merge')
         .values({
@@ -890,6 +979,8 @@ export const identityRouter = router({
           surviving_person_id: input.survivingPersonId,
           reason: input.reason,
           moved_user_ids: JSON.stringify(movedUserIds),
+          // The exact reversal set for unmerge, like moved_user_ids.
+          revoked_grant_ids: JSON.stringify(revokedGrants.map((g) => g.grantId)),
           merged_by: actor,
           merged_at: new Date(),
         })
@@ -956,7 +1047,7 @@ export const identityRouter = router({
     return { mergeId, copiedFlagIds };
   }),
 
-  /** Reverse a merge: restore users, reactivate the superseded person (PL-039). */
+  /** Reverse a merge: restore users, grants and the superseded person (PL-039). */
   unmerge: identityAdmin.input(unmergeInput).mutation(async ({ ctx, input }) => {
     const actor = requireActor(ctx);
     const merge = await ctx.db
@@ -969,13 +1060,20 @@ export const identityRouter = router({
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'Merge already reversed' });
 
     const movedUserIds = merge.moved_user_ids as string[];
-    await ctx.db.transaction().execute(async (trx) => {
+    const revokedGrantIds = (merge.revoked_grant_ids ?? []) as string[];
+    const restoredGrantIds = await ctx.db.transaction().execute(async (trx) => {
       await restoreUsers(trx, { userIds: movedUserIds, toPersonId: merge.superseded_person_id });
       await trx
         .updateTable('platform.person')
         .set({ status: 'active', updated_by: actor })
         .where('id', '=', merge.superseded_person_id)
         .execute();
+      const restored = await restoreMergeRevokedGrants(trx, {
+        personId: merge.superseded_person_id,
+        revokedGrantIds,
+        actorPersonId: actor,
+        correlationId: ctx.correlationId,
+      });
       await trx
         .updateTable('platform.person_merge')
         .set({ reversed_by: actor, reversed_at: new Date(), reversal_reason: input.reason })
@@ -990,8 +1088,9 @@ export const identityRouter = router({
         actorPersonId: actor,
         correlationId: ctx.correlationId,
       });
+      return restored;
     });
-    return { mergeId: input.mergeId };
+    return { mergeId: input.mergeId, restoredGrantIds };
   }),
 
   // --- Invitation (PL-036) — the only external account-creation path ------

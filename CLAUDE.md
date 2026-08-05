@@ -360,7 +360,8 @@ results. Hard rule, not a preference.
   `to_char`) — a JS `Date` holds only ms precision, so round-tripping a microsecond
   Postgres timestamp through the cursor truncates the boundary and drops/duplicates
   rows at page edges. Helpers: `packages/trpc/src/lib/keyset.ts`; canonical pattern:
-  `packages/trpc/src/routers/users.ts`.
+  `packages/trpc/src/routers/platform/identity.ts` (`listPersons`), which pairs
+  the keyset shape with the plan-04 authorisation controls.
 - **Validate against a real database.** Mock-DB unit tests don't execute SQL, so
   keyset/sort/filter correctness can't be proven by them alone — exercise the
   procedure against the live/test Postgres (page the whole set; assert correct
