@@ -64,6 +64,21 @@ export interface PlatformEventConsumption {
   event_id: string;
 }
 
+export interface PlatformLookup {
+  active: Generated<boolean>;
+  code: string;
+  created_at: Generated<Timestamp>;
+  created_by: string;
+  deleted_at: Timestamp | null;
+  description: string | null;
+  id: string;
+  label: string;
+  list_type: "department" | "job_role" | "document_category" | "sickness_type" | "ppe_type" | "leaver_reason" | "equipment_type";
+  sort_order: Generated<number>;
+  updated_at: Generated<Timestamp>;
+  updated_by: string;
+}
+
 export interface PlatformPerson {
   access_valid_until: Timestamp | null;
   agency_worker_reference: string | null;
@@ -164,6 +179,36 @@ export interface PlatformRoleGrant {
   valid_until: Timestamp | null;
 }
 
+export interface PlatformTeam {
+  /**
+   * Optional hex colour for calendar rendering (plan 12 colour-by-team; core plan 05 §12.2 Q7). NULL means the consumer falls back to its own per-kind colours.
+   */
+  colour: string | null;
+  created_at: Generated<Timestamp>;
+  created_by: string;
+  deleted_at: Timestamp | null;
+  deputy_person_id: string | null;
+  description: string | null;
+  id: string;
+  manager_person_id: string;
+  max_concurrent_leave: number | null;
+  name: string;
+  updated_at: Generated<Timestamp>;
+  updated_by: string;
+}
+
+export interface PlatformTeamMembership {
+  created_at: Generated<Timestamp>;
+  created_by: string;
+  id: string;
+  person_id: string;
+  team_id: string;
+  updated_at: Generated<Timestamp>;
+  updated_by: string;
+  valid_from: string;
+  valid_to: string | null;
+}
+
 export interface RateLimit {
   count: number;
   id: string;
@@ -211,12 +256,15 @@ export interface DB {
   account: Account;
   "platform.domain_event": PlatformDomainEvent;
   "platform.event_consumption": PlatformEventConsumption;
+  "platform.lookup": PlatformLookup;
   "platform.person": PlatformPerson;
   "platform.person_allocation": PlatformPersonAllocation;
   "platform.person_flag": PlatformPersonFlag;
   "platform.person_merge": PlatformPersonMerge;
   "platform.role": PlatformRole;
   "platform.role_grant": PlatformRoleGrant;
+  "platform.team": PlatformTeam;
+  "platform.team_membership": PlatformTeamMembership;
   rate_limit: RateLimit;
   session: Session;
   user: User;

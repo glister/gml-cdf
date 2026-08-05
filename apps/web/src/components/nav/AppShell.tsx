@@ -5,10 +5,12 @@ import {
   GitMerge,
   KeyRound,
   LayoutDashboard,
+  List,
   Menu,
   ShieldCheck,
   UserCog,
   Users,
+  UsersRound,
 } from 'lucide-react';
 import { cn } from '~/lib/utils';
 import { ConnectLockup } from '~/components/auth/ConnectLockup';
@@ -55,6 +57,33 @@ function NavItemInner({
           {count}
         </span>
       )}
+    </>
+  );
+}
+
+/**
+ * The Configuration section (core plan 05 §9.4). Reference data and teams are
+ * maintained by Administrators and HR Users; the same UX-only caveat as
+ * `AccessNavSection` applies — hiding a link is convenience, the
+ * `refDataAdminProcedure` behind each route is the control.
+ */
+function ConfigurationNavSection() {
+  const mine = trpcReact.platform.authz.grants.mine.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+  });
+  if (!holdsAnyRole(mine.data, ['administrator', 'hr_user'])) return null;
+
+  return (
+    <>
+      <NavSectionLabel>Configuration</NavSectionLabel>
+      <div className="flex flex-col gap-0.5">
+        <Link to="/admin/reference-data" className={navItemClass}>
+          <NavItemInner icon={<List size={20} strokeWidth={1.9} />} label="Reference data" />
+        </Link>
+        <Link to="/admin/teams" className={navItemClass}>
+          <NavItemInner icon={<UsersRound size={20} strokeWidth={1.9} />} label="Teams" />
+        </Link>
+      </div>
     </>
   );
 }
@@ -129,6 +158,7 @@ function Sidebar({ user }: { user: AppShellUser | null }) {
             <NavItemInner icon={<GitMerge size={20} strokeWidth={1.9} />} label="Duplicates" />
           </Link>
         </div>
+        <ConfigurationNavSection />
         <AccessNavSection />
       </nav>
       {user && (

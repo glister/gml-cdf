@@ -37,6 +37,24 @@ resource "azurerm_postgresql_flexible_server_database" "this" {
   collation = "en_US.utf8"
 }
 
+# Extension allow-list (core plan 05 §12.1/§12.3).
+#
+# Azure Database for PostgreSQL Flexible Server refuses `CREATE EXTENSION` for
+# anything not named in the `azure.extensions` server parameter, regardless of
+# role. `btree_gist` is required by core plan 05's migration — it backs the
+# `team_membership_no_overlap` EXCLUDE constraint, which is how the
+# "one membership per person per team at a time" invariant is a database
+# property rather than an application promise (ADR-0011).
+#
+# Without this, `20260803T100100-platform-team` fails on the first deploy to a
+# fresh server. Names are uppercase and comma-separated; append rather than
+# replace when a later plan needs another extension.
+resource "azurerm_postgresql_flexible_server_configuration" "azure_extensions" {
+  name      = "azure.extensions"
+  server_id = azurerm_postgresql_flexible_server.this.id
+  value     = "BTREE_GIST"
+}
+
 # Allow other Azure services (e.g. Container Apps) to reach the server.
 resource "azurerm_postgresql_flexible_server_firewall_rule" "azure_services" {
   name             = "allow-azure-services"

@@ -3,6 +3,8 @@ import { defineFieldClassification, schemaUpTo } from './lib/field-classificatio
 import {
   FIELD_CLASSES,
   GRANT_STATES,
+  LOOKUP_LIST_TYPES,
+  LOOKUP_SORTS,
   MODULE_KEYS,
   PERSON_FLAG_TYPES,
   PERSON_SORTS,
@@ -11,6 +13,7 @@ import {
   RELATIONSHIP_TYPES,
   ROLE_KEYS,
   SORT_DIRECTIONS,
+  TEAM_SORTS,
   USER_ROLES,
 } from './lib/constants.js';
 
@@ -326,3 +329,208 @@ export const personFlagOutputFull = schemaUpTo(personFlagClassification, 'specia
  * sensitive detail from the operational output".
  */
 export const personFlagOutputRestricted = schemaUpTo(personFlagClassification, 'sensitive');
+
+// --- platform.lookup / platform.team routers (core plan 05 §5.1) ---
+
+export const lookupListTypeSchema = z.enum(LOOKUP_LIST_TYPES);
+export type LookupListTypeInput = z.infer<typeof lookupListTypeSchema>;
+
+/**
+ * The stable machine key. Same regex as the `lookup_code_format_check` CHECK, so
+ * a value rejected here would be rejected by Postgres anyway — validated at both
+ * ends because the migration mappings (DM-002) and seeds address rows by
+ * `(list_type, code)`, and a code that varies by casing or spacing breaks them
+ * silently.
+ */
+export const lookupCodeSchema = z
+  .string()
+  .trim()
+  .regex(/^[a-z0-9][a-z0-9_]{0,63}$/, 'lowercase letters, digits and underscores only');
+
+const lookupLabelSchema = z.string().trim().min(1).max(200);
+const lookupDescriptionSchema = z.string().trim().max(1000);
+
+export const lookupValueSchema = z.object({
+  id: z.uuid(),
+  listType: lookupListTypeSchema,
+  code: lookupCodeSchema,
+  label: lookupLabelSchema,
+  description: lookupDescriptionSchema.nullable(),
+  sortOrder: z.number().int(),
+  active: z.boolean(),
+});
+export type LookupValue = z.infer<typeof lookupValueSchema>;
+
+export const lookupOptionsInput = z.object({
+  listType: lookupListTypeSchema,
+  /**
+   * Retired values too. Admin-only — a picker offering a deactivated value would
+   * undo the point of deactivation (PL-007); this exists so an admin screen can
+   * render the historical set.
+   */
+  includeInactive: z.boolean().default(false),
+});
+export type LookupOptionsInput = z.infer<typeof lookupOptionsInput>;
+
+export const listLookupValuesInput = z.object({
+  cursor: z.string().optional(),
+  limit: z.number().int().min(1).max(100).default(25),
+  listType: lookupListTypeSchema.optional(),
+  search: z.string().trim().max(200).optional(),
+  active: z.boolean().optional(),
+  sort: z.enum(LOOKUP_SORTS).default('sort_order'),
+  sortDir: sortDirEnum.default('asc'),
+});
+export type ListLookupValuesInput = z.infer<typeof listLookupValuesInput>;
+
+export const createLookupValueInput = z.object({
+  listType: lookupListTypeSchema,
+  code: lookupCodeSchema,
+  label: lookupLabelSchema,
+  description: lookupDescriptionSchema.optional(),
+  sortOrder: z.number().int().min(0).max(9999).optional(),
+});
+export type CreateLookupValueInput = z.infer<typeof createLookupValueInput>;
+
+/**
+ * `code` is absent by design, not by omission: it is immutable after creation
+ * (§4.1.1), so there is no field to send. A rename changes `label`.
+ *
+ * `.strict()` is what turns that from a convention into a guard — without it a
+ * client sending `code` would have it silently stripped and would believe the
+ * rename succeeded. It fails loudly instead.
+ */
+export const updateLookupValueInput = z
+  .object({
+    id: z.uuid(),
+    label: lookupLabelSchema.optional(),
+    description: lookupDescriptionSchema.nullish(),
+    sortOrder: z.number().int().min(0).max(9999).optional(),
+  })
+  .strict();
+export type UpdateLookupValueInput = z.infer<typeof updateLookupValueInput>;
+
+export const setLookupActiveInput = z.object({ id: z.uuid(), active: z.boolean() });
+export type SetLookupActiveInput = z.infer<typeof setLookupActiveInput>;
+
+/**
+ * Soft-delete a value created in error. `confirmNeverUsed` is a deliberate
+ * speed bump, not a permission: nothing in the platform can prove non-use
+ * before the consuming tables exist, so the caller asserts it and the journal
+ * records who asserted it (§4.3).
+ */
+export const removeLookupValueInput = z.object({
+  id: z.uuid(),
+  confirmNeverUsed: z.literal(true),
+});
+export type RemoveLookupValueInput = z.infer<typeof removeLookupValueInput>;
+
+const teamNameSchema = z.string().trim().min(1).max(200);
+const teamDescriptionSchema = z.string().trim().max(1000);
+/** Lowercase hex, matching `team_colour_format_check`. */
+const teamColourSchema = z
+  .string()
+  .trim()
+  .regex(/^#[0-9a-f]{6}$/);
+const teamCapacitySchema = z.number().int().min(1).max(999);
+
+export const teamSchema = z.object({
+  id: z.uuid(),
+  name: teamNameSchema,
+  description: teamDescriptionSchema.nullable(),
+  managerPersonId: z.uuid(),
+  deputyPersonId: z.uuid().nullable(),
+  maxConcurrentLeave: teamCapacitySchema.nullable(),
+  colour: teamColourSchema.nullable(),
+});
+export type Team = z.infer<typeof teamSchema>;
+
+export const teamMembershipSchema = z.object({
+  id: z.uuid(),
+  teamId: z.uuid(),
+  personId: z.uuid(),
+  validFrom: z.iso.date(),
+  validTo: z.iso.date().nullable(),
+});
+export type TeamMembership = z.infer<typeof teamMembershipSchema>;
+
+export const listTeamsInput = z.object({
+  cursor: z.string().optional(),
+  limit: z.number().int().min(1).max(100).default(25),
+  search: z.string().trim().max(200).optional(),
+  includeArchived: z.boolean().default(false),
+  sort: z.enum(TEAM_SORTS).default('name'),
+  sortDir: sortDirEnum.default('asc'),
+});
+export type ListTeamsInput = z.infer<typeof listTeamsInput>;
+
+/** `asAt` omitted means today — the roster as it currently stands. */
+export const getTeamInput = z.object({ teamId: z.uuid(), asAt: z.iso.date().optional() });
+export type GetTeamInput = z.infer<typeof getTeamInput>;
+
+export const createTeamInput = z.object({
+  name: teamNameSchema,
+  description: teamDescriptionSchema.optional(),
+  managerPersonId: z.uuid(),
+  deputyPersonId: z.uuid().optional(),
+  maxConcurrentLeave: teamCapacitySchema.optional(),
+  colour: teamColourSchema.optional(),
+});
+export type CreateTeamInput = z.infer<typeof createTeamInput>;
+
+export const updateTeamInput = z.object({
+  teamId: z.uuid(),
+  name: teamNameSchema.optional(),
+  description: teamDescriptionSchema.nullish(),
+  managerPersonId: z.uuid().optional(),
+  deputyPersonId: z.uuid().nullish(),
+  maxConcurrentLeave: teamCapacitySchema.nullish(),
+  colour: teamColourSchema.nullish(),
+});
+export type UpdateTeamInput = z.infer<typeof updateTeamInput>;
+
+export const archiveTeamInput = z.object({ teamId: z.uuid() });
+export type ArchiveTeamInput = z.infer<typeof archiveTeamInput>;
+
+export const addTeamMemberInput = z.object({
+  teamId: z.uuid(),
+  personId: z.uuid(),
+  validFrom: z.iso.date(),
+});
+export type AddTeamMemberInput = z.infer<typeof addTeamMemberInput>;
+
+export const endTeamMembershipInput = z.object({
+  membershipId: z.uuid(),
+  validTo: z.iso.date(),
+});
+export type EndTeamMembershipInput = z.infer<typeof endTeamMembershipInput>;
+
+/**
+ * Correcting a typo, which is a different act from ending a membership and is
+ * journalled as such (§4.2): ending records a business fact, correcting moves a
+ * boundary other records may already have been read against.
+ */
+export const correctTeamMembershipInput = z
+  .object({
+    membershipId: z.uuid(),
+    validFrom: z.iso.date().optional(),
+    validTo: z.iso.date().nullish(),
+  })
+  .refine((v) => v.validFrom !== undefined || v.validTo !== undefined, {
+    message: 'supply at least one of validFrom or validTo',
+  });
+export type CorrectTeamMembershipInput = z.infer<typeof correctTeamMembershipInput>;
+
+/**
+ * Validator for a stored snapshot envelope (`@repo/db`'s `makeSnapshot`), used
+ * by consuming plans when they read a `jsonb` snapshot column back. Snake_case
+ * keys mirror the stored shape exactly — see `packages/db/src/lib/snapshot.ts`.
+ */
+export const snapshotEnvelopeSchema = <T extends z.ZodTypeAny>(data: T) =>
+  z.object({
+    source_table: z.string(),
+    source_id: z.uuid(),
+    source_version: z.number().int().nullable(),
+    taken_at: z.iso.datetime(),
+    data,
+  });

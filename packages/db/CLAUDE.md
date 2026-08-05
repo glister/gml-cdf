@@ -8,11 +8,24 @@ Kysely + Postgres. **Source-only** — exports `./src/index.ts` and
 - `src/client.ts` — validates `POSTGRES_*` via `@repo/env` `parse()`, builds a
   `pg.Pool` (max 10), exports `db` (`Kysely<DB>`) and `pool`. Sets a pg type
   parser for OID 1082 (`date`) so dates stay raw `YYYY-MM-DD` strings.
+  **`POSTGRES_SSL`** (`'true'`/`'false'`, default `'false'`) gates TLS with
+  `rejectUnauthorized: true`. Off for the plaintext local/CI containers; **`true`
+  is mandatory against every Azure environment**, where Flexible Server sets
+  `require_secure_transport = ON` and refuses an unencrypted connection outright.
+  Any new deployment target that connects must set it — see
+  `terraform/modules/container-apps` and the `migrate` job in `terraform.yml`.
 - `src/migrator.ts` — `createMigrator(db)` factory (Kysely `Migrator` +
   `FileMigrationProvider` over `src/migrations`). Shared by the CLI and tests.
 - `src/migrate.ts` — `migrateToLatest()` CLI over `createMigrator`. Run via
-  `pnpm migrate`.
+  `pnpm migrate` locally (`tsx --env-file ../../.env`, i.e. the committed **dev**
+  config) or `pnpm migrate:ci` where the environment is already populated —
+  deployed environments use the latter from the `migrate` job in
+  `.github/workflows/terraform.yml`, which runs after `terraform apply`.
 - `src/migrations/*` — `YYYYMMDDTHHMMSS-kebab-desc.ts`, each exports `up`/`down`.
+  **A migration that needs a Postgres extension must add it to `azure.extensions`
+  in `terraform/modules/postgres/main.tf` in the same change** — Azure refuses
+  `CREATE EXTENSION` for anything unlisted, regardless of role, and the parameter
+  is one comma-separated string (append, never replace).
 - `src/migration-helpers.ts` — reusable ADR-0011 migration utilities
   (`withStandardColumns`, `makeAppendOnly`, `attachUpdatedAtTrigger`, …).
   Exported as the `@repo/db/migration-helpers` subpath; **not** re-exported from

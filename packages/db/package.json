@@ -10,6 +10,7 @@
   },
   "scripts": {
     "migrate": "tsx --env-file ../../.env src/migrate.ts",
+    "migrate:ci": "tsx src/migrate.ts",
     "migrate:generate": "pnpm migrate && kysely-codegen --env-file ../../.env --out-file src/types.ts --exclude-pattern 'kysely_*' --date-parser string",
     "seed": "tsx --env-file ../../.env src/seed.ts",
     "lint": "eslint .",
