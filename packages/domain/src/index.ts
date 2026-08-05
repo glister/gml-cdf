@@ -12,6 +12,7 @@ export {
   type Grant,
   type GrantState,
 } from './authz/grants.js';
+export { MODULE_KEYS, ROLE_KEYS, type ModuleKey, type RoleKey } from './authz/roles.js';
 export {
   matchDuplicate,
   normaliseIdentityValue,

@@ -30,6 +30,12 @@ export {
   type AppendEventInput,
 } from './journal.js';
 export { relayOutboxBatch, recordConsumptionOnce } from './outbox.js';
+export {
+  isCheckViolation,
+  isExclusionViolation,
+  isForeignKeyViolation,
+  isUniqueViolation,
+} from './pg-errors.js';
 export { makeSnapshot, type SnapshotEnvelope, type MakeSnapshotArgs } from './lib/snapshot.js';
 export {
   activeOn,

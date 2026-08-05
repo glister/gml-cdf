@@ -11,13 +11,13 @@ import {
   resetConfig,
   resolveConfig,
   setConfig,
-} from './config.js';
+} from './resolve.js';
 import {
   ConfigValueInvalidError,
   defineConfigKey,
   unregisterConfigKeyForTests,
-} from '../config/registry.js';
-import { externalAccessDefaultDays } from '../config/keys.js';
+} from './registry.js';
+import { externalAccessDefaultDays } from './keys.js';
 
 /**
  * Supersede, as-at resolution and immutability (core plan 06 tests 10-T2…T6).

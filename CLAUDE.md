@@ -63,7 +63,8 @@ package even though the lockfile already records it.
 Know which category a package is in before editing it — the implications differ.
 
 **Source-only** (no `build` script; `exports` → `./src/index.ts` directly):
-`env`, `db`, `trpc`, `typescript-config`, `eslint-config`, `vitest-config`.
+`env`, `db`, `domain`, `identity`, `config`, `trpc`, `typescript-config`,
+`eslint-config`, `vitest-config`.
 
 - Consumers import TypeScript source directly; their own bundler/compiler (tsup,
   Vite, tsx) handles it.

@@ -26,12 +26,17 @@ export { loadGrantsForPerson } from './lib/grants-context.js';
 
 /**
  * The configuration store (core plan 06): the key registry and the as-at
- * resolution API. Exported from the package root so `apps/api`, `apps/worker`
- * and later plans' service code resolve `config:` values from one place, and the
- * web editor validates against the very same Zod schemas.
+ * resolution API. It now lives in its own source-only `@repo/config` — core plan
+ * 07's runtime needs it and `@repo/trpc` imports that runtime, so keeping it
+ * here made the two packages mutually dependent (core 07 §5.2 write-back,
+ * 2026-08-05).
+ *
+ * Re-exported unchanged from the package root, so `apps/api`, `apps/worker` and
+ * later plans' service code still resolve `config:` values from one place, the
+ * web editor still validates against the very same Zod schemas, and no call site
+ * had to move.
  */
-export * from './config/index.js';
-export * from './lib/config.js';
+export * from '@repo/config';
 
 export * from './schemas.js';
 export * from './lib/keyset.js';

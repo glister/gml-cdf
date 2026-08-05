@@ -1,5 +1,5 @@
 import { type Kysely, sql, type Transaction } from 'kysely';
-import { appendEvent, newUuidV7, type DB } from '@repo/db';
+import { appendEvent, isUniqueViolation, newUuidV7, type DB } from '@repo/db';
 import type { EventPayload } from '@repo/domain';
 import type { z } from 'zod';
 // Through the barrel, never `./registry.js`: keys register as a side effect of
@@ -9,8 +9,7 @@ import {
   qualifiedName,
   requireConfigKey,
   type ConfigKeyDef,
-} from '../config/index.js';
-import { isUniqueViolation } from './pg-errors.js';
+} from './index.js';
 
 /**
  * The configuration resolution and write API (core plan 06 §4.7).

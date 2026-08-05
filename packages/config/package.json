@@ -1,5 +1,5 @@
 {
-  "name": "@repo/trpc",
+  "name": "@repo/config",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -12,11 +12,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@repo/config": "workspace:*",
     "@repo/db": "workspace:*",
     "@repo/domain": "workspace:*",
-    "@repo/identity": "workspace:*",
-    "@trpc/server": "^11.0.0",
     "kysely": "^0.29.0",
     "zod": "^4.0.0"
   },
