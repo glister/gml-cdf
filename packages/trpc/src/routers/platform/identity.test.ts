@@ -143,6 +143,14 @@ async function eventsFor(personId: string, eventType: string) {
     .execute();
 }
 
+async function personRow(personId: string) {
+  return db
+    .selectFrom('platform.person')
+    .selectAll()
+    .where('id', '=', personId)
+    .executeTakeFirstOrThrow();
+}
+
 describe('listPersons (keyset, SQL facets)', () => {
   it('pages the whole set in global order with no duplicates or gaps', async () => {
     const ids: string[] = [];
@@ -240,6 +248,77 @@ describe('pre-creation check + createPerson (PL-047, AC-D7)', () => {
     expect(await eventsFor(personId, 'platform.person.precreation_check_overridden')).toHaveLength(
       1,
     );
+  });
+
+  /**
+   * Core plan 06 test 10-T7 — the pilot consumption point (PL-029/PL-042).
+   *
+   * This is the whole claim of the configuration store, made testable: a
+   * decision point changes through the API and the very next decision uses the
+   * new value, with no code change and nothing redeployed. The assertions are
+   * about *this* process, mid-run — nothing is rebuilt between them.
+   */
+  it('takes the external access window from configuration, and follows it when it changes', async () => {
+    const daysUntil = (iso: Date | null) => {
+      if (!iso) return null;
+      return Math.round((iso.getTime() - Date.now()) / 86_400_000);
+    };
+
+    // No entry has ever been written, so the frozen code default (90) applies.
+    const first = await caller().platform.identity.createPerson({
+      displayName: 'Agency One',
+      relationshipType: 'agency',
+    });
+    const before = await personRow(first.personId);
+    expect(daysUntil(before.access_valid_until)).toBe(90);
+
+    // Change the decision point through the admin API — no release, no restart.
+    await caller().platform.config.set({
+      namespace: 'platform.identity',
+      key: 'external_access_default_days',
+      value: 30,
+    });
+
+    const second = await caller().platform.identity.createPerson({
+      displayName: 'Agency Two',
+      relationshipType: 'agency',
+    });
+    const after = await personRow(second.personId);
+    expect(daysUntil(after.access_valid_until)).toBe(30);
+
+    // The change is audited (PL-030) and the earlier person keeps the window
+    // that was in force when they were created — a config change never reaches
+    // back into decisions already made.
+    //
+    // Scoped by the entry's own id, because the journal is append-only:
+    // `truncateAll` skips it, so rows accumulate across the suite.
+    const entry = await db
+      .selectFrom('platform.config_entry')
+      .select('id')
+      .executeTakeFirstOrThrow();
+    const changed = await eventsFor(entry.id, 'platform.config_entry.changed');
+    expect(changed).toHaveLength(1);
+    expect(changed[0]!.kind).toBe('admin');
+    expect(daysUntil((await personRow(first.personId)).access_valid_until)).toBe(90);
+  });
+
+  it('never expires an employee, whatever the configured window says', async () => {
+    const { personId } = await caller().platform.identity.createPerson({
+      displayName: 'Staff Member',
+      relationshipType: 'employee',
+    });
+    expect((await personRow(personId)).access_valid_until).toBeNull();
+  });
+
+  it('honours an explicit expiry date over the configured default', async () => {
+    const explicit = new Date(Date.now() + 5 * 86_400_000);
+    const { personId } = await caller().platform.identity.createPerson({
+      displayName: 'Short Engagement',
+      relationshipType: 'subcontractor',
+      accessValidUntil: explicit.toISOString(),
+    });
+    const row = await personRow(personId);
+    expect(row.access_valid_until?.toISOString()).toBe(explicit.toISOString());
   });
 });
 

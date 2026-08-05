@@ -120,12 +120,15 @@ export type PersonScope = (typeof PERSON_SCOPES)[number];
 
 /**
  * Authorisation config items (core plan 04 §6), shipped as constants with their
- * config keys **reserved**.
+ * config keys **reserved** — reserved, not registered: neither has a consumer
+ * that reads it from the store yet.
  *
- * Plan 06 (the config store) depends on plan 04, so the store cannot be consumed
- * here at build time — the chicken-and-egg recorded as §12.2 Q4. When plan 06
- * lands, move these to `platform.config_entry` under exactly these keys and
- * replace the reads; the keys are the migration contract.
+ * **Renamed 2026-08-05** when plan 06 landed. They were reserved as `authz.*`,
+ * but plan 06 fixes the qualified name as `<module>.<area>.<key>` where the
+ * module is a Postgres schema (`platform` or `hr`) — `authz` is neither, and
+ * `defineConfigKey` validates the grammar at load, so an `authz.*` key could not
+ * be registered at all. Whichever change makes these editable registers them
+ * under the names below and replaces the reads here.
  *
  * Neither is a business threshold that changes behaviour silently: the TTL only
  * pre-fills a form field, and the reason requirement is already enforced by the
@@ -133,9 +136,9 @@ export type PersonScope = (typeof PERSON_SCOPES)[number];
  */
 export const AUTHZ_CONFIG_DEFAULTS = {
   /** Pre-filled `validUntil` when granting to an external-role holder (PL-042/043). */
-  'authz.external.default_grant_ttl_days': 90,
+  'platform.authz.external.default_grant_ttl_days': 90,
   /** Whether revoking demands a reason. Enforced by the input schema today. */
-  'authz.grants.revoke_requires_reason': true,
+  'platform.authz.grants.revoke_requires_reason': true,
 } as const;
 
 // --- Reference-data service (core plan 05, ADR-0016) ------------------------
@@ -168,3 +171,13 @@ export type LookupSort = (typeof LOOKUP_SORTS)[number];
 /** Sort columns for the teams list. */
 export const TEAM_SORTS = ['name', 'updated_at'] as const;
 export type TeamSort = (typeof TEAM_SORTS)[number];
+
+// --- Configuration store (core plan 06, ADR-0016) ---------------------------
+
+/**
+ * Sort columns for the config browser. Deliberately short: the browser lists the
+ * **registry** (a few dozen keys), merged with whatever entries exist, so its
+ * ordering is over key names and last-changed times, not over a large table.
+ */
+export const CONFIG_SORTS = ['key', 'updated_at'] as const;
+export type ConfigSort = (typeof CONFIG_SORTS)[number];

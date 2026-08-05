@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { defineFieldClassification, schemaUpTo } from './lib/field-classification.js';
 import {
+  CONFIG_SORTS,
   FIELD_CLASSES,
   GRANT_STATES,
   LOOKUP_LIST_TYPES,
@@ -534,3 +535,167 @@ export const snapshotEnvelopeSchema = <T extends z.ZodTypeAny>(data: T) =>
     taken_at: z.iso.datetime(),
     data,
   });
+
+// --- platform.config router (core plan 06 §5.1) -----------------------------
+
+/**
+ * The `namespace`/`key` split mirrors the table's columns and the registry's
+ * `${namespace}.${key}` name. Both patterns restate the `config_entry_*_chk`
+ * CHECK constraints, so a name rejected here would be rejected by Postgres
+ * anyway — validated at both ends because a key addressed with the wrong
+ * casing or an extra dot would silently resolve to nothing and read as
+ * "unregistered".
+ */
+export const configNamespaceSchema = z
+  .string()
+  .trim()
+  .regex(/^[a-z][a-z0-9_]+(\.[a-z][a-z0-9_]+)*$/, 'lowercase dotted snake_case segments');
+export const configKeyNameSchema = z
+  .string()
+  .trim()
+  .regex(/^[a-z][a-z0-9_]+$/, 'a single lowercase snake_case segment');
+
+const configKeyRef = z.object({
+  namespace: configNamespaceSchema,
+  key: configKeyNameSchema,
+});
+export type ConfigKeyRef = z.infer<typeof configKeyRef>;
+
+/**
+ * How the admin editor should render a key. Derived server-side from the
+ * registered Zod schema, never guessed from the current value — a key whose
+ * value happens to be `0` today is still a number key when it is unset.
+ * Anything the registry expresses that these cannot (objects, arrays, unions)
+ * falls to `json`, which the UI edits as validated JSON text.
+ */
+export const CONFIG_EDITOR_KINDS = [
+  'integer',
+  'number',
+  'string',
+  'boolean',
+  'enum',
+  'json',
+] as const;
+export const configEditorKindSchema = z.enum(CONFIG_EDITOR_KINDS);
+export type ConfigEditorKind = z.infer<typeof configEditorKindSchema>;
+
+/**
+ * The shape the editor renders from — a JSON-Schema-ish descriptor produced from
+ * the key's registered Zod schema, so client-side validation and the server's
+ * write-path validation cannot drift apart.
+ */
+export const configSchemaDescriptorSchema = z.object({
+  editorKind: configEditorKindSchema,
+  /** `z.toJSONSchema()` output, or null for a schema it cannot express. */
+  jsonSchema: z.unknown().nullable(),
+  /** Present for `enum`; the permitted values in declaration order. */
+  options: z.array(z.string()).nullable(),
+  /** Present for `integer`/`number` where the schema declares bounds. */
+  minimum: z.number().nullable(),
+  maximum: z.number().nullable(),
+});
+export type ConfigSchemaDescriptor = z.infer<typeof configSchemaDescriptorSchema>;
+
+/** One registry key merged with whatever entry is in force for it. */
+export const configEntrySummarySchema = z.object({
+  namespace: configNamespaceSchema,
+  key: configKeyNameSchema,
+  qualifiedName: z.string(),
+  description: z.string(),
+  registeredBy: z.string(),
+  /** The value in force: the entry's, or the registered default. */
+  value: z.unknown(),
+  defaultValue: z.unknown(),
+  /** True when no entry is in force and the code default applies. */
+  isDefault: z.boolean(),
+  version: z.number().int().nullable(),
+  validFrom: z.iso.datetime().nullable(),
+  updatedAt: z.iso.datetime().nullable(),
+  updatedByName: z.string().nullable(),
+  editableBy: z.array(roleKeySchema),
+  /**
+   * Whether *this caller* may edit the key. UX only — `set`/`reset` re-check it
+   * server-side (ADR-0015); a client that ignores this gets a `FORBIDDEN`.
+   */
+  canEdit: z.boolean(),
+});
+export type ConfigEntrySummary = z.infer<typeof configEntrySummarySchema>;
+
+/**
+ * Registry-driven listing. Filtering is server-side, as the hard rule requires —
+ * but over the **registry**, which is code, not a table, so it cannot be
+ * expressed in SQL and there is nothing to paginate: the row count is fixed at
+ * build time by the number of registered keys. The single SQL query behind it
+ * fetches the entries in force for those keys.
+ */
+export const listConfigInput = z.object({
+  namespace: configNamespaceSchema.optional(),
+  search: z.string().trim().max(200).optional(),
+  /** Only keys this caller may edit — the "what can I change?" view. */
+  editableOnly: z.boolean().default(false),
+  sort: z.enum(CONFIG_SORTS).default('key'),
+  sortDir: sortDirEnum.default('asc'),
+});
+export type ListConfigInput = z.infer<typeof listConfigInput>;
+
+/** `at` omitted means "the value in force now". */
+export const getConfigInput = configKeyRef.extend({ at: z.iso.datetime().optional() });
+export type GetConfigInput = z.infer<typeof getConfigInput>;
+
+export const getConfigOutput = configEntrySummarySchema.extend({
+  schema: configSchemaDescriptorSchema,
+  /**
+   * A change staged for a future instant, if one exists. The open row is that
+   * staged successor, so a surface that showed only "current" would hide a
+   * pending change entirely (§4.1).
+   */
+  pendingChange: z
+    .object({
+      version: z.number().int(),
+      validFrom: z.iso.datetime(),
+      value: z.unknown(),
+    })
+    .nullable(),
+});
+export type GetConfigOutput = z.infer<typeof getConfigOutput>;
+
+/**
+ * `value` is `unknown` on purpose: its shape is the key's registered Zod schema,
+ * which only the registry knows. The procedure validates against that schema
+ * before any write, so an invalid value is a `BAD_REQUEST` with the schema's own
+ * message rather than a generic input error.
+ *
+ * `effectiveFrom` stages the change. Omitted means "now"; a past instant is
+ * rejected, because it would rewrite decisions already made.
+ */
+export const setConfigInput = configKeyRef.extend({
+  value: z.unknown(),
+  effectiveFrom: z.iso.datetime().optional(),
+});
+export type SetConfigInput = z.infer<typeof setConfigInput>;
+
+export const setConfigOutput = z.object({
+  version: z.number().int(),
+  validFrom: z.iso.datetime(),
+});
+export type SetConfigOutput = z.infer<typeof setConfigOutput>;
+
+export const resetConfigInput = configKeyRef;
+export type ResetConfigInput = z.infer<typeof resetConfigInput>;
+
+export const configHistoryInput = configKeyRef.extend({
+  cursor: z.string().optional(),
+  limit: z.number().int().min(1).max(100).default(25),
+});
+export type ConfigHistoryInput = z.infer<typeof configHistoryInput>;
+
+export const configHistoryRowSchema = z.object({
+  id: z.uuid(),
+  version: z.number().int(),
+  value: z.unknown(),
+  validFrom: z.iso.datetime(),
+  validTo: z.iso.datetime().nullable(),
+  createdAt: z.iso.datetime(),
+  createdByName: z.string().nullable(),
+});
+export type ConfigHistoryRow = z.infer<typeof configHistoryRowSchema>;

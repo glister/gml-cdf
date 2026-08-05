@@ -4,6 +4,12 @@ locals {
     environment = var.environment
     managed_by  = "terraform"
   }
+
+  # Hostnames are derived from the URLs the app is configured with rather than
+  # declared separately, so the certificate can only ever be issued for the name
+  # the app actually answers to.
+  web_hostname = replace(replace(var.app_url, "https://", ""), "/", "")
+  api_hostname = replace(replace(var.api_url, "https://", ""), "/", "")
 }
 
 resource "azurerm_resource_group" "this" {
@@ -131,4 +137,35 @@ module "container_apps" {
   log_level                  = "info"
 
   tags = local.tags
+}
+
+# Custom domains. Gated on `dns_zone_name` so an environment without a delegated
+# zone still applies cleanly and keeps its generated *.azurecontainerapps.io
+# hostnames. The hostnames come from app_url/api_url so there is one source of
+# truth: what the app believes it is called is what gets bound and certificated.
+module "dns_and_certs" {
+  source = "./modules/dns-and-certs"
+  count  = var.dns_zone_name == "" ? 0 : 1
+
+  dns_zone_name                       = var.dns_zone_name
+  resource_group_name                 = azurerm_resource_group.this.name
+  container_app_environment_id        = module.container_apps.environment_id
+  container_app_environment_static_ip = module.container_apps.environment_static_ip
+  enable_bindings                     = var.enable_custom_domain_bindings
+  tags                                = local.tags
+
+  bindings = {
+    web = {
+      container_app_id = module.container_apps.web_id
+      hostname         = local.web_hostname
+      ingress_fqdn     = module.container_apps.web_fqdn
+      verification_id  = module.container_apps.web_custom_domain_verification_id
+    }
+    api = {
+      container_app_id = module.container_apps.api_id
+      hostname         = local.api_hostname
+      ingress_fqdn     = module.container_apps.api_fqdn
+      verification_id  = module.container_apps.api_custom_domain_verification_id
+    }
+  }
 }

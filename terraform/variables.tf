@@ -117,3 +117,26 @@ variable "max_replicas" {
   type    = number
   default = 3
 }
+
+# --- Custom domains ---
+
+variable "dns_zone_name" {
+  description = <<-DESC
+    Zone delegated to Azure for this environment, e.g. `connect.cdfencing.co.uk`
+    (prod) or `dev.connect.cdfencing.co.uk` (dev). Must be the parent of both
+    `app_url` and `api_url`. Empty disables custom domains entirely.
+  DESC
+  type        = string
+  default     = ""
+}
+
+variable "enable_custom_domain_bindings" {
+  description = <<-DESC
+    Phase 2 of the custom-domain rollout (see modules/dns-and-certs): issue
+    managed certificates and bind the hostnames. Leave false until the zone's
+    name servers are delegated at the registrar and `dig NS <zone>` returns
+    Azure's — enabling early fails certificate validation.
+  DESC
+  type        = bool
+  default     = false
+}

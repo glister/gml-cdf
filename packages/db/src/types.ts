@@ -41,6 +41,23 @@ export interface Account {
   user_id: string;
 }
 
+export interface PlatformConfigEntry {
+  created_at: Generated<Timestamp>;
+  created_by: string;
+  id: string;
+  key: string;
+  namespace: string;
+  updated_at: Generated<Timestamp>;
+  updated_by: string;
+  valid_from: Timestamp;
+  valid_to: Timestamp | null;
+  /**
+   * Validated against the key's registered Zod schema on write AND on read (@repo/trpc config registry). A value failing its schema on read is registry drift and raises rather than returning a guess.
+   */
+  value: Json;
+  version: number;
+}
+
 export interface PlatformDomainEvent {
   actor_person_id: string | null;
   causation_id: string | null;
@@ -254,6 +271,7 @@ export interface Verification {
 
 export interface DB {
   account: Account;
+  "platform.config_entry": PlatformConfigEntry;
   "platform.domain_event": PlatformDomainEvent;
   "platform.event_consumption": PlatformEventConsumption;
   "platform.lookup": PlatformLookup;

@@ -27,7 +27,7 @@ export default defineConfig({
     // Authenticated specs reuse the stored admin session.
     {
       name: 'logged-in',
-      testMatch: /people\.spec\.ts/,
+      testMatch: /(people|admin-config)\.spec\.ts/,
       dependencies: ['setup'],
       use: { ...devices['Desktop Chrome'], storageState: 'e2e/.auth/admin.json' },
     },

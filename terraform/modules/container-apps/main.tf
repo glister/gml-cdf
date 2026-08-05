@@ -316,3 +316,33 @@ output "api_fqdn" {
 output "web_fqdn" {
   value = azurerm_container_app.web.ingress[0].fqdn
 }
+
+# --- Custom-domain inputs (consumed by modules/dns-and-certs) --------------
+
+output "environment_id" {
+  value = azurerm_container_app_environment.this.id
+}
+
+# The environment's public inbound IP. Every app in the environment answers on
+# it, which is what makes an apex A record possible — a zone apex cannot hold a
+# CNAME, so `connect.cdfencing.co.uk` points here rather than at an app FQDN.
+output "environment_static_ip" {
+  value = azurerm_container_app_environment.this.static_ip_address
+}
+
+output "api_id" {
+  value = azurerm_container_app.api.id
+}
+
+output "web_id" {
+  value = azurerm_container_app.web.id
+}
+
+# Proves domain ownership to Azure; published as the `asuid.<host>` TXT record.
+output "api_custom_domain_verification_id" {
+  value = azurerm_container_app.api.custom_domain_verification_id
+}
+
+output "web_custom_domain_verification_id" {
+  value = azurerm_container_app.web.custom_domain_verification_id
+}
