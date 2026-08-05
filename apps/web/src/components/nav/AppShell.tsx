@@ -8,6 +8,7 @@ import {
   List,
   Menu,
   ShieldCheck,
+  SlidersHorizontal,
   UserCog,
   Users,
   UsersRound,
@@ -82,6 +83,12 @@ function ConfigurationNavSection() {
         </Link>
         <Link to="/admin/teams" className={navItemClass}>
           <NavItemInner icon={<UsersRound size={20} strokeWidth={1.9} />} label="Teams" />
+        </Link>
+        <Link to="/admin/config" className={navItemClass}>
+          <NavItemInner
+            icon={<SlidersHorizontal size={20} strokeWidth={1.9} />}
+            label="Configuration"
+          />
         </Link>
       </div>
     </>

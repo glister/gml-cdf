@@ -17,11 +17,13 @@ import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedAdminTeamsIndexRouteImport } from './routes/_authenticated/admin/teams/index';
 import { Route as AuthenticatedAdminReferenceDataIndexRouteImport } from './routes/_authenticated/admin/reference-data/index';
 import { Route as AuthenticatedAdminPeopleIndexRouteImport } from './routes/_authenticated/admin/people/index';
+import { Route as AuthenticatedAdminConfigIndexRouteImport } from './routes/_authenticated/admin/config/index';
 import { Route as AuthenticatedAdminTeamsTeamIdRouteImport } from './routes/_authenticated/admin/teams/$teamId';
 import { Route as AuthenticatedAdminReferenceDataListTypeRouteImport } from './routes/_authenticated/admin/reference-data/$listType';
 import { Route as AuthenticatedAdminPeopleNewRouteImport } from './routes/_authenticated/admin/people/new';
 import { Route as AuthenticatedAdminPeopleDuplicatesRouteImport } from './routes/_authenticated/admin/people/duplicates';
 import { Route as AuthenticatedAdminPeoplePersonIdRouteImport } from './routes/_authenticated/admin/people/$personId';
+import { Route as AuthenticatedAdminConfigQualifiedKeyRouteImport } from './routes/_authenticated/admin/config/$qualifiedKey';
 import { Route as AuthenticatedAdminAuthzRolesRouteImport } from './routes/_authenticated/admin/authz/roles';
 import { Route as AuthenticatedAdminAuthzGrantsRouteImport } from './routes/_authenticated/admin/authz/grants';
 import { Route as AuthenticatedAdminAuthzAllocationsRouteImport } from './routes/_authenticated/admin/authz/allocations';
@@ -68,6 +70,12 @@ const AuthenticatedAdminPeopleIndexRoute =
     path: '/people/',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any);
+const AuthenticatedAdminConfigIndexRoute =
+  AuthenticatedAdminConfigIndexRouteImport.update({
+    id: '/config/',
+    path: '/config/',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any);
 const AuthenticatedAdminTeamsTeamIdRoute =
   AuthenticatedAdminTeamsTeamIdRouteImport.update({
     id: '/teams/$teamId',
@@ -98,6 +106,12 @@ const AuthenticatedAdminPeoplePersonIdRoute =
     path: '/people/$personId',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any);
+const AuthenticatedAdminConfigQualifiedKeyRoute =
+  AuthenticatedAdminConfigQualifiedKeyRouteImport.update({
+    id: '/config/$qualifiedKey',
+    path: '/config/$qualifiedKey',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any);
 const AuthenticatedAdminAuthzRolesRoute =
   AuthenticatedAdminAuthzRolesRouteImport.update({
     id: '/authz/roles',
@@ -125,11 +139,13 @@ export interface FileRoutesByFullPath {
   '/admin/authz/allocations': typeof AuthenticatedAdminAuthzAllocationsRoute;
   '/admin/authz/grants': typeof AuthenticatedAdminAuthzGrantsRoute;
   '/admin/authz/roles': typeof AuthenticatedAdminAuthzRolesRoute;
+  '/admin/config/$qualifiedKey': typeof AuthenticatedAdminConfigQualifiedKeyRoute;
   '/admin/people/$personId': typeof AuthenticatedAdminPeoplePersonIdRoute;
   '/admin/people/duplicates': typeof AuthenticatedAdminPeopleDuplicatesRoute;
   '/admin/people/new': typeof AuthenticatedAdminPeopleNewRoute;
   '/admin/reference-data/$listType': typeof AuthenticatedAdminReferenceDataListTypeRoute;
   '/admin/teams/$teamId': typeof AuthenticatedAdminTeamsTeamIdRoute;
+  '/admin/config/': typeof AuthenticatedAdminConfigIndexRoute;
   '/admin/people/': typeof AuthenticatedAdminPeopleIndexRoute;
   '/admin/reference-data/': typeof AuthenticatedAdminReferenceDataIndexRoute;
   '/admin/teams/': typeof AuthenticatedAdminTeamsIndexRoute;
@@ -142,11 +158,13 @@ export interface FileRoutesByTo {
   '/admin/authz/allocations': typeof AuthenticatedAdminAuthzAllocationsRoute;
   '/admin/authz/grants': typeof AuthenticatedAdminAuthzGrantsRoute;
   '/admin/authz/roles': typeof AuthenticatedAdminAuthzRolesRoute;
+  '/admin/config/$qualifiedKey': typeof AuthenticatedAdminConfigQualifiedKeyRoute;
   '/admin/people/$personId': typeof AuthenticatedAdminPeoplePersonIdRoute;
   '/admin/people/duplicates': typeof AuthenticatedAdminPeopleDuplicatesRoute;
   '/admin/people/new': typeof AuthenticatedAdminPeopleNewRoute;
   '/admin/reference-data/$listType': typeof AuthenticatedAdminReferenceDataListTypeRoute;
   '/admin/teams/$teamId': typeof AuthenticatedAdminTeamsTeamIdRoute;
+  '/admin/config': typeof AuthenticatedAdminConfigIndexRoute;
   '/admin/people': typeof AuthenticatedAdminPeopleIndexRoute;
   '/admin/reference-data': typeof AuthenticatedAdminReferenceDataIndexRoute;
   '/admin/teams': typeof AuthenticatedAdminTeamsIndexRoute;
@@ -161,11 +179,13 @@ export interface FileRoutesById {
   '/_authenticated/admin/authz/allocations': typeof AuthenticatedAdminAuthzAllocationsRoute;
   '/_authenticated/admin/authz/grants': typeof AuthenticatedAdminAuthzGrantsRoute;
   '/_authenticated/admin/authz/roles': typeof AuthenticatedAdminAuthzRolesRoute;
+  '/_authenticated/admin/config/$qualifiedKey': typeof AuthenticatedAdminConfigQualifiedKeyRoute;
   '/_authenticated/admin/people/$personId': typeof AuthenticatedAdminPeoplePersonIdRoute;
   '/_authenticated/admin/people/duplicates': typeof AuthenticatedAdminPeopleDuplicatesRoute;
   '/_authenticated/admin/people/new': typeof AuthenticatedAdminPeopleNewRoute;
   '/_authenticated/admin/reference-data/$listType': typeof AuthenticatedAdminReferenceDataListTypeRoute;
   '/_authenticated/admin/teams/$teamId': typeof AuthenticatedAdminTeamsTeamIdRoute;
+  '/_authenticated/admin/config/': typeof AuthenticatedAdminConfigIndexRoute;
   '/_authenticated/admin/people/': typeof AuthenticatedAdminPeopleIndexRoute;
   '/_authenticated/admin/reference-data/': typeof AuthenticatedAdminReferenceDataIndexRoute;
   '/_authenticated/admin/teams/': typeof AuthenticatedAdminTeamsIndexRoute;
@@ -180,11 +200,13 @@ export interface FileRouteTypes {
     | '/admin/authz/allocations'
     | '/admin/authz/grants'
     | '/admin/authz/roles'
+    | '/admin/config/$qualifiedKey'
     | '/admin/people/$personId'
     | '/admin/people/duplicates'
     | '/admin/people/new'
     | '/admin/reference-data/$listType'
     | '/admin/teams/$teamId'
+    | '/admin/config/'
     | '/admin/people/'
     | '/admin/reference-data/'
     | '/admin/teams/';
@@ -197,11 +219,13 @@ export interface FileRouteTypes {
     | '/admin/authz/allocations'
     | '/admin/authz/grants'
     | '/admin/authz/roles'
+    | '/admin/config/$qualifiedKey'
     | '/admin/people/$personId'
     | '/admin/people/duplicates'
     | '/admin/people/new'
     | '/admin/reference-data/$listType'
     | '/admin/teams/$teamId'
+    | '/admin/config'
     | '/admin/people'
     | '/admin/reference-data'
     | '/admin/teams';
@@ -215,11 +239,13 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/authz/allocations'
     | '/_authenticated/admin/authz/grants'
     | '/_authenticated/admin/authz/roles'
+    | '/_authenticated/admin/config/$qualifiedKey'
     | '/_authenticated/admin/people/$personId'
     | '/_authenticated/admin/people/duplicates'
     | '/_authenticated/admin/people/new'
     | '/_authenticated/admin/reference-data/$listType'
     | '/_authenticated/admin/teams/$teamId'
+    | '/_authenticated/admin/config/'
     | '/_authenticated/admin/people/'
     | '/_authenticated/admin/reference-data/'
     | '/_authenticated/admin/teams/';
@@ -289,6 +315,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminPeopleIndexRouteImport;
       parentRoute: typeof AuthenticatedAdminRoute;
     };
+    '/_authenticated/admin/config/': {
+      id: '/_authenticated/admin/config/';
+      path: '/config';
+      fullPath: '/admin/config/';
+      preLoaderRoute: typeof AuthenticatedAdminConfigIndexRouteImport;
+      parentRoute: typeof AuthenticatedAdminRoute;
+    };
     '/_authenticated/admin/teams/$teamId': {
       id: '/_authenticated/admin/teams/$teamId';
       path: '/teams/$teamId';
@@ -324,6 +357,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminPeoplePersonIdRouteImport;
       parentRoute: typeof AuthenticatedAdminRoute;
     };
+    '/_authenticated/admin/config/$qualifiedKey': {
+      id: '/_authenticated/admin/config/$qualifiedKey';
+      path: '/config/$qualifiedKey';
+      fullPath: '/admin/config/$qualifiedKey';
+      preLoaderRoute: typeof AuthenticatedAdminConfigQualifiedKeyRouteImport;
+      parentRoute: typeof AuthenticatedAdminRoute;
+    };
     '/_authenticated/admin/authz/roles': {
       id: '/_authenticated/admin/authz/roles';
       path: '/authz/roles';
@@ -352,11 +392,13 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminAuthzAllocationsRoute: typeof AuthenticatedAdminAuthzAllocationsRoute;
   AuthenticatedAdminAuthzGrantsRoute: typeof AuthenticatedAdminAuthzGrantsRoute;
   AuthenticatedAdminAuthzRolesRoute: typeof AuthenticatedAdminAuthzRolesRoute;
+  AuthenticatedAdminConfigQualifiedKeyRoute: typeof AuthenticatedAdminConfigQualifiedKeyRoute;
   AuthenticatedAdminPeoplePersonIdRoute: typeof AuthenticatedAdminPeoplePersonIdRoute;
   AuthenticatedAdminPeopleDuplicatesRoute: typeof AuthenticatedAdminPeopleDuplicatesRoute;
   AuthenticatedAdminPeopleNewRoute: typeof AuthenticatedAdminPeopleNewRoute;
   AuthenticatedAdminReferenceDataListTypeRoute: typeof AuthenticatedAdminReferenceDataListTypeRoute;
   AuthenticatedAdminTeamsTeamIdRoute: typeof AuthenticatedAdminTeamsTeamIdRoute;
+  AuthenticatedAdminConfigIndexRoute: typeof AuthenticatedAdminConfigIndexRoute;
   AuthenticatedAdminPeopleIndexRoute: typeof AuthenticatedAdminPeopleIndexRoute;
   AuthenticatedAdminReferenceDataIndexRoute: typeof AuthenticatedAdminReferenceDataIndexRoute;
   AuthenticatedAdminTeamsIndexRoute: typeof AuthenticatedAdminTeamsIndexRoute;
@@ -367,6 +409,8 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
     AuthenticatedAdminAuthzAllocationsRoute,
   AuthenticatedAdminAuthzGrantsRoute: AuthenticatedAdminAuthzGrantsRoute,
   AuthenticatedAdminAuthzRolesRoute: AuthenticatedAdminAuthzRolesRoute,
+  AuthenticatedAdminConfigQualifiedKeyRoute:
+    AuthenticatedAdminConfigQualifiedKeyRoute,
   AuthenticatedAdminPeoplePersonIdRoute: AuthenticatedAdminPeoplePersonIdRoute,
   AuthenticatedAdminPeopleDuplicatesRoute:
     AuthenticatedAdminPeopleDuplicatesRoute,
@@ -374,6 +418,7 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminReferenceDataListTypeRoute:
     AuthenticatedAdminReferenceDataListTypeRoute,
   AuthenticatedAdminTeamsTeamIdRoute: AuthenticatedAdminTeamsTeamIdRoute,
+  AuthenticatedAdminConfigIndexRoute: AuthenticatedAdminConfigIndexRoute,
   AuthenticatedAdminPeopleIndexRoute: AuthenticatedAdminPeopleIndexRoute,
   AuthenticatedAdminReferenceDataIndexRoute:
     AuthenticatedAdminReferenceDataIndexRoute,

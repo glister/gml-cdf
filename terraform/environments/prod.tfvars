@@ -20,3 +20,9 @@ api_url    = "https://api.connect.cdfencing.co.uk"
 
 # Sensitive values (subscription_id, postgres_admin_password, resend_api_key,
 # better_auth_secret) come from TF_VAR_* in CI.
+
+# --- Custom domains (runbook §11) ---
+# Phase 1: apply with bindings disabled, delegate the name servers at Krystal.
+# Phase 2: set enable_custom_domain_bindings = true and re-apply.
+dns_zone_name                 = "connect.cdfencing.co.uk"
+enable_custom_domain_bindings = false

@@ -35,3 +35,17 @@ output "postgres_admin_login" {
 output "key_vault_uri" {
   value = module.key_vault.uri
 }
+
+# Phase 1 of the custom-domain rollout: the name servers to delegate to at the
+# registrar. Empty until `dns_zone_name` is set. See runbook §11.
+output "dns_name_servers" {
+  value = try(module.dns_and_certs[0].name_servers, [])
+}
+
+output "dns_zone_name" {
+  value = try(module.dns_and_certs[0].zone_name, "")
+}
+
+output "bound_hostnames" {
+  value = try(module.dns_and_certs[0].bound_hostnames, [])
+}
