@@ -1,5 +1,6 @@
 import { db, pool } from './client.js';
 import { newUuidV7 } from './ids.js';
+import type { NewLookup } from './index.js';
 import { makeUser } from './test-support.js';
 
 /**
@@ -59,6 +60,130 @@ async function grantAdministratorEverywhere(personId: string): Promise<void> {
   console.log(`✔ seed: administrator granted in ${modules.length} modules`);
 }
 
+/**
+ * Dev placeholders for the seven Phase 1 Tier 1 lists (core plan 05 §9.1).
+ * Production values come from the config workshops and the Breathe HR export.
+ *
+ * **The `code`s below are the migration contract (DM-002).** Breathe mapping
+ * tables target `(list_type, code)`, so a code here is renamed only alongside
+ * its mapping — labels are the freely editable half of the pair (§4.1.1).
+ */
+type SeedListType = NewLookup['list_type'];
+
+const SEED_LOOKUPS: ReadonlyArray<{ listType: SeedListType; code: string; label: string }> = [
+  { listType: 'department', code: 'fencing_ops', label: 'Fencing Operations' },
+  { listType: 'department', code: 'transport', label: 'Transport' },
+  { listType: 'department', code: 'office', label: 'Office' },
+  { listType: 'department', code: 'finance', label: 'Finance' },
+
+  { listType: 'job_role', code: 'fencer', label: 'Fencer' },
+  { listType: 'job_role', code: 'fencing_mate', label: 'Fencing Mate' },
+  { listType: 'job_role', code: 'site_supervisor', label: 'Site Supervisor' },
+  { listType: 'job_role', code: 'driver', label: 'Driver' },
+  { listType: 'job_role', code: 'office_administrator', label: 'Office Administrator' },
+
+  { listType: 'document_category', code: 'contract', label: 'Contract' },
+  { listType: 'document_category', code: 'right_to_work', label: 'Right to Work' },
+  { listType: 'document_category', code: 'qualification', label: 'Qualification / Card' },
+  { listType: 'document_category', code: 'policy', label: 'Policy' },
+  { listType: 'document_category', code: 'id_document', label: 'Identity Document' },
+
+  // SA-001's sickness categories. The *list* is public reference data; a
+  // person's sickness *records* are the HR module's special-category concern.
+  { listType: 'sickness_type', code: 'cold_flu', label: 'Cold / Flu' },
+  { listType: 'sickness_type', code: 'stomach', label: 'Stomach / Digestive' },
+  { listType: 'sickness_type', code: 'musculoskeletal', label: 'Musculoskeletal' },
+  { listType: 'sickness_type', code: 'stress_anxiety', label: 'Stress / Anxiety' },
+  { listType: 'sickness_type', code: 'other', label: 'Other' },
+
+  { listType: 'ppe_type', code: 'hard_hat', label: 'Hard Hat' },
+  { listType: 'ppe_type', code: 'hi_vis', label: 'Hi-Vis Vest' },
+  { listType: 'ppe_type', code: 'safety_boots', label: 'Safety Boots' },
+  { listType: 'ppe_type', code: 'gloves', label: 'Gloves' },
+  { listType: 'ppe_type', code: 'ear_defenders', label: 'Ear Defenders' },
+
+  { listType: 'leaver_reason', code: 'resignation', label: 'Resignation' },
+  { listType: 'leaver_reason', code: 'end_of_contract', label: 'End of Contract' },
+  { listType: 'leaver_reason', code: 'redundancy', label: 'Redundancy' },
+  { listType: 'leaver_reason', code: 'dismissal', label: 'Dismissal' },
+  { listType: 'leaver_reason', code: 'retirement', label: 'Retirement' },
+
+  { listType: 'equipment_type', code: 'mobile_phone', label: 'Mobile Phone' },
+  { listType: 'equipment_type', code: 'laptop', label: 'Laptop' },
+  { listType: 'equipment_type', code: 'van', label: 'Van' },
+  { listType: 'equipment_type', code: 'power_tools', label: 'Power Tools' },
+  { listType: 'equipment_type', code: 'fuel_card', label: 'Fuel Card' },
+];
+
+/**
+ * Seed the Tier 1 lists and one demo team (core plan 05). Idempotent via the
+ * `(list_type, code)` and live-name unique constraints, so re-running adds
+ * nothing. `sort_order` follows declaration order within each list.
+ */
+async function seedReferenceData(actorPersonId: string): Promise<void> {
+  const orderByList = new Map<string, number>();
+  const rows = SEED_LOOKUPS.map((v) => {
+    const next = orderByList.get(v.listType) ?? 0;
+    orderByList.set(v.listType, next + 1);
+    return {
+      id: newUuidV7(),
+      list_type: v.listType,
+      code: v.code,
+      label: v.label,
+      sort_order: next,
+      created_by: actorPersonId,
+      updated_by: actorPersonId,
+    };
+  });
+  await db
+    .insertInto('platform.lookup')
+    .values(rows)
+    .onConflict((oc) => oc.columns(['list_type', 'code']).doNothing())
+    .execute();
+  // eslint-disable-next-line no-console
+  console.log(`✔ seed: ${rows.length} lookup values across ${orderByList.size} list types`);
+
+  const team = await db
+    .selectFrom('platform.team')
+    .select('id')
+    .where('name', '=', 'Fencing Crew A')
+    .where('deleted_at', 'is', null)
+    .executeTakeFirst();
+  if (team) {
+    // eslint-disable-next-line no-console
+    console.log('✔ seed: demo team already present');
+    return;
+  }
+  const teamId = newUuidV7();
+  await db
+    .insertInto('platform.team')
+    .values({
+      id: teamId,
+      name: 'Fencing Crew A',
+      description: 'Demo team for core plan 05 (PL-005d/e).',
+      manager_person_id: actorPersonId,
+      max_concurrent_leave: 2,
+      colour: '#2f6f4f',
+      created_by: actorPersonId,
+      updated_by: actorPersonId,
+    })
+    .execute();
+  await db
+    .insertInto('platform.team_membership')
+    .values({
+      id: newUuidV7(),
+      team_id: teamId,
+      person_id: actorPersonId,
+      // Open-ended (`valid_to` NULL) = current member.
+      valid_from: '2026-01-01',
+      created_by: actorPersonId,
+      updated_by: actorPersonId,
+    })
+    .execute();
+  // eslint-disable-next-line no-console
+  console.log(`✔ seed: demo team ${teamId} with one open-ended membership`);
+}
+
 async function seed(): Promise<void> {
   const email = 'admin@cdf.local';
 
@@ -73,7 +198,10 @@ async function seed(): Promise<void> {
     console.log(`✔ seed: ${email} already present`);
     // Backfill grants for a database seeded before core plan 04 — without them
     // the admin can authenticate but reaches no product surface.
-    if (existing.person_id) await grantAdministratorEverywhere(existing.person_id);
+    if (existing.person_id) {
+      await grantAdministratorEverywhere(existing.person_id);
+      await seedReferenceData(existing.person_id);
+    }
   } else {
     const personId = newUuidV7();
     await db
@@ -98,6 +226,7 @@ async function seed(): Promise<void> {
     });
     await db.insertInto('user').values(admin).execute();
     await grantAdministratorEverywhere(personId);
+    await seedReferenceData(personId);
 
     // eslint-disable-next-line no-console
     console.log(`✔ seed complete (${email}, person ${personId})`);

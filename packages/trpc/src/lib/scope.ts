@@ -79,32 +79,38 @@ export function allocatedPersonIds(adminPersonId: string): Expression<string> {
 }
 
 /**
- * The people a manager can see (PL-004). **Interface fixed now; deliberately
- * fail-closed until plan 05 lands.**
+ * The people a manager can see (PL-004) — **live since core plan 05 landed
+ * `platform.team` / `platform.team_membership` (2026-08-03)**. This helper
+ * shipped fail-closed through plan 04 precisely so this swap would be a body
+ * change and nothing else; no call site moved.
  *
- * `platform.team` / `platform.team_membership` are owned and migrated by plan 05
- * (§4.1.2 there) and do not exist yet, so this returns the empty set: a Line
- * Manager currently sees no team rows rather than everyone's. Failing closed is
- * the only safe direction for an authorisation helper — a permissive stub would
- * be a silent security hole that tests would not catch.
+ * Three properties are deliberate:
  *
- * When plan 05's migration lands, replace the body with the effective-dated
- * membership query:
+ *  1. **Effective-dated, evaluated now.** Membership is half-open
+ *     `[valid_from, valid_to)` (ADR-0012), so a member who left yesterday is
+ *     already out of scope and one who joins tomorrow is not yet in it —
+ *     without anyone running a job. `current_date` is the database's today, the
+ *     same clock the EXCLUDE constraint uses.
+ *  2. **Deputy counts.** A deputy exists to cover the manager, and a cover that
+ *     cannot see the team is not cover (core plan 04 §12.2 Q2's residual half,
+ *     resolved here).
+ *  3. **Archived teams confer nothing.** A soft-deleted team is retired
+ *     configuration; leaving its manager with visibility would make archiving
+ *     a no-op for access.
  *
- *   SELECT m.person_id FROM platform.team_membership m
- *   JOIN platform.team t ON t.id = m.team_id
- *   WHERE (t.manager_person_id = :viewer OR t.deputy_person_id = :viewer)
- *     AND m.valid_from <= current_date
- *     AND (m.valid_to IS NULL OR m.valid_to > current_date)
- *
- * (Deputy inclusion is the residual half of §12.2 Q2.) A later CONSUMPTION
- * POINT extends this with a recursive CTE over `hr.employee.manager_person_id`
- * when the HR employee record lands, unioned with the team source. **Call sites
- * do not change** — that is the point of fixing the interface now.
+ * A later CONSUMPTION POINT unions this with a recursive CTE over
+ * `hr.employee.manager_person_id` when the HR employee record lands. Call sites
+ * still will not change.
  */
-export function managedPersonIds(_viewerPersonId: string): Expression<string> {
-  // TODO(plan-05): swap for the team_membership query above. PL-004.
-  return sql<string>`(SELECT NULL::uuid WHERE false)`;
+export function managedPersonIds(viewerPersonId: string): Expression<string> {
+  return sql<string>`(
+    SELECT m.person_id FROM platform.team_membership m
+    JOIN platform.team t ON t.id = m.team_id
+    WHERE (t.manager_person_id = ${viewerPersonId} OR t.deputy_person_id = ${viewerPersonId})
+      AND t.deleted_at IS NULL
+      AND m.valid_from <= current_date
+      AND (m.valid_to IS NULL OR m.valid_to > current_date)
+  )`;
 }
 
 /**

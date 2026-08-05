@@ -3,12 +3,15 @@ import type {
   Account,
   PlatformDomainEvent,
   PlatformEventConsumption,
+  PlatformLookup,
   PlatformPerson,
   PlatformPersonAllocation,
   PlatformPersonFlag,
   PlatformPersonMerge,
   PlatformRole,
   PlatformRoleGrant,
+  PlatformTeam,
+  PlatformTeamMembership,
   Session,
   User,
   Verification,
@@ -23,6 +26,13 @@ export {
   type AppendEventInput,
 } from './journal.js';
 export { relayOutboxBatch, recordConsumptionOnce } from './outbox.js';
+export { makeSnapshot, type SnapshotEnvelope, type MakeSnapshotArgs } from './lib/snapshot.js';
+export {
+  activeOn,
+  endEffective,
+  type EffectiveDatedTable,
+  type EndEffectiveInput,
+} from './lib/effective-dating.js';
 export {
   grantRole,
   revokeGrant,
@@ -36,12 +46,15 @@ export type {
   Account,
   PlatformDomainEvent,
   PlatformEventConsumption,
+  PlatformLookup,
   PlatformPerson,
   PlatformPersonAllocation,
   PlatformPersonFlag,
   PlatformPersonMerge,
   PlatformRole,
   PlatformRoleGrant,
+  PlatformTeam,
+  PlatformTeamMembership,
   Session,
   User,
   Verification,
@@ -98,3 +111,16 @@ export type RoleGrantUpdate = Updateable<PlatformRoleGrant>;
 export type PersonAllocationRecord = Selectable<PlatformPersonAllocation>;
 export type NewPersonAllocation = Insertable<PlatformPersonAllocation>;
 export type PersonAllocationUpdate = Updateable<PlatformPersonAllocation>;
+
+// Reference-data service (core plan 05, ADR-0016).
+export type LookupRecord = Selectable<PlatformLookup>;
+export type NewLookup = Insertable<PlatformLookup>;
+export type LookupUpdate = Updateable<PlatformLookup>;
+
+export type TeamRecord = Selectable<PlatformTeam>;
+export type NewTeam = Insertable<PlatformTeam>;
+export type TeamUpdate = Updateable<PlatformTeam>;
+
+export type TeamMembershipRecord = Selectable<PlatformTeamMembership>;
+export type NewTeamMembership = Insertable<PlatformTeamMembership>;
+export type TeamMembershipUpdate = Updateable<PlatformTeamMembership>;

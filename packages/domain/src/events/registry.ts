@@ -3,6 +3,11 @@ import type { EventDefinition } from './define.js';
 import {
   platformDataSpecialCategoryAccessed,
   platformDemoPinged,
+  platformLookupValueCreated,
+  platformLookupValueDeactivated,
+  platformLookupValueDeleted,
+  platformLookupValueReactivated,
+  platformLookupValueUpdated,
   platformPersonAccessExpired,
   platformPersonAccessExpirySet,
   platformPersonAllocationAdded,
@@ -23,6 +28,12 @@ import {
   platformPersonSignedIn,
   platformRoleGranted,
   platformRoleRevoked,
+  platformTeamArchived,
+  platformTeamCreated,
+  platformTeamMembershipAdded,
+  platformTeamMembershipCorrected,
+  platformTeamMembershipEnded,
+  platformTeamUpdated,
 } from './platform.js';
 
 /**
@@ -61,6 +72,18 @@ export const eventTypes = {
   'platform.data.special_category.accessed': platformDataSpecialCategoryAccessed,
   'platform.person.allocation_added': platformPersonAllocationAdded,
   'platform.person.allocation_ended': platformPersonAllocationEnded,
+  // Reference-data service (core plan 05, PL-005/006/007, kind='admin').
+  'platform.lookup.value.created': platformLookupValueCreated,
+  'platform.lookup.value.updated': platformLookupValueUpdated,
+  'platform.lookup.value.deactivated': platformLookupValueDeactivated,
+  'platform.lookup.value.reactivated': platformLookupValueReactivated,
+  'platform.lookup.value.deleted': platformLookupValueDeleted,
+  'platform.team.created': platformTeamCreated,
+  'platform.team.updated': platformTeamUpdated,
+  'platform.team.archived': platformTeamArchived,
+  'platform.team.membership.added': platformTeamMembershipAdded,
+  'platform.team.membership.ended': platformTeamMembershipEnded,
+  'platform.team.membership.corrected': platformTeamMembershipCorrected,
 } as const;
 
 /** The union of all registered event-type names. */

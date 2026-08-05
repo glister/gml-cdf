@@ -14,7 +14,11 @@ import { Route as AuthenticatedRouteImport } from './routes/_authenticated';
 import { Route as IndexRouteImport } from './routes/index';
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard';
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin';
+import { Route as AuthenticatedAdminTeamsIndexRouteImport } from './routes/_authenticated/admin/teams/index';
+import { Route as AuthenticatedAdminReferenceDataIndexRouteImport } from './routes/_authenticated/admin/reference-data/index';
 import { Route as AuthenticatedAdminPeopleIndexRouteImport } from './routes/_authenticated/admin/people/index';
+import { Route as AuthenticatedAdminTeamsTeamIdRouteImport } from './routes/_authenticated/admin/teams/$teamId';
+import { Route as AuthenticatedAdminReferenceDataListTypeRouteImport } from './routes/_authenticated/admin/reference-data/$listType';
 import { Route as AuthenticatedAdminPeopleNewRouteImport } from './routes/_authenticated/admin/people/new';
 import { Route as AuthenticatedAdminPeopleDuplicatesRouteImport } from './routes/_authenticated/admin/people/duplicates';
 import { Route as AuthenticatedAdminPeoplePersonIdRouteImport } from './routes/_authenticated/admin/people/$personId';
@@ -46,10 +50,34 @@ const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => AuthenticatedRoute,
 } as any);
+const AuthenticatedAdminTeamsIndexRoute =
+  AuthenticatedAdminTeamsIndexRouteImport.update({
+    id: '/teams/',
+    path: '/teams/',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any);
+const AuthenticatedAdminReferenceDataIndexRoute =
+  AuthenticatedAdminReferenceDataIndexRouteImport.update({
+    id: '/reference-data/',
+    path: '/reference-data/',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any);
 const AuthenticatedAdminPeopleIndexRoute =
   AuthenticatedAdminPeopleIndexRouteImport.update({
     id: '/people/',
     path: '/people/',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any);
+const AuthenticatedAdminTeamsTeamIdRoute =
+  AuthenticatedAdminTeamsTeamIdRouteImport.update({
+    id: '/teams/$teamId',
+    path: '/teams/$teamId',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any);
+const AuthenticatedAdminReferenceDataListTypeRoute =
+  AuthenticatedAdminReferenceDataListTypeRouteImport.update({
+    id: '/reference-data/$listType',
+    path: '/reference-data/$listType',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any);
 const AuthenticatedAdminPeopleNewRoute =
@@ -100,7 +128,11 @@ export interface FileRoutesByFullPath {
   '/admin/people/$personId': typeof AuthenticatedAdminPeoplePersonIdRoute;
   '/admin/people/duplicates': typeof AuthenticatedAdminPeopleDuplicatesRoute;
   '/admin/people/new': typeof AuthenticatedAdminPeopleNewRoute;
+  '/admin/reference-data/$listType': typeof AuthenticatedAdminReferenceDataListTypeRoute;
+  '/admin/teams/$teamId': typeof AuthenticatedAdminTeamsTeamIdRoute;
   '/admin/people/': typeof AuthenticatedAdminPeopleIndexRoute;
+  '/admin/reference-data/': typeof AuthenticatedAdminReferenceDataIndexRoute;
+  '/admin/teams/': typeof AuthenticatedAdminTeamsIndexRoute;
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute;
@@ -113,7 +145,11 @@ export interface FileRoutesByTo {
   '/admin/people/$personId': typeof AuthenticatedAdminPeoplePersonIdRoute;
   '/admin/people/duplicates': typeof AuthenticatedAdminPeopleDuplicatesRoute;
   '/admin/people/new': typeof AuthenticatedAdminPeopleNewRoute;
+  '/admin/reference-data/$listType': typeof AuthenticatedAdminReferenceDataListTypeRoute;
+  '/admin/teams/$teamId': typeof AuthenticatedAdminTeamsTeamIdRoute;
   '/admin/people': typeof AuthenticatedAdminPeopleIndexRoute;
+  '/admin/reference-data': typeof AuthenticatedAdminReferenceDataIndexRoute;
+  '/admin/teams': typeof AuthenticatedAdminTeamsIndexRoute;
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport;
@@ -128,7 +164,11 @@ export interface FileRoutesById {
   '/_authenticated/admin/people/$personId': typeof AuthenticatedAdminPeoplePersonIdRoute;
   '/_authenticated/admin/people/duplicates': typeof AuthenticatedAdminPeopleDuplicatesRoute;
   '/_authenticated/admin/people/new': typeof AuthenticatedAdminPeopleNewRoute;
+  '/_authenticated/admin/reference-data/$listType': typeof AuthenticatedAdminReferenceDataListTypeRoute;
+  '/_authenticated/admin/teams/$teamId': typeof AuthenticatedAdminTeamsTeamIdRoute;
   '/_authenticated/admin/people/': typeof AuthenticatedAdminPeopleIndexRoute;
+  '/_authenticated/admin/reference-data/': typeof AuthenticatedAdminReferenceDataIndexRoute;
+  '/_authenticated/admin/teams/': typeof AuthenticatedAdminTeamsIndexRoute;
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
@@ -143,7 +183,11 @@ export interface FileRouteTypes {
     | '/admin/people/$personId'
     | '/admin/people/duplicates'
     | '/admin/people/new'
-    | '/admin/people/';
+    | '/admin/reference-data/$listType'
+    | '/admin/teams/$teamId'
+    | '/admin/people/'
+    | '/admin/reference-data/'
+    | '/admin/teams/';
   fileRoutesByTo: FileRoutesByTo;
   to:
     | '/'
@@ -156,7 +200,11 @@ export interface FileRouteTypes {
     | '/admin/people/$personId'
     | '/admin/people/duplicates'
     | '/admin/people/new'
-    | '/admin/people';
+    | '/admin/reference-data/$listType'
+    | '/admin/teams/$teamId'
+    | '/admin/people'
+    | '/admin/reference-data'
+    | '/admin/teams';
   id:
     | '__root__'
     | '/'
@@ -170,7 +218,11 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/people/$personId'
     | '/_authenticated/admin/people/duplicates'
     | '/_authenticated/admin/people/new'
-    | '/_authenticated/admin/people/';
+    | '/_authenticated/admin/reference-data/$listType'
+    | '/_authenticated/admin/teams/$teamId'
+    | '/_authenticated/admin/people/'
+    | '/_authenticated/admin/reference-data/'
+    | '/_authenticated/admin/teams/';
   fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
@@ -216,11 +268,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminRouteImport;
       parentRoute: typeof AuthenticatedRoute;
     };
+    '/_authenticated/admin/teams/': {
+      id: '/_authenticated/admin/teams/';
+      path: '/teams';
+      fullPath: '/admin/teams/';
+      preLoaderRoute: typeof AuthenticatedAdminTeamsIndexRouteImport;
+      parentRoute: typeof AuthenticatedAdminRoute;
+    };
+    '/_authenticated/admin/reference-data/': {
+      id: '/_authenticated/admin/reference-data/';
+      path: '/reference-data';
+      fullPath: '/admin/reference-data/';
+      preLoaderRoute: typeof AuthenticatedAdminReferenceDataIndexRouteImport;
+      parentRoute: typeof AuthenticatedAdminRoute;
+    };
     '/_authenticated/admin/people/': {
       id: '/_authenticated/admin/people/';
       path: '/people';
       fullPath: '/admin/people/';
       preLoaderRoute: typeof AuthenticatedAdminPeopleIndexRouteImport;
+      parentRoute: typeof AuthenticatedAdminRoute;
+    };
+    '/_authenticated/admin/teams/$teamId': {
+      id: '/_authenticated/admin/teams/$teamId';
+      path: '/teams/$teamId';
+      fullPath: '/admin/teams/$teamId';
+      preLoaderRoute: typeof AuthenticatedAdminTeamsTeamIdRouteImport;
+      parentRoute: typeof AuthenticatedAdminRoute;
+    };
+    '/_authenticated/admin/reference-data/$listType': {
+      id: '/_authenticated/admin/reference-data/$listType';
+      path: '/reference-data/$listType';
+      fullPath: '/admin/reference-data/$listType';
+      preLoaderRoute: typeof AuthenticatedAdminReferenceDataListTypeRouteImport;
       parentRoute: typeof AuthenticatedAdminRoute;
     };
     '/_authenticated/admin/people/new': {
@@ -275,7 +355,11 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminPeoplePersonIdRoute: typeof AuthenticatedAdminPeoplePersonIdRoute;
   AuthenticatedAdminPeopleDuplicatesRoute: typeof AuthenticatedAdminPeopleDuplicatesRoute;
   AuthenticatedAdminPeopleNewRoute: typeof AuthenticatedAdminPeopleNewRoute;
+  AuthenticatedAdminReferenceDataListTypeRoute: typeof AuthenticatedAdminReferenceDataListTypeRoute;
+  AuthenticatedAdminTeamsTeamIdRoute: typeof AuthenticatedAdminTeamsTeamIdRoute;
   AuthenticatedAdminPeopleIndexRoute: typeof AuthenticatedAdminPeopleIndexRoute;
+  AuthenticatedAdminReferenceDataIndexRoute: typeof AuthenticatedAdminReferenceDataIndexRoute;
+  AuthenticatedAdminTeamsIndexRoute: typeof AuthenticatedAdminTeamsIndexRoute;
 }
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
@@ -287,7 +371,13 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminPeopleDuplicatesRoute:
     AuthenticatedAdminPeopleDuplicatesRoute,
   AuthenticatedAdminPeopleNewRoute: AuthenticatedAdminPeopleNewRoute,
+  AuthenticatedAdminReferenceDataListTypeRoute:
+    AuthenticatedAdminReferenceDataListTypeRoute,
+  AuthenticatedAdminTeamsTeamIdRoute: AuthenticatedAdminTeamsTeamIdRoute,
   AuthenticatedAdminPeopleIndexRoute: AuthenticatedAdminPeopleIndexRoute,
+  AuthenticatedAdminReferenceDataIndexRoute:
+    AuthenticatedAdminReferenceDataIndexRoute,
+  AuthenticatedAdminTeamsIndexRoute: AuthenticatedAdminTeamsIndexRoute,
 };
 
 const AuthenticatedAdminRouteWithChildren =
