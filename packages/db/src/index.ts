@@ -11,8 +11,11 @@ import type {
   PlatformPersonMerge,
   PlatformRole,
   PlatformRoleGrant,
+  PlatformScheduledAction,
   PlatformTeam,
   PlatformTeamMembership,
+  PlatformWorkflowInstance,
+  PlatformWorkflowTransition,
   Session,
   User,
   Verification,
@@ -55,8 +58,11 @@ export type {
   PlatformPersonMerge,
   PlatformRole,
   PlatformRoleGrant,
+  PlatformScheduledAction,
   PlatformTeam,
   PlatformTeamMembership,
+  PlatformWorkflowInstance,
+  PlatformWorkflowTransition,
   Session,
   User,
   Verification,
@@ -132,3 +138,17 @@ export type TeamMembershipUpdate = Updateable<PlatformTeamMembership>;
 export type ConfigEntryRecord = Selectable<PlatformConfigEntry>;
 export type NewConfigEntry = Insertable<PlatformConfigEntry>;
 export type ConfigEntryUpdate = Updateable<PlatformConfigEntry>;
+
+// Workflow runtime & scheduled actions (core plan 07, ADR-0013). There is no
+// `WorkflowTransitionUpdate`: the transition log is append-only at the database
+// level, so a row is only ever inserted (ADR-0011).
+export type WorkflowInstanceRecord = Selectable<PlatformWorkflowInstance>;
+export type NewWorkflowInstance = Insertable<PlatformWorkflowInstance>;
+export type WorkflowInstanceUpdate = Updateable<PlatformWorkflowInstance>;
+
+export type WorkflowTransitionRecord = Selectable<PlatformWorkflowTransition>;
+export type NewWorkflowTransition = Insertable<PlatformWorkflowTransition>;
+
+export type ScheduledActionRecord = Selectable<PlatformScheduledAction>;
+export type NewScheduledAction = Insertable<PlatformScheduledAction>;
+export type ScheduledActionUpdate = Updateable<PlatformScheduledAction>;

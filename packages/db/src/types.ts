@@ -196,6 +196,27 @@ export interface PlatformRoleGrant {
   valid_until: Timestamp | null;
 }
 
+export interface PlatformScheduledAction {
+  action_type: string;
+  cancel_reason: string | null;
+  cancelled_at: Timestamp | null;
+  created_at: Generated<Timestamp>;
+  created_by: string | null;
+  deleted_at: Timestamp | null;
+  due_at: Timestamp;
+  enqueued_at: Timestamp | null;
+  executed_at: Timestamp | null;
+  id: string;
+  payload: Generated<Json>;
+  source: "workflow" | "manual" | "system";
+  status: Generated<"pending" | "enqueued" | "executed" | "cancelled">;
+  subject_stream_id: string | null;
+  subject_stream_type: string | null;
+  updated_at: Generated<Timestamp>;
+  updated_by: string | null;
+  workflow_instance_id: string | null;
+}
+
 export interface PlatformTeam {
   /**
    * Optional hex colour for calendar rendering (plan 12 colour-by-team; core plan 05 §12.2 Q7). NULL means the consumer falls back to its own per-kind colours.
@@ -224,6 +245,41 @@ export interface PlatformTeamMembership {
   updated_by: string;
   valid_from: string;
   valid_to: string | null;
+}
+
+export interface PlatformWorkflowInstance {
+  completed_at: Timestamp | null;
+  created_at: Generated<Timestamp>;
+  created_by: string;
+  current_state: string;
+  definition_version: number;
+  deleted_at: Timestamp | null;
+  id: string;
+  subject_stream_id: string;
+  subject_stream_type: string;
+  updated_at: Generated<Timestamp>;
+  updated_by: string | null;
+  workflow_key: string;
+}
+
+export interface PlatformWorkflowTransition {
+  action: string;
+  actor_person_id: string | null;
+  comment: string | null;
+  created_by: string | null;
+  effects: Generated<Json>;
+  from_state: string;
+  guard_results: Generated<Json>;
+  id: string;
+  instance_id: string;
+  occurred_at: Timestamp;
+  on_behalf_of: string | null;
+  recorded_at: Generated<Timestamp>;
+  /**
+   * The config: references this transition acted on, resolved as-at occurred_at (ADR-0016). Ids and primitive decision values only — never subject profile data (ADR-0019).
+   */
+  resolved_config: Generated<Json>;
+  to_state: string;
 }
 
 export interface RateLimit {
@@ -281,8 +337,11 @@ export interface DB {
   "platform.person_merge": PlatformPersonMerge;
   "platform.role": PlatformRole;
   "platform.role_grant": PlatformRoleGrant;
+  "platform.scheduled_action": PlatformScheduledAction;
   "platform.team": PlatformTeam;
   "platform.team_membership": PlatformTeamMembership;
+  "platform.workflow_instance": PlatformWorkflowInstance;
+  "platform.workflow_transition": PlatformWorkflowTransition;
   rate_limit: RateLimit;
   session: Session;
   user: User;
