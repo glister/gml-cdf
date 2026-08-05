@@ -31,6 +31,7 @@ export { loadGrantsForPerson } from './lib/grants-context.js';
  * web editor validates against the very same Zod schemas.
  */
 export * from './config/index.js';
+export * from './lib/config.js';
 
 export * from './schemas.js';
 export * from './lib/keyset.js';
