@@ -6,6 +6,7 @@ import { identityRouter } from './routers/platform/identity.js';
 import { journalRouter } from './routers/platform/journal.js';
 import { lookupRouter } from './routers/platform/lookup.js';
 import { teamRouter } from './routers/platform/team.js';
+import { workflowRouter } from './routers/platform/workflow.js';
 
 /**
  * Composition root: merge every feature router from `./routers/*` here.
@@ -20,6 +21,7 @@ export const appRouter = router({
     lookup: lookupRouter,
     team: teamRouter,
     config: configRouter,
+    workflow: workflowRouter,
   }),
 });
 

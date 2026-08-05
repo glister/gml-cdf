@@ -910,6 +910,9 @@ importers:
       '@repo/identity':
         specifier: workspace:*
         version: link:../identity
+      '@repo/workflow':
+        specifier: workspace:*
+        version: link:../workflow
       '@trpc/server':
         specifier: ^11.0.0
         version: 11.18.0(typescript@5.9.3)

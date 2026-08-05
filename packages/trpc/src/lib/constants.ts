@@ -148,3 +148,28 @@ export type TeamSort = (typeof TEAM_SORTS)[number];
  */
 export const CONFIG_SORTS = ['key', 'updated_at'] as const;
 export type ConfigSort = (typeof CONFIG_SORTS)[number];
+
+// --- Workflow runtime & scheduled actions (core plan 07, ADR-0013) ----------
+
+/**
+ * Sort columns for the instance list. `updated_at` is the useful default for an
+ * operator ("what moved recently?"); `created_at` answers "what has been open
+ * longest?".
+ */
+export const WORKFLOW_INSTANCE_SORTS = ['created_at', 'updated_at'] as const;
+export type WorkflowInstanceSort = (typeof WORKFLOW_INSTANCE_SORTS)[number];
+
+/**
+ * `platform.scheduled_action.status`. Mirrors the CHECK constraint and the
+ * inlined literals in `.kysely-codegenrc.json`.
+ */
+export const SCHEDULED_ACTION_STATUSES = ['pending', 'enqueued', 'executed', 'cancelled'] as const;
+export type ScheduledActionStatus = (typeof SCHEDULED_ACTION_STATUSES)[number];
+
+/** Who created a timer. Mirrors `platform.scheduled_action.source`. */
+export const SCHEDULED_ACTION_SOURCES = ['workflow', 'manual', 'system'] as const;
+export type ScheduledActionSource = (typeof SCHEDULED_ACTION_SOURCES)[number];
+
+/** Sort columns for the timers table. Due date is what an operator scans by. */
+export const SCHEDULED_ACTION_SORTS = ['due_at', 'created_at'] as const;
+export type ScheduledActionSort = (typeof SCHEDULED_ACTION_SORTS)[number];

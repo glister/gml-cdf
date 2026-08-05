@@ -53,6 +53,13 @@ export {
   type RevokedGrantSummary,
 } from './authz.js';
 export type { DB } from './types.js';
+/**
+ * The generated jsonb/timestamp aliases. Re-exported because a router selecting
+ * a `jsonb` column would otherwise infer a type that can only be named through
+ * `@repo/db/src/types.js` — a deep path TypeScript rightly calls unportable
+ * (TS2742). Naming them here keeps consumers on the package's public surface.
+ */
+export type { Json, JsonArray, JsonObject, JsonPrimitive, JsonValue, Timestamp } from './types.js';
 export type {
   Account,
   PlatformConfigEntry,
