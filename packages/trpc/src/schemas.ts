@@ -25,6 +25,14 @@ import {
  * Flat module of Zod input/output schemas + inferred types. Enums are derived
  * from the constant tuples in `./lib/constants.ts`. Every router pulls its
  * validators from here.
+ *
+ * **Exported as the `@repo/trpc/schemas` subpath, and that is how clients must
+ * import it.** A form validating with a shared schema needs the Zod object at
+ * *runtime*, and reaching it through the package root would pull in the router —
+ * and therefore `@trpc/server` — landing "You're trying to use @trpc/server in a
+ * non-server environment" in the browser. This module imports nothing but Zod
+ * and the constant tuples, so the subpath is safe in any bundle. The root export
+ * stays type-only on the client (`import type { AppRouter }`).
  */
 
 export const sortDirEnum = z.enum(SORT_DIRECTIONS);

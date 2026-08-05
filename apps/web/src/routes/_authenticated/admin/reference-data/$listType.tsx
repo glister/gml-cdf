@@ -54,12 +54,16 @@ type SortKey = 'sort_order' | 'label' | 'updated_at';
 /**
  * Form-shaped schemas, mirroring the wire schemas in `@repo/trpc/schemas`.
  *
- * They are restated rather than imported for two reasons. The shapes genuinely
- * differ — a cleared optional field is `''` in a controlled input, not
- * `undefined` — and, decisively, `@repo/trpc`'s schema module reaches
- * `@repo/db` through the field-classification helpers, so importing it here
- * would pull the Postgres driver into the browser bundle. The server schema
- * remains the authority; these only stop an obviously-invalid form being sent.
+ * They are restated rather than imported because the shapes genuinely differ: a
+ * cleared optional field is `''` in a controlled input, not `undefined`. The
+ * server schema remains the authority; these only stop an obviously-invalid form
+ * being sent.
+ *
+ * (This note used to give a second reason — that `@repo/trpc`'s schema module
+ * reached `@repo/db` and would drag the Postgres driver into the browser bundle.
+ * Core plan 07 fixed that: `schemas.ts` is now free of `@repo/db` and exported
+ * as the `@repo/trpc/schemas` subpath, so a form that wants the wire schema
+ * verbatim may import it.)
  *
  * Keep the code pattern in step with `lookupCodeSchema` and the
  * `lookup_code_format_check` CHECK — it is what migrations and integrations key

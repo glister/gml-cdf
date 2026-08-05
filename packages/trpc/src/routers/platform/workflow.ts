@@ -58,6 +58,22 @@ function requireActor(ctx: TRPCContext): string {
   return ctx.actorPersonId;
 }
 
+/**
+ * A `jsonb` column, flattened to a plain object for the wire.
+ *
+ * `@repo/db`'s generated `Json` alias is recursive. That is correct for the
+ * database layer, but a recursive type inside a router's *inferred output* is
+ * something TanStack Table's column typing cannot instantiate on the client
+ * (TS2589) — so the timers list would be untypeable in the very screen it
+ * exists for. Payloads here are ids and primitives, rendered as text, so a flat
+ * object loses nothing.
+ */
+function asJsonObject(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
 /** The runtime's failure codes, mapped to the tRPC vocabulary. */
 const TRPC_CODE: Record<
   TransitionFailureCode,
@@ -200,6 +216,27 @@ export const workflowRouter = router({
       .orderBy('t.id')
       .execute();
 
+    // The three `jsonb` columns are widened to `unknown` on the wire, for the
+    // reason `asJsonObject` documents: a recursive type in the inferred output
+    // is unusable on the client. Each has a different shape, so the client
+    // narrows them itself (`~/lib/workflow`) — which it would have to do
+    // regardless, since these columns are deliberately schema-less in SQL.
+    const transitionDtos = transitions.map((t) => ({
+      id: t.id,
+      fromState: t.from_state,
+      toState: t.to_state,
+      action: t.action,
+      actorPersonId: t.actor_person_id,
+      actorName: t.actor_name,
+      onBehalfOf: t.on_behalf_of,
+      comment: t.comment,
+      guardResults: t.guard_results as unknown,
+      resolvedConfig: t.resolved_config as unknown,
+      effects: t.effects as unknown,
+      occurredAt: t.occurred_at,
+      recordedAt: t.recorded_at,
+    }));
+
     // Timers for the case, so the detail view can answer "what happens next if
     // nobody acts?" without a second round trip.
     const timers = await ctx.db
@@ -209,7 +246,7 @@ export const workflowRouter = router({
       .orderBy('due_at')
       .execute();
 
-    return { instance, transitions, timers };
+    return { instance, transitions: transitionDtos, timers };
   }),
 
   /** Keyset-paginated instance list; every facet applied in SQL (ADR-0004). */
@@ -329,7 +366,13 @@ export const workflowRouter = router({
       const items = hasMore ? rows.slice(0, input.limit) : rows;
       const last = items.at(-1);
       const nextCursor = hasMore && last ? encodeCursor({ key: last.sort_key, id: last.id }) : null;
-      return { items: items.map(({ sort_key: _sk, ...rest }) => rest), nextCursor };
+      return {
+        items: items.map(({ sort_key: _sk, payload, ...rest }) => ({
+          ...rest,
+          payload: asJsonObject(payload),
+        })),
+        nextCursor,
+      };
     }),
 
   /**

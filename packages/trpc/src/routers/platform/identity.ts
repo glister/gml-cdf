@@ -25,7 +25,8 @@ import {
 } from '@repo/identity';
 import { protectedProcedure, roleProcedure, router, type TRPCContext } from '../../trpc.js';
 import { externalAccessDefaultDays, getConfig } from '@repo/config';
-import { ceilingForRoles, journalSpecialCategoryRead } from '../../lib/field-classification.js';
+import { ceilingForRoles } from '../../lib/field-classification.js';
+import { journalSpecialCategoryRead } from '../../lib/special-category-journal.js';
 import { scopeFor, scopePersons } from '../../lib/scope.js';
 import { personFlagClassification } from '../../schemas.js';
 import {

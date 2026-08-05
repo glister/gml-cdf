@@ -43,3 +43,4 @@ export * from './lib/keyset.js';
 export * from './lib/constants.js';
 export * from './lib/scope.js';
 export * from './lib/field-classification.js';
+export * from './lib/special-category-journal.js';

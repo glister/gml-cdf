@@ -212,10 +212,10 @@ describe('get — the case history', () => {
     expect(result.instance.started_by_name).toBe('Workflow Admin');
     expect(result.transitions).toHaveLength(1);
     expect(result.transitions[0]).toMatchObject({
-      from_state: 'pending',
-      to_state: 'approved',
+      fromState: 'pending',
+      toState: 'approved',
       action: 'approve',
-      actor_name: 'Workflow Admin',
+      actorName: 'Workflow Admin',
     });
     // The expiry timer, auto-cancelled when the case completed.
     expect(result.timers).toHaveLength(1);
