@@ -1,6 +1,7 @@
 import type { Insertable, Selectable, Updateable } from 'kysely';
 import type {
   Account,
+  PlatformConfigEntry,
   PlatformDomainEvent,
   PlatformEventConsumption,
   PlatformLookup,
@@ -44,6 +45,7 @@ export {
 export type { DB } from './types.js';
 export type {
   Account,
+  PlatformConfigEntry,
   PlatformDomainEvent,
   PlatformEventConsumption,
   PlatformLookup,
@@ -124,3 +126,9 @@ export type TeamUpdate = Updateable<PlatformTeam>;
 export type TeamMembershipRecord = Selectable<PlatformTeamMembership>;
 export type NewTeamMembership = Insertable<PlatformTeamMembership>;
 export type TeamMembershipUpdate = Updateable<PlatformTeamMembership>;
+
+// Configuration store (core plan 06, ADR-0016). `ConfigEntryUpdate` covers only
+// the supersede stamp — the close-only guard rejects every other UPDATE.
+export type ConfigEntryRecord = Selectable<PlatformConfigEntry>;
+export type NewConfigEntry = Insertable<PlatformConfigEntry>;
+export type ConfigEntryUpdate = Updateable<PlatformConfigEntry>;

@@ -1,6 +1,8 @@
 import type { z } from 'zod';
 import type { EventDefinition } from './define.js';
 import {
+  platformConfigEntryChanged,
+  platformConfigEntryReset,
   platformDataSpecialCategoryAccessed,
   platformDemoPinged,
   platformLookupValueCreated,
@@ -84,6 +86,9 @@ export const eventTypes = {
   'platform.team.membership.added': platformTeamMembershipAdded,
   'platform.team.membership.ended': platformTeamMembershipEnded,
   'platform.team.membership.corrected': platformTeamMembershipCorrected,
+  // Configuration store (core plan 06, PL-029/030, kind='admin').
+  'platform.config_entry.changed': platformConfigEntryChanged,
+  'platform.config_entry.reset': platformConfigEntryReset,
 } as const;
 
 /** The union of all registered event-type names. */

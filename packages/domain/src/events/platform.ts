@@ -456,3 +456,66 @@ export const platformTeamMembershipCorrected = defineEvent(
     validTo: delta(z.iso.date().nullable()).optional(),
   }),
 );
+
+// --- Configuration store (core plan 06, PL-029/030, kind='admin') ------------
+//
+// Changing a decision point is administrative configuration of the system, so
+// both events are `kind='admin'` on `stream_type='platform.config_entry'`,
+// appended in the same transaction as the supersede (ADR-0010, PL-030). Plan
+// 13's audit view renders them as "who changed what, when".
+//
+// **Values travel in the payload, and that is safe by construction.** ADR-0019
+// bans personal data from payloads; §4.5 of the plan bans it from config values
+// in the first place — a value may hold thresholds, cadences, role codes and
+// dates, never a person. So carrying old and new here makes the audit view
+// self-contained without a second read, and the registry's `sensitiveValue`
+// flag exists to suppress them should an exception ever be justified.
+//
+// The name is `platform.config_entry.*`, not `platform.config.*` as the plan's
+// §4.2 first sketched: ADR-0021 derives the entity segment from the table, and
+// `stream_type` is the `<module>.<entity>` prefix of the event type — a
+// `platform.config.changed` on `stream_type='platform.config_entry'` would be
+// the one place in the system where those two disagreed (write-back 2026-08-05).
+
+const configNamespace = z.string().max(200);
+const configKeyName = z.string().max(100);
+/** A config value: any JSON the key's registered Zod schema accepts. */
+const configValue = z.json();
+
+/**
+ * A key's value was set or superseded. `fromVersion` is null on the first-ever
+ * entry for a key, where the predecessor is the frozen code default rather than
+ * a row — which is exactly the distinction the audit view needs to render
+ * "default → 45" differently from "90 → 45".
+ */
+export const platformConfigEntryChanged = defineEvent(
+  'platform.config_entry.changed',
+  1,
+  z.strictObject({
+    namespace: configNamespace,
+    key: configKeyName,
+    fromVersion: z.number().int().nullable(),
+    toVersion: z.number().int(),
+    oldValue: configValue.optional(),
+    newValue: configValue.optional(),
+    validFrom: z.iso.datetime(),
+  }),
+);
+
+/**
+ * A key was reverted to its registered code default: the open row was closed
+ * with no successor. Distinct from `changed` because there is no successor
+ * version to point at, and because "reverted to default" is the fact an auditor
+ * is looking for — reconstructing it from an absence of rows would not do.
+ */
+export const platformConfigEntryReset = defineEvent(
+  'platform.config_entry.reset',
+  1,
+  z.strictObject({
+    namespace: configNamespace,
+    key: configKeyName,
+    closedVersion: z.number().int(),
+    oldValue: configValue.optional(),
+    defaultValue: configValue.optional(),
+  }),
+);
