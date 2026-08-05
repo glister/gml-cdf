@@ -37,7 +37,9 @@ export {
   eventDefinition,
   isEventType,
   platformDemoPinged,
+  workflowTransitionedPayload,
   type EventDefinition,
   type EventType,
   type EventPayload,
 } from './events/index.js';
+export * from './workflow/index.js';

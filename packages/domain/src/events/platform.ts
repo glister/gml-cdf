@@ -519,3 +519,119 @@ export const platformConfigEntryReset = defineEvent(
     defaultValue: configValue.optional(),
   }),
 );
+
+// --- Workflow runtime & scheduled actions (core plan 07, ADR-0013) -----------
+//
+// Every state change a workflow makes is journalled in the same transaction as
+// the state write (ADR-0010), which is what makes the runtime auditable, the
+// module-decoupling rail real, and the reporting feed complete.
+//
+// **The generic events stream on the instance, not on the subject** — that is a
+// correction to the plan's §4.2, made in build. ADR-0021 fixes `stream_type` as
+// the event type's `<module>.<entity>` prefix, so a `platform.workflow.*` type
+// journalled against `stream_type='hr.leave_booking'` would break the one
+// pairing rule the grammar exists to guarantee. Instead:
+//
+//  - the **generic** types are `platform.workflow_instance.*` on
+//    `stream_type='platform.workflow_instance'`, `stream_id=<instance id>`, and
+//    carry the subject as payload fields so consumers can still fan out by it;
+//  - a definition that wants the fact to land on the subject's own timeline
+//    declares `emits` (e.g. `hr.leave_booking.approved`), and the runtime
+//    enforces that the declared type's `<module>.<entity>` prefix equals the
+//    instance's `subject_stream_type` — so the ADR-0021 pairing holds there too,
+//    by construction rather than by convention.
+//
+// Payloads carry ids, keys and state names only. A definition or effect whose
+// params embed subject profile data is a review-blocking defect (ADR-0019), and
+// the strict schemas here are the structural half of that rule.
+
+/** A journal stream name, `<module>.<entity>` (ADR-0021). */
+const streamTypeName = z.string().max(100);
+/** An effect fanned onto the `effects` queue — registry name plus ids-only params. */
+const effectRef = z.strictObject({
+  name: z.string().min(1).max(100),
+  params: z.record(z.string(), z.json()).optional(),
+});
+
+/**
+ * The payload shape shared by the generic `transitioned` event and by every
+ * domain-specific `emits` override (§4.2: "the same payload shape, instead of
+ * the generic type"). Exported so a consuming plan registers its override with
+ * this schema rather than inventing a divergent one — and so the outbox relay
+ * can read `payload.effects` from any of them (§5.4).
+ */
+export const workflowTransitionedPayload = z.strictObject({
+  workflowKey: z.string().max(200),
+  definitionVersion: z.number().int().min(1),
+  subjectStreamType: streamTypeName,
+  subjectStreamId: z.uuid(),
+  from: z.string().max(100),
+  to: z.string().max(100),
+  action: z.string().max(100),
+  /** Names of the soft guards that warned; details live on the transition row. */
+  guardWarnings: z.array(z.string().max(100)),
+  /** What the relay fans onto the `effects` queue (§5.4). */
+  effects: z.array(effectRef),
+  /** True when `to` is terminal — the instance completed with this transition. */
+  completed: z.boolean(),
+});
+
+/** An instance was created and entered its initial state. */
+export const platformWorkflowInstanceStarted = defineEvent(
+  'platform.workflow_instance.started',
+  1,
+  z.strictObject({
+    workflowKey: z.string().max(200),
+    definitionVersion: z.number().int().min(1),
+    subjectStreamType: streamTypeName,
+    subjectStreamId: z.uuid(),
+    initialState: z.string().max(100),
+  }),
+);
+
+/**
+ * A named transition was taken. The default event for every transition whose
+ * definition declares no `emits` override — one event per transition, never two.
+ */
+export const platformWorkflowInstanceTransitioned = defineEvent(
+  'platform.workflow_instance.transitioned',
+  1,
+  workflowTransitionedPayload,
+);
+
+/**
+ * A timer was created. Journalled so the activity trail explains *why* something
+ * fired later, which a `scheduled_action` row alone cannot (it is mutable
+ * operational state — ADR-0012 puts its history here).
+ */
+export const platformScheduledActionScheduled = defineEvent(
+  'platform.scheduled_action.scheduled',
+  1,
+  z.strictObject({
+    actionType: z.string().max(200),
+    dueAt: z.iso.datetime(),
+    workflowInstanceId: z.uuid().nullable(),
+    subjectStreamType: streamTypeName.nullable(),
+    subjectStreamId: z.uuid().nullable(),
+    source: z.enum(['workflow', 'manual', 'system']),
+  }),
+);
+
+/**
+ * A pending timer was cancelled — by an administrator, or automatically when the
+ * instance reached a terminal state (the "a human got there before the chaser"
+ * case, §5.2 step 6).
+ *
+ * There is no matching `executed` event by design: the effect a timer fires
+ * produces its own business fact, and journalling the mechanics as well would
+ * double-count it in the activity trail. `executed_at` on the row records it.
+ */
+export const platformScheduledActionCancelled = defineEvent(
+  'platform.scheduled_action.cancelled',
+  1,
+  z.strictObject({
+    actionType: z.string().max(200),
+    reason: z.string().min(1).max(500),
+    workflowInstanceId: z.uuid().nullable(),
+  }),
+);

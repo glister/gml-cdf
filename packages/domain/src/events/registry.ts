@@ -30,12 +30,16 @@ import {
   platformPersonSignedIn,
   platformRoleGranted,
   platformRoleRevoked,
+  platformScheduledActionCancelled,
+  platformScheduledActionScheduled,
   platformTeamArchived,
   platformTeamCreated,
   platformTeamMembershipAdded,
   platformTeamMembershipCorrected,
   platformTeamMembershipEnded,
   platformTeamUpdated,
+  platformWorkflowInstanceStarted,
+  platformWorkflowInstanceTransitioned,
 } from './platform.js';
 
 /**
@@ -89,6 +93,11 @@ export const eventTypes = {
   // Configuration store (core plan 06, PL-029/030, kind='admin').
   'platform.config_entry.changed': platformConfigEntryChanged,
   'platform.config_entry.reset': platformConfigEntryReset,
+  // Workflow runtime & scheduled actions (core plan 07, ADR-0013).
+  'platform.workflow_instance.started': platformWorkflowInstanceStarted,
+  'platform.workflow_instance.transitioned': platformWorkflowInstanceTransitioned,
+  'platform.scheduled_action.scheduled': platformScheduledActionScheduled,
+  'platform.scheduled_action.cancelled': platformScheduledActionCancelled,
 } as const;
 
 /** The union of all registered event-type names. */
