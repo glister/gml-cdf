@@ -55,6 +55,12 @@ jobs:
     permissions:
       id-token: write # OIDC federated login to Azure
       contents: read
+    outputs:
+      resource_group: ${{ steps.pg.outputs.resource_group }}
+      server_name: ${{ steps.pg.outputs.server_name }}
+      fqdn: ${{ steps.pg.outputs.fqdn }}
+      database: ${{ steps.pg.outputs.database }}
+      admin_login: ${{ steps.pg.outputs.admin_login }}
     defaults:
       run:
         working-directory: terraform
@@ -111,3 +117,112 @@ jobs:
 
       - name: Apply
         run: terraform apply -auto-approve tfplan
+
+      # Hand the connection details to `migrate` rather than making it re-init
+      # the remote state. None of these is a secret: server name, FQDN, database
+      # and admin login are all non-sensitive Terraform outputs.
+      - name: Export Postgres coordinates
+        id: pg
+        run: |
+          {
+            echo "resource_group=$(terraform output -raw resource_group_name)"
+            echo "server_name=$(terraform output -raw postgres_server_name)"
+            echo "fqdn=$(terraform output -raw postgres_fqdn)"
+            echo "database=$(terraform output -raw postgres_database_name)"
+            echo "admin_login=$(terraform output -raw postgres_admin_login)"
+          } >> "$GITHUB_OUTPUT"
+
+  # Apply the Kysely migrations to the environment `deploy` just provisioned.
+  #
+  # **Ordering is the reason this lives here rather than in its own workflow.**
+  # It must run after `terraform apply`, because a migration can depend on
+  # infrastructure the apply creates — core plan 05's team migration needs
+  # `btree_gist`, and Azure refuses `CREATE EXTENSION` until the
+  # `azure.extensions` server parameter allow-lists it. Running these in the
+  # wrong order fails, confusingly, inside a SQL file.
+  #
+  # **Network access is bought for the duration and handed back.** The server is
+  # public with only the "allow Azure services" firewall rule (`0.0.0.0`), which
+  # a GitHub-hosted runner is not reliably covered by. So the job opens a rule
+  # for its own egress IP, migrates, and always removes it — including on
+  # failure or cancellation. If Postgres later moves behind a VNet this approach
+  # stops working entirely and the migration has to run from inside Azure (a
+  # Container Apps job) or a self-hosted runner in the VNet.
+  migrate:
+    needs: deploy
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # OIDC federated login to Azure
+      contents: read
+    env:
+      # Via `env` rather than interpolated into `run:` blocks — an expression
+      # expanded straight into a shell script is a template-injection seam, and
+      # the workflow-lint gate audits for it.
+      PG_SERVER_NAME: ${{ needs.deploy.outputs.server_name }}
+      PG_RESOURCE_GROUP: ${{ needs.deploy.outputs.resource_group }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # The migrator runs from TypeScript source via tsx (@repo/db is
+      # source-only), so the workspace install is the build step.
+      - run: pnpm install --frozen-lockfile
+
+      # A fixed, greppable name so a rule leaked by a hard-killed runner is
+      # findable and sweepable, rather than accumulating anonymously.
+      - name: Open a firewall window for this runner
+        id: firewall
+        run: |
+          ip="$(curl -fsS --retry 3 https://api.ipify.org)"
+          rule="ci-migrate-${GITHUB_RUN_ID}"
+          echo "rule=$rule" >> "$GITHUB_OUTPUT"
+          az postgres flexible-server firewall-rule create \
+            --resource-group "$PG_RESOURCE_GROUP" \
+            --name "$PG_SERVER_NAME" \
+            --rule-name "$rule" \
+            --start-ip-address "$ip" \
+            --end-ip-address "$ip" \
+            --output none
+          echo "Opened $rule for $ip"
+
+      - name: Run migrations
+        env:
+          POSTGRES_HOST: ${{ needs.deploy.outputs.fqdn }}
+          POSTGRES_PORT: '5432'
+          POSTGRES_DB: ${{ needs.deploy.outputs.database }}
+          POSTGRES_USER: ${{ needs.deploy.outputs.admin_login }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          # Flexible Server sets require_secure_transport = ON; without this the
+          # connection is refused outright.
+          POSTGRES_SSL: 'true'
+        run: pnpm --filter @repo/db migrate:ci
+
+      # `always()` so a failed migration — or a cancelled run — still closes the
+      # window it opened. This is the step that keeps the exposure bounded.
+      - name: Close the firewall window
+        if: always() && steps.firewall.outputs.rule != ''
+        env:
+          RULE_NAME: ${{ steps.firewall.outputs.rule }}
+        run: |
+          az postgres flexible-server firewall-rule delete \
+            --resource-group "$PG_RESOURCE_GROUP" \
+            --name "$PG_SERVER_NAME" \
+            --rule-name "$RULE_NAME" \
+            --yes --output none
+          echo "Closed $RULE_NAME"
