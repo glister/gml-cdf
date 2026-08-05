@@ -309,6 +309,88 @@ resource "azurerm_container_app_job" "identity_sweeps" {
   }
 }
 
+# SCHEDULER — the DB-backed timer drain (core plan 07 §5.5, WF-8).
+#
+# ADR-0013 chose `platform.scheduled_action` rows over broker-scheduled messages
+# so pending timers are queryable, amendable and cancellable in SQL. The price is
+# something that wakes up and drains what has come due — this Job, on the same
+# worker image (one build, one dependency set, `@repo/workflow` shared with the
+# code that creates the timers).
+#
+# A **Job, not a KEDA-scaled app**: the work is a short batch, not a listener.
+# Every five minutes bounds firing latency at ~5 minutes, which every Phase 1
+# cadence tolerates because they are all day-granular (fit-note chase at day 7,
+# probation lead times, access expiry). Cadence and alerting on an overrun are
+# core plan 07 §12.2 Q5, open with CDF.
+#
+# Overlapping runs are safe: the drain claims rows `FOR UPDATE SKIP LOCKED`, so a
+# run that starts before its predecessor finishes takes different rows rather
+# than blocking on or double-picking them. `parallelism = 1` keeps a single
+# replica per trigger regardless.
+#
+# Unlike the identity-sweeps Job this one reads and writes Postgres, so it takes
+# the full app environment rather than the Service Bus connection alone.
+resource "azurerm_container_app_job" "scheduler" {
+  name                         = "${var.project}-${var.environment}-scheduler"
+  container_app_environment_id = azurerm_container_app_environment.this.id
+  resource_group_name          = var.resource_group_name
+  location                     = var.location
+  tags                         = var.tags
+
+  replica_timeout_in_seconds = 300
+  replica_retry_limit        = 1
+
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [var.identity_id]
+  }
+
+  registry {
+    server   = var.acr_login_server
+    identity = var.identity_id
+  }
+
+  dynamic "secret" {
+    for_each = local.app_secrets
+    content {
+      name                = secret.key
+      key_vault_secret_id = secret.value
+      identity            = var.identity_id
+    }
+  }
+
+  schedule_trigger_config {
+    cron_expression          = "*/5 * * * *"
+    parallelism              = 1
+    replica_completion_count = 1
+  }
+
+  template {
+    container {
+      name    = "scheduler"
+      image   = "${var.acr_login_server}/worker:${var.image_tag}"
+      cpu     = 0.25
+      memory  = "0.5Gi"
+      command = ["node", "dist/scheduler.js"]
+
+      dynamic "env" {
+        for_each = local.common_env
+        content {
+          name  = env.key
+          value = env.value
+        }
+      }
+      dynamic "env" {
+        for_each = local.secret_env
+        content {
+          name        = env.key
+          secret_name = env.value
+        }
+      }
+    }
+  }
+}
+
 output "api_fqdn" {
   value = azurerm_container_app.api.ingress[0].fqdn
 }
@@ -317,17 +399,13 @@ output "web_fqdn" {
   value = azurerm_container_app.web.ingress[0].fqdn
 }
 
-# --- Custom-domain inputs (consumed by modules/dns-and-certs) --------------
+# --- Custom-domain inputs -------------------------------------------------
+# `environment_id` and the app ids feed modules/custom-domains; the fqdns and
+# verification ids feed the root `dns_records_required` output, which tells the
+# operator what to create by hand at Krystal.
 
 output "environment_id" {
   value = azurerm_container_app_environment.this.id
-}
-
-# The environment's public inbound IP. Every app in the environment answers on
-# it, which is what makes an apex A record possible — a zone apex cannot hold a
-# CNAME, so `connect.cdfencing.co.uk` points here rather than at an app FQDN.
-output "environment_static_ip" {
-  value = azurerm_container_app_environment.this.static_ip_address
 }
 
 output "api_id" {

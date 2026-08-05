@@ -1,3 +1,5 @@
+import type { ModuleKey } from '../authz/roles.js';
+
 /**
  * The declarative workflow definition model (core plan 07 §5.1, ADR-0013).
  *
@@ -129,6 +131,15 @@ export interface WorkflowDefinition<S extends string = string> {
   readonly key: string;
   /** Integer ≥ 1. Bump on any shape change; running instances stay pinned. */
   readonly version: number;
+  /**
+   * The grant scope a `by` policy resolves against (core plan 04 §5.1). Role
+   * grants are per-module and matched **exactly** — there is no wildcard — so a
+   * workflow must say which functional area it belongs to or its `by` check
+   * would have nothing to check against. `'platform'` for shared-service
+   * shapes; `'hr.holiday_leave'`, `'hr.er'` and so on for HR ones, which is
+   * what keeps the deliberately restricted areas restricted.
+   */
+  readonly module: ModuleKey;
   readonly states: readonly S[];
   readonly initial: S;
   /** Entering one sets `completed_at` and cancels the instance's pending timers. */

@@ -18,6 +18,7 @@ function base(overrides: Partial<WorkflowDefinition> = {}): WorkflowDefinition {
   return {
     key: 'platform.test.shape',
     version: 1,
+    module: 'platform',
     states: ['open', 'closed'],
     initial: 'open',
     terminal: ['closed'],

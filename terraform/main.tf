@@ -54,12 +54,19 @@ module "service_bus" {
 
   # The domain-event journal relay (core plan 02 §5.2) publishes to the
   # domain-events topic; Phase 1 has the single pilot-demo subscription (later
-  # plans/modules add their own). The `effects` queue carries scheduled command
-  # messages (core plan 03 §5.2 — the identity sweeps); plan 07's scheduled-action
-  # mechanism will own it later, but this plan lands it now (see §5.2 sequencing).
+  # plans/modules add their own). The `effects` queue carries everything the
+  # platform does *after* a fact commits: the effects a transition fans out via
+  # the relay, the timers the scheduler drains (core plan 07 §5.4), and core
+  # plan 03's daily identity sweeps.
   queues        = ["hello-world", "effects"]
   topics        = ["domain-events"]
   subscriptions = { "pilot-demo" = "domain-events" }
+
+  # Effect MessageIds are deterministic, so a replayed relay batch or a
+  # scheduler re-send after a crash collapses into one delivery inside this
+  # window. It is the first idempotency layer only — the window expires, and
+  # every handler carries its own guard (core plan 07 §5.4).
+  duplicate_detection_queues = { effects = "PT10M" }
 
   tags = local.tags
 }
@@ -139,33 +146,27 @@ module "container_apps" {
   tags = local.tags
 }
 
-# Custom domains. Gated on `dns_zone_name` so an environment without a delegated
-# zone still applies cleanly and keeps its generated *.azurecontainerapps.io
-# hostnames. The hostnames come from app_url/api_url so there is one source of
-# truth: what the app believes it is called is what gets bound and certificated.
-module "dns_and_certs" {
-  source = "./modules/dns-and-certs"
-  count  = var.dns_zone_name == "" ? 0 : 1
+# Custom domains. DNS lives at Krystal and is created by hand (see
+# `terraform output dns_records_required`); Terraform owns only the certificates
+# and bindings, and stays inert until those records resolve. Hostnames come from
+# app_url/api_url so there is one source of truth: what the app believes it is
+# called is what gets bound and certificated.
+module "custom_domains" {
+  source = "./modules/custom-domains"
+  count  = var.enable_custom_domains ? 1 : 0
 
-  dns_zone_name                       = var.dns_zone_name
-  resource_group_name                 = azurerm_resource_group.this.name
-  container_app_environment_id        = module.container_apps.environment_id
-  container_app_environment_static_ip = module.container_apps.environment_static_ip
-  enable_bindings                     = var.enable_custom_domain_bindings
-  tags                                = local.tags
+  container_app_environment_id = module.container_apps.environment_id
+  dns_parent_zone              = var.dns_parent_zone
+  tags                         = local.tags
 
   bindings = {
     web = {
       container_app_id = module.container_apps.web_id
       hostname         = local.web_hostname
-      ingress_fqdn     = module.container_apps.web_fqdn
-      verification_id  = module.container_apps.web_custom_domain_verification_id
     }
     api = {
       container_app_id = module.container_apps.api_id
       hostname         = local.api_hostname
-      ingress_fqdn     = module.container_apps.api_fqdn
-      verification_id  = module.container_apps.api_custom_domain_verification_id
     }
   }
 }

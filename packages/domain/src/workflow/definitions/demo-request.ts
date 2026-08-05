@@ -25,6 +25,7 @@ import { DEMO_APPROVER_ROLE_REF, DEMO_EXPIRY_HOURS_REF } from '../demo-config-ke
 export const demoRequestV1 = defineWorkflow({
   key: 'platform.demo.request',
   version: 1,
+  module: 'platform',
   states: ['pending', 'approved', 'rejected'],
   initial: 'pending',
   terminal: ['approved', 'rejected'],

@@ -36,16 +36,38 @@ output "key_vault_uri" {
   value = module.key_vault.uri
 }
 
-# Phase 1 of the custom-domain rollout: the name servers to delegate to at the
-# registrar. Empty until `dns_zone_name` is set. See runbook §11.
-output "dns_name_servers" {
-  value = try(module.dns_and_certs[0].name_servers, [])
-}
-
-output "dns_zone_name" {
-  value = try(module.dns_and_certs[0].zone_name, "")
+# The records to create by hand in the Krystal panel before flipping
+# `enable_custom_domains` to true. Available from the first apply onward — it is
+# derived from the apps, not from the custom-domains module, so it does not
+# depend on the flag it exists to unblock. See runbook §11.
+#
+# `host` is the name relative to the `cdfencing.co.uk` zone, which is how
+# Krystal's panel asks for it; entering the FQDN instead usually results in a
+# doubled suffix.
+output "dns_records_required" {
+  description = "CNAME + asuid TXT records to create at Krystal for the custom domains."
+  value = [
+    for r in [
+      {
+        app             = "web"
+        hostname        = local.web_hostname
+        cname_target    = module.container_apps.web_fqdn
+        verification_id = module.container_apps.web_custom_domain_verification_id
+      },
+      {
+        app             = "api"
+        hostname        = local.api_hostname
+        cname_target    = module.container_apps.api_fqdn
+        verification_id = module.container_apps.api_custom_domain_verification_id
+      },
+      ] : {
+      app   = r.app
+      cname = { host = trimsuffix(r.hostname, ".${var.dns_parent_zone}"), value = r.cname_target }
+      txt   = { host = "asuid.${trimsuffix(r.hostname, ".${var.dns_parent_zone}")}", value = r.verification_id }
+    }
+  ]
 }
 
 output "bound_hostnames" {
-  value = try(module.dns_and_certs[0].bound_hostnames, [])
+  value = try(module.custom_domains[0].bound_hostnames, [])
 }

@@ -11,18 +11,21 @@
     "start": "node --import ./dist/instrument.js dist/index.js",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "scheduler": "tsx --env-file ../../.env src/scheduler.ts"
   },
   "dependencies": {
     "@azure/service-bus": "^7.9.5",
+    "@repo/config": "workspace:*",
     "@repo/db": "workspace:*",
     "@repo/domain": "workspace:*",
     "@repo/email": "workspace:*",
-    "@repo/identity": "workspace:*",
     "@repo/env": "workspace:*",
+    "@repo/identity": "workspace:*",
     "@repo/logging": "workspace:*",
     "@repo/service-bus": "workspace:*",
     "@repo/trpc": "workspace:*",
+    "@repo/workflow": "workspace:*",
     "csv-parse": "^5.6.0",
     "kysely": "^0.29.0",
     "winston": "^3.19.0",

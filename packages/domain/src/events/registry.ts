@@ -31,6 +31,7 @@ import {
   platformRoleGranted,
   platformRoleRevoked,
   platformScheduledActionCancelled,
+  platformScheduledActionRescheduled,
   platformScheduledActionScheduled,
   platformTeamArchived,
   platformTeamCreated,
@@ -38,6 +39,7 @@ import {
   platformTeamMembershipCorrected,
   platformTeamMembershipEnded,
   platformTeamUpdated,
+  platformWorkflowInstanceDemoOutcomeRecorded,
   platformWorkflowInstanceStarted,
   platformWorkflowInstanceTransitioned,
 } from './platform.js';
@@ -96,7 +98,9 @@ export const eventTypes = {
   // Workflow runtime & scheduled actions (core plan 07, ADR-0013).
   'platform.workflow_instance.started': platformWorkflowInstanceStarted,
   'platform.workflow_instance.transitioned': platformWorkflowInstanceTransitioned,
+  'platform.workflow_instance.demo_outcome_recorded': platformWorkflowInstanceDemoOutcomeRecorded,
   'platform.scheduled_action.scheduled': platformScheduledActionScheduled,
+  'platform.scheduled_action.rescheduled': platformScheduledActionRescheduled,
   'platform.scheduled_action.cancelled': platformScheduledActionCancelled,
 } as const;
 

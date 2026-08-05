@@ -66,6 +66,7 @@ describe('evaluateTransition — T-D3: a legal action returns its consequences',
     const withEmit = defineWorkflow({
       key: 'platform.test.emitter',
       version: 1,
+      module: 'platform',
       states: ['open', 'closed'],
       initial: 'open',
       terminal: ['closed'],
@@ -199,6 +200,7 @@ describe('evaluateTransition — T-D5: hard guards block, soft guards warn', () 
     const def = defineWorkflow({
       key: 'platform.test.blocked',
       version: 1,
+      module: 'platform',
       states: ['open', 'closed'],
       initial: 'open',
       terminal: ['closed'],
@@ -223,6 +225,7 @@ describe('evaluateTransition — T-D5: hard guards block, soft guards warn', () 
     const def = defineWorkflow({
       key: 'platform.test.missing',
       version: 1,
+      module: 'platform',
       states: ['open', 'closed'],
       initial: 'open',
       terminal: ['closed'],

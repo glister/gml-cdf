@@ -45,6 +45,7 @@ export {
 } from './lib/effective-dating.js';
 export {
   grantRole,
+  loadGrantsForPerson,
   revokeGrant,
   revokeAllGrantsForPerson,
   type GrantRoleInput,

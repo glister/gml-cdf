@@ -561,6 +561,18 @@ const effectRef = z.strictObject({
  * can read `payload.effects` from any of them (§5.4).
  */
 export const workflowTransitionedPayload = z.strictObject({
+  /**
+   * The `platform.workflow_transition` row this event records. Present because
+   * the relay derives the effect messages' deterministic `MessageId` and their
+   * idempotency root from it (§5.4) — and because it lets a subscriber fetch the
+   * guard results and resolved config behind the decision.
+   */
+  transitionId: z.uuid(),
+  /**
+   * The instance. Redundant with `stream_id` on the generic event, but not on an
+   * `emits` override, where the stream is the subject.
+   */
+  instanceId: z.uuid(),
   workflowKey: z.string().max(200),
   definitionVersion: z.number().int().min(1),
   subjectStreamType: streamTypeName,
@@ -618,6 +630,24 @@ export const platformScheduledActionScheduled = defineEvent(
 );
 
 /**
+ * A pending timer's due date was amended. Not in the plan's §4.2 list, but
+ * AC-D9 requires both admin timer actions — cancel *and* reschedule — to be
+ * journalled, and re-emitting `scheduled` would assert a timer was created when
+ * one was moved. `from`/`to` carry the whole change, so the audit view needs no
+ * second read.
+ */
+export const platformScheduledActionRescheduled = defineEvent(
+  'platform.scheduled_action.rescheduled',
+  1,
+  z.strictObject({
+    actionType: z.string().max(200),
+    fromDueAt: z.iso.datetime(),
+    toDueAt: z.iso.datetime(),
+    workflowInstanceId: z.uuid().nullable(),
+  }),
+);
+
+/**
  * A pending timer was cancelled — by an administrator, or automatically when the
  * instance reached a terminal state (the "a human got there before the chaser"
  * case, §5.2 step 6).
@@ -634,4 +664,20 @@ export const platformScheduledActionCancelled = defineEvent(
     reason: z.string().min(1).max(500),
     workflowInstanceId: z.uuid().nullable(),
   }),
+);
+
+/**
+ * The pilot slice's effect fact (core plan 07 §4.3). `demo.recordOutcome` is the
+ * one effect plan 07 ships, and this is the observable thing it does — so the
+ * end-to-end test can assert that a message delivered twice produces exactly one
+ * business fact (AC-D6), which is the property every effect a later plan
+ * registers must also have.
+ *
+ * Demo-only: it retires with the `platform.demo.request` shape, and no
+ * production consumer should ever subscribe to it.
+ */
+export const platformWorkflowInstanceDemoOutcomeRecorded = defineEvent(
+  'platform.workflow_instance.demo_outcome_recorded',
+  1,
+  z.strictObject({ outcome: z.enum(['approved', 'rejected', 'expired']) }),
 );

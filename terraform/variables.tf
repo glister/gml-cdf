@@ -120,22 +120,24 @@ variable "max_replicas" {
 
 # --- Custom domains ---
 
-variable "dns_zone_name" {
+variable "dns_parent_zone" {
   description = <<-DESC
-    Zone delegated to Azure for this environment, e.g. `connect.cdfencing.co.uk`
-    (prod) or `dev.connect.cdfencing.co.uk` (dev). Must be the parent of both
-    `app_url` and `api_url`. Empty disables custom domains entirely.
+    The DNS zone the records live in, hosted at Krystal. Used only to render
+    `dns_records_required` with hosts relative to the zone, which is how
+    Krystal's panel expects them. Not derived from app_url: `.co.uk` is a
+    two-label public suffix, so no amount of splitting on dots gets this right.
   DESC
   type        = string
-  default     = ""
+  default     = "cdfencing.co.uk"
 }
 
-variable "enable_custom_domain_bindings" {
+variable "enable_custom_domains" {
   description = <<-DESC
-    Phase 2 of the custom-domain rollout (see modules/dns-and-certs): issue
-    managed certificates and bind the hostnames. Leave false until the zone's
-    name servers are delegated at the registrar and `dig NS <zone>` returns
-    Azure's — enabling early fails certificate validation.
+    Issue managed certificates for `app_url`/`api_url` and bind them to the
+    apps. DNS is not managed by Terraform — it lives at Krystal. Leave false
+    until the CNAME and asuid TXT records from `terraform output
+    dns_records_required` exist and resolve; enabling early fails certificate
+    validation. See runbook §11.
   DESC
   type        = bool
   default     = false
