@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { sql } from 'kysely';
 import { z } from 'zod';
 import { db, newUuidV7 } from '@repo/db';
@@ -71,17 +71,15 @@ afterAll(() => unregisterConfigKeyForTests('platform.test.threshold_days'));
 
 /** Run one supersede in its own transaction, as a procedure would. */
 async function set(value: number, effectiveFrom?: Date) {
-  return db
-    .transaction()
-    .execute((trx) =>
-      setConfig(trx, {
-        def: scratchKey,
-        value,
-        actorPersonId: actorId,
-        effectiveFrom,
-        correlationId,
-      }),
-    );
+  return db.transaction().execute((trx) =>
+    setConfig(trx, {
+      def: scratchKey,
+      value,
+      actorPersonId: actorId,
+      effectiveFrom,
+      correlationId,
+    }),
+  );
 }
 
 async function reset() {

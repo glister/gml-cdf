@@ -38,7 +38,7 @@ const adminOnlyKey = defineConfigKey({
   registeredBy: 'test',
 });
 
-const hrEditableKey = defineConfigKey({
+defineConfigKey({
   namespace: 'platform.test_router',
   key: 'hr_editable_cadence',
   schema: z.enum(['P1D', 'P7D']),

@@ -24,6 +24,8 @@ import {
   restoreUsers,
 } from '@repo/identity';
 import { protectedProcedure, roleProcedure, router, type TRPCContext } from '../../trpc.js';
+import { externalAccessDefaultDays } from '../../config/index.js';
+import { getConfig } from '../../lib/config.js';
 import { ceilingForRoles, journalSpecialCategoryRead } from '../../lib/field-classification.js';
 import { scopeFor, scopePersons } from '../../lib/scope.js';
 import { personFlagClassification } from '../../schemas.js';
@@ -159,6 +161,17 @@ function requireActor(ctx: TRPCContext): string {
     });
   }
   return ctx.actorPersonId;
+}
+
+/**
+ * `from` plus whole days. `setDate` past the month end rolls over correctly, and
+ * because it works in local components the resulting instant keeps the same
+ * wall-clock time — an access window that starts at 09:00 ends at 09:00.
+ */
+function addDays(from: Date, days: number): Date {
+  const result = new Date(from);
+  result.setDate(result.getDate() + days);
+  return result;
 }
 
 async function loadPerson(ctx: TRPCContext, personId: string): Promise<PersonRecord> {
@@ -618,6 +631,24 @@ export const identityRouter = router({
       });
     }
 
+    /**
+     * The access window (PL-042). An explicit date wins; otherwise a
+     * non-employee gets the org-wide default from the configuration store
+     * (core plan 06 §9.5-T2 — the pilot consumption point).
+     *
+     * This is what makes PL-042's "time-boxed" real rather than aspirational:
+     * before, an external created without a date had **no** expiry at all and
+     * the sweep would never pick them up. Changing the window is now a
+     * configuration change — no release, and the change itself is audited.
+     * Employees never expire, so they are excluded here as they are in the
+     * input validation above.
+     */
+    const accessValidUntil = input.accessValidUntil
+      ? new Date(input.accessValidUntil)
+      : input.relationshipType === 'employee'
+        ? null
+        : addDays(new Date(), await getConfig(ctx.db, externalAccessDefaultDays));
+
     const personId = newUuidV7();
     await ctx.db.transaction().execute(async (trx) => {
       await trx
@@ -631,7 +662,7 @@ export const identityRouter = router({
           date_of_birth: input.dateOfBirth,
           contact_email: input.contactEmail?.toLowerCase(),
           agency_worker_reference: input.agencyWorkerReference,
-          access_valid_until: input.accessValidUntil ? new Date(input.accessValidUntil) : null,
+          access_valid_until: accessValidUntil,
           created_by: actor,
           updated_by: actor,
         })
