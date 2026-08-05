@@ -141,6 +141,13 @@ export {
 } from './effects/registry.js';
 
 export {
+  effectMessagesFor,
+  effectMessagesForBatch,
+  EFFECTS_QUEUE,
+  type EffectMessage,
+} from './effects/fanout.js';
+
+export {
   effectEnvelopeSchema,
   effectIdempotencyKey,
   effectMessageId,

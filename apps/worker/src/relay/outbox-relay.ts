@@ -3,7 +3,7 @@ import type { Logger } from 'winston';
 import { relayOutboxBatch, type DB } from '@repo/db';
 import type { ServiceBus } from '@repo/service-bus';
 import { relayConfig } from './config.js';
-import { EFFECTS_QUEUE, effectMessagesForBatch } from './effects-fanout.js';
+import { EFFECTS_QUEUE, effectServiceBusMessages } from './effects-fanout.js';
 import { toEnvelopeMessage } from './envelope.js';
 
 /**
@@ -65,7 +65,7 @@ export function startOutboxRelay(
         // Effects first: a consequence sent for an event that then fails to
         // publish is replayed harmlessly, whereas an event published without its
         // effects would look complete to every subscriber while nothing happened.
-        const effectMessages = effectMessagesForBatch(events);
+        const effectMessages = effectServiceBusMessages(events);
         if (effectMessages.length > 0) await effectsSender.sendMessages(effectMessages);
         await sender.sendMessages(events.map(toEnvelopeMessage));
       }));
