@@ -168,3 +168,13 @@ export type LookupSort = (typeof LOOKUP_SORTS)[number];
 /** Sort columns for the teams list. */
 export const TEAM_SORTS = ['name', 'updated_at'] as const;
 export type TeamSort = (typeof TEAM_SORTS)[number];
+
+// --- Configuration store (core plan 06, ADR-0016) ---------------------------
+
+/**
+ * Sort columns for the config browser. Deliberately short: the browser lists the
+ * **registry** (a few dozen keys), merged with whatever entries exist, so its
+ * ordering is over key names and last-changed times, not over a large table.
+ */
+export const CONFIG_SORTS = ['key', 'updated_at'] as const;
+export type ConfigSort = (typeof CONFIG_SORTS)[number];

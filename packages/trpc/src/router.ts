@@ -1,6 +1,7 @@
 import { router } from './trpc.js';
 import { usersRouter } from './routers/users.js';
 import { authzRouter } from './routers/platform/authz.js';
+import { configRouter } from './routers/platform/config.js';
 import { identityRouter } from './routers/platform/identity.js';
 import { journalRouter } from './routers/platform/journal.js';
 import { lookupRouter } from './routers/platform/lookup.js';
@@ -18,6 +19,7 @@ export const appRouter = router({
     authz: authzRouter,
     lookup: lookupRouter,
     team: teamRouter,
+    config: configRouter,
   }),
 });
 

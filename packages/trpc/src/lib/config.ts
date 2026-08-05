@@ -2,12 +2,14 @@ import { type Kysely, sql, type Transaction } from 'kysely';
 import { appendEvent, newUuidV7, type DB } from '@repo/db';
 import type { EventPayload } from '@repo/domain';
 import type { z } from 'zod';
+// Through the barrel, never `./registry.js`: keys register as a side effect of
+// loading their definition module, and the barrel is what guarantees they have.
 import {
   ConfigValueInvalidError,
   qualifiedName,
   requireConfigKey,
   type ConfigKeyDef,
-} from '../config/registry.js';
+} from '../config/index.js';
 import { isUniqueViolation } from './pg-errors.js';
 
 /**
@@ -181,7 +183,7 @@ export function parseConfigRef(ref: string): ConfigKeyDef {
   return requireConfigKey(name);
 }
 
-export interface SetConfigInput<S extends z.ZodType> {
+export interface SetConfigArgs<S extends z.ZodType> {
   def: ConfigKeyDef<S>;
   value: z.infer<S>;
   actorPersonId: string;
@@ -221,7 +223,7 @@ export interface SetConfigResult {
  */
 export async function setConfig<S extends z.ZodType>(
   trx: Transaction<DB>,
-  input: SetConfigInput<S>,
+  input: SetConfigArgs<S>,
 ): Promise<SetConfigResult> {
   const { def } = input;
   const name = qualifiedName(def);
@@ -332,7 +334,7 @@ export async function setConfig<S extends z.ZodType>(
   return { entryId, version, validFrom: effective };
 }
 
-export interface ResetConfigInput {
+export interface ResetConfigArgs {
   def: ConfigKeyDef;
   actorPersonId: string;
   correlationId: string;
@@ -349,7 +351,7 @@ export interface ResetConfigInput {
  */
 export async function resetConfig(
   trx: Transaction<DB>,
-  input: ResetConfigInput,
+  input: ResetConfigArgs,
 ): Promise<{ reset: boolean; closedVersion: number | null }> {
   const { def } = input;
 
