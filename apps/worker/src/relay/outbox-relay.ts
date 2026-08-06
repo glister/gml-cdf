@@ -3,6 +3,7 @@ import type { Logger } from 'winston';
 import { relayOutboxBatch, type DB } from '@repo/db';
 import type { ServiceBus } from '@repo/service-bus';
 import { relayConfig } from './config.js';
+import { EFFECTS_QUEUE, effectServiceBusMessages } from './effects-fanout.js';
 import { toEnvelopeMessage } from './envelope.js';
 
 /**
@@ -14,8 +15,15 @@ import { toEnvelopeMessage } from './envelope.js';
  * republishes rather than loses (at-least-once; consumers dedupe).
  *
  * The SQL (claim + stamp, `FOR UPDATE SKIP LOCKED`) lives in `@repo/db`
- * (`relayOutboxBatch`); this module owns the loop, the sender, the envelope
+ * (`relayOutboxBatch`); this module owns the loop, the senders, the envelope
  * mapping and the backoff.
+ *
+ * Since core plan 07 it relays to **two** destinations. An event whose payload
+ * carries `effects` (a workflow transition) fans one message per effect onto the
+ * `effects` queue first, then the event goes to `domain-events`, then the stamp.
+ * Both sends happen inside the relay's transaction, so the ordering is not a
+ * dual write with a window in it: any failure rolls the stamp back and the whole
+ * batch replays, which every reader downstream is built to absorb.
  */
 
 export interface OutboxRelayDeps {
@@ -49,10 +57,16 @@ export function startOutboxRelay(
   const backoffMaxMs = options.backoffMaxMs ?? relayConfig.backoffMaxMs;
 
   const sender = deps.sb.sender(relayConfig.topic);
+  const effectsSender = deps.sb.sender(EFFECTS_QUEUE);
   const runBatch =
     options.runBatch ??
     ((n: number): Promise<number> =>
       relayOutboxBatch(deps.db, n, async (events) => {
+        // Effects first: a consequence sent for an event that then fails to
+        // publish is replayed harmlessly, whereas an event published without its
+        // effects would look complete to every subscriber while nothing happened.
+        const effectMessages = effectServiceBusMessages(events);
+        if (effectMessages.length > 0) await effectsSender.sendMessages(effectMessages);
         await sender.sendMessages(events.map(toEnvelopeMessage));
       }));
 
@@ -96,7 +110,7 @@ export function startOutboxRelay(
       if (timer) clearTimeout(timer);
       wake?.(); // resolve any in-flight wait so the loop exits promptly
       await running;
-      await sender.close();
+      await Promise.all([sender.close(), effectsSender.close()]);
     },
   };
 }

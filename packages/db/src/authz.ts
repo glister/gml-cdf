@@ -1,5 +1,5 @@
-import type { Transaction } from 'kysely';
-import type { EventPayload } from '@repo/domain';
+import type { Kysely, Transaction } from 'kysely';
+import type { EventPayload, Grant, ModuleKey, RoleKey } from '@repo/domain';
 import { appendEvent } from './journal.js';
 import type { DB, PlatformRoleGrant } from './types.js';
 
@@ -193,4 +193,47 @@ export async function revokeAllGrantsForPerson(
     if (result) revoked.push(result);
   }
   return revoked;
+}
+
+/**
+ * Resolve a person's live role grants (core plan 04 §9.3). One indexed query —
+ * `role_grant_person_active_ix` is a partial index over exactly this predicate,
+ * and at CDF's scale (hundreds of people, a handful of grants each) no caching
+ * is warranted.
+ *
+ * "Live" means unrevoked and not soft-deleted. The **time window is deliberately
+ * not filtered here**: callers evaluate it per decision via `@repo/domain`'s
+ * `isGrantActive`/`hasRole`, so a grant that expires part-way through a session
+ * stops authorising immediately rather than at the next sign-in. Filtering it
+ * here would silently reintroduce session-lifetime authorisation.
+ *
+ * Lives beside the grant write paths for the same reason they do (ADR-0022): two
+ * callers must behave identically — `@repo/trpc`'s request-context factory, and
+ * core plan 07's workflow runtime resolving a transition's `by` policy. A second
+ * implementation would be a second authorisation read path.
+ */
+export async function loadGrantsForPerson(
+  db: Kysely<DB>,
+  personId: string | null,
+): Promise<Grant<RoleKey, ModuleKey>[]> {
+  if (!personId) return [];
+  const rows = await db
+    .selectFrom('platform.role_grant as g')
+    .innerJoin('platform.role as r', 'r.id', 'g.role_id')
+    .select(['r.key as roleKey', 'g.module', 'g.valid_from', 'g.valid_until', 'g.revoked_at'])
+    .where('g.person_id', '=', personId)
+    .where('g.revoked_at', 'is', null)
+    .where('g.deleted_at', 'is', null)
+    .execute();
+
+  return rows.map((row) => ({
+    // `role.key` is text (roles are data, PL-002), so an unrecognised key is
+    // possible in principle — a Phase 2 role added before the tuple is updated.
+    // It simply never matches a caller's role list, which fails closed.
+    roleKey: row.roleKey as RoleKey,
+    module: row.module,
+    validFrom: row.valid_from,
+    validUntil: row.valid_until,
+    revokedAt: row.revoked_at,
+  }));
 }

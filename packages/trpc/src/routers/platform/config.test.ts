@@ -5,7 +5,7 @@ import { createMigrator, truncateAll } from '@repo/db/test-support';
 import { appRouter } from '../../router.js';
 import type { ContextGrant, TRPCContext } from '../../trpc.js';
 import { ROLE_KEYS, type RoleKey } from '../../lib/constants.js';
-import { defineConfigKey, unregisterConfigKeyForTests } from '../../config/registry.js';
+import { defineConfigKey, unregisterConfigKeyForTests } from '@repo/config';
 
 /**
  * The `platform.config` surface (core plan 06 §10, tests 10-T8/T9, PL-029/030).

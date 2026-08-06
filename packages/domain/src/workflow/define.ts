@@ -1,0 +1,262 @@
+import { MODULE_KEYS } from '../authz/roles.js';
+import { EVENT_TYPE_PATTERN } from '../events/define.js';
+import {
+  isConfiguredDelay,
+  type ConfigRef,
+  type DelaySpec,
+  type ScheduleRef,
+  type TransitionActorPolicy,
+  type WorkflowDefinition,
+} from './types.js';
+
+/**
+ * `defineWorkflow` — the gate every workflow definition passes at module load
+ * (core plan 07 §5.1, WF-1).
+ *
+ * It validates the shape (states, transitions, actor policies, config refs) and
+ * then the one property the whole Phase 2 bet rests on: that the definition is
+ * **serialisable**, i.e. `JSON.parse(JSON.stringify(def))` deep-equals `def`. A
+ * closure, a `Date`, a `Map` or a `RegExp` smuggled into a definition would work
+ * perfectly in Phase 1 and make the Phase 2 migration to database-stored
+ * definitions a rewrite — so it fails here, at boot, loudly, instead.
+ *
+ * Everything is checked at import time rather than at first execution because a
+ * malformed workflow should stop a deployment, not one user's request.
+ */
+
+/** `platform.demo.request` — lowercase dotted segments, two or more. */
+const WORKFLOW_KEY_PATTERN = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
+
+/** `config:platform.workflow.demo.expiry_hours`. */
+const CONFIG_REF_PATTERN = /^config:[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
+
+/**
+ * A `by: { role }` naming a UUID is a person, not a role — the one mechanical
+ * check available for §8's "access is by role, never by named individual".
+ */
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Thrown for any invalid definition. One error type, a specific message. */
+export class WorkflowDefinitionError extends Error {
+  constructor(key: string, version: number, detail: string) {
+    super(`invalid workflow definition '${key}' v${version}: ${detail}`);
+    this.name = 'WorkflowDefinitionError';
+  }
+}
+
+/**
+ * A plain object — an object literal, or one with a null prototype. Anything
+ * else (a `Map`, a `Set`, a `Date`, a class instance) is a non-JSON value that
+ * `JSON.stringify` either mangles or silently flattens to `{}`.
+ */
+function isPlainObject(value: object): boolean {
+  const proto: unknown = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+/**
+ * Structural equality over JSON-shaped values, treating a key whose value is
+ * `undefined` as absent — so an author writing `guards: undefined` is not
+ * punished for a no-op, while a function or a `Date` (both of which vanish or
+ * mutate under `JSON.stringify`) still fails, because neither equals `undefined`
+ * on the original side.
+ *
+ * The plain-object check is not redundant with comparing keys: `new Map([['a',
+ * 1]])` stringifies to `{}` and has **no own enumerable properties**, so a
+ * key-by-key comparison would call it equal to the `{}` it round-trips into and
+ * wave the definition through. Rejecting non-plain objects outright is what
+ * closes that hole.
+ */
+function jsonDeepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    return a.every((item, i) => jsonDeepEqual(item, b[i]));
+  }
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+  if (!isPlainObject(a) || !isPlainObject(b)) return false;
+
+  const record = (value: object): Record<string, unknown> => value as Record<string, unknown>;
+  const [ra, rb] = [record(a), record(b)];
+  const keys = new Set([...Object.keys(ra), ...Object.keys(rb)]);
+  for (const key of keys) {
+    const [va, vb] = [ra[key], rb[key]];
+    if (va === undefined && vb === undefined) continue; // absent ≡ undefined
+    if (!jsonDeepEqual(va, vb)) return false;
+  }
+  return true;
+}
+
+function assertConfigRef(fail: (detail: string) => never, ref: string, where: string): void {
+  if (!CONFIG_REF_PATTERN.test(ref)) {
+    fail(
+      `${where} is not a valid configuration reference: '${ref}' (expected 'config:<module>.<area>.<key>')`,
+    );
+  }
+}
+
+function validateActorPolicy(
+  fail: (detail: string) => never,
+  by: TransitionActorPolicy,
+  where: string,
+): void {
+  if ('system' in by) {
+    if (by.system !== true) fail(`${where} declares 'system' but not as \`true\``);
+    return;
+  }
+  if ('configRef' in by) {
+    assertConfigRef(fail, by.configRef, `${where} 'by' policy`);
+    return;
+  }
+  if ('role' in by) {
+    if (by.role.length === 0) fail(`${where} names an empty role`);
+    // §8: a definition may never authorise an individual. Role membership is
+    // resolved at execution time so that changing the team changes who acts.
+    if (UUID_PATTERN.test(by.role)) {
+      fail(
+        `${where} names an individual ('${by.role}') rather than a role — access is by role, never by named person (§8)`,
+      );
+    }
+    return;
+  }
+  fail(
+    `${where} has no recognisable 'by' policy (expected { role }, { configRef } or { system: true })`,
+  );
+}
+
+function validateDelay(fail: (detail: string) => never, delay: DelaySpec, where: string): void {
+  if (!['minutes', 'hours', 'days'].includes(delay.unit)) {
+    fail(`${where} has an unknown delay unit '${delay.unit}'`);
+  }
+  if (isConfiguredDelay(delay)) {
+    assertConfigRef(fail, delay.configRef, `${where} delay`);
+    return;
+  }
+  if (!Number.isFinite(delay.amount) || delay.amount < 0) {
+    fail(`${where} has a delay amount that is not a non-negative finite number`);
+  }
+}
+
+function validateSchedule(
+  fail: (detail: string) => never,
+  refs: readonly ScheduleRef[],
+  where: string,
+): void {
+  refs.forEach((ref, i) => {
+    const at = `${where} schedule[${i}]`;
+    if (!ref.actionType || ref.actionType.length === 0) fail(`${at} has an empty actionType`);
+    validateDelay(fail, ref.delay, at);
+  });
+}
+
+/**
+ * Validate and freeze a workflow definition.
+ *
+ * Rejects, in order: a malformed key or version; duplicate, empty or missing
+ * states; an `initial`/`terminal` state outside `states`; a transition whose
+ * `from`/`to` is not a state; a transition **out of** a terminal state (terminal
+ * means terminal — an escape hatch there is a modelling error, not a feature); a
+ * duplicate `(from, action)` pair; an empty guard, effect or config name; an
+ * actor policy naming an individual; a malformed `config:` reference or `emits`
+ * name; and finally any value that does not survive a JSON round trip.
+ */
+export function defineWorkflow<S extends string>(
+  def: WorkflowDefinition<S>,
+): WorkflowDefinition<S> {
+  const fail = (detail: string): never => {
+    throw new WorkflowDefinitionError(def.key, def.version, detail);
+  };
+
+  if (!WORKFLOW_KEY_PATTERN.test(def.key)) {
+    fail(`key must be a lowercase, namespaced, dotted name (e.g. 'platform.demo.request')`);
+  }
+  if (!Number.isInteger(def.version) || def.version < 1) {
+    fail('version must be a positive integer');
+  }
+  if (!(MODULE_KEYS as readonly string[]).includes(def.module)) {
+    fail(
+      `module '${def.module}' is not a grant scope — a workflow's 'by' policies resolve against role grants in exactly one module (core plan 04 §5.1)`,
+    );
+  }
+
+  if (def.states.length === 0) fail('a definition needs at least one state');
+  const states = new Set<string>(def.states);
+  if (states.size !== def.states.length) fail('states must be unique');
+  if (!states.has(def.initial)) fail(`initial state '${def.initial}' is not in states`);
+
+  const terminal = new Set<string>(def.terminal);
+  for (const state of terminal) {
+    if (!states.has(state)) fail(`terminal state '${state}' is not in states`);
+  }
+  if (terminal.has(def.initial)) {
+    fail(`initial state '${def.initial}' is also terminal — the instance could never move`);
+  }
+
+  const seen = new Set<string>();
+  def.transitions.forEach((t, i) => {
+    const where = `transition[${i}] (${t.from} --${t.action}--> ${t.to})`;
+    if (!t.action || t.action.length === 0) fail(`transition[${i}] has an empty action name`);
+    if (!states.has(t.from)) fail(`${where} leaves unknown state '${t.from}'`);
+    if (!states.has(t.to)) fail(`${where} enters unknown state '${t.to}'`);
+    if (terminal.has(t.from)) fail(`${where} leaves terminal state '${t.from}'`);
+
+    const pair = `${t.from} ${t.action}`;
+    if (seen.has(pair)) fail(`duplicate transition for (from='${t.from}', action='${t.action}')`);
+    seen.add(pair);
+
+    validateActorPolicy(fail, t.by, where);
+
+    t.guards?.forEach((g, gi) => {
+      if (!g || g.length === 0) fail(`${where} guards[${gi}] is empty`);
+    });
+    t.effects?.forEach((e, ei) => {
+      if (!e.name || e.name.length === 0) fail(`${where} effects[${ei}] has an empty name`);
+    });
+    t.config?.forEach((ref: ConfigRef, ci) => assertConfigRef(fail, ref, `${where} config[${ci}]`));
+    if (t.schedule) validateSchedule(fail, t.schedule, where);
+
+    if (t.emits !== undefined && !EVENT_TYPE_PATTERN.test(t.emits)) {
+      fail(
+        `${where} emits '${t.emits}', which is not a valid event type — '<module>.<entity>.<verb-past>' (ADR-0021)`,
+      );
+    }
+  });
+
+  if (def.initialSchedule) validateSchedule(fail, def.initialSchedule, 'initialSchedule');
+
+  // Every state should be reachable and every non-terminal state should be able
+  // to move; an unreachable state is dead weight in a definition an editor will
+  // one day render, and a non-terminal dead end is a case that silently sticks.
+  const reachable = new Set<string>([def.initial]);
+  const enters = new Map<string, string[]>();
+  for (const t of def.transitions) {
+    enters.set(t.from, [...(enters.get(t.from) ?? []), t.to]);
+  }
+  const queue = [def.initial as string];
+  while (queue.length > 0) {
+    for (const next of enters.get(queue.shift()!) ?? []) {
+      if (!reachable.has(next)) {
+        reachable.add(next);
+        queue.push(next);
+      }
+    }
+  }
+  for (const state of states) {
+    if (!reachable.has(state)) fail(`state '${state}' is unreachable from '${def.initial}'`);
+    if (!terminal.has(state) && !enters.has(state)) {
+      fail(
+        `state '${state}' is not terminal but has no outgoing transition — a case would stick there`,
+      );
+    }
+  }
+
+  // The Phase 2 door (WF-1). Last, so the message a developer sees is the most
+  // specific problem rather than this catch-all.
+  if (!jsonDeepEqual(JSON.parse(JSON.stringify(def)), def)) {
+    fail(
+      'definition is not serialisable: it does not survive a JSON round trip unchanged. Definitions are data (ADR-0013) — no functions, Dates, Maps, Sets or class instances',
+    );
+  }
+
+  return Object.freeze(def);
+}

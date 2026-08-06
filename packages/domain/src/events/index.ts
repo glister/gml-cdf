@@ -7,4 +7,4 @@ export {
   type EventType,
   type EventPayload,
 } from './registry.js';
-export { platformDemoPinged } from './platform.js';
+export { platformDemoPinged, workflowTransitionedPayload } from './platform.js';

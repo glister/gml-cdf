@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Link } from '@tanstack/react-router';
 import {
+  AlarmClock,
   ChevronDown,
   GitMerge,
   KeyRound,
@@ -12,6 +13,7 @@ import {
   UserCog,
   Users,
   UsersRound,
+  Workflow,
 } from 'lucide-react';
 import { cn } from '~/lib/utils';
 import { ConnectLockup } from '~/components/auth/ConnectLockup';
@@ -96,6 +98,33 @@ function ConfigurationNavSection() {
 }
 
 /**
+ * The Operations section (core plan 07 §5.7). Administrator only, because the
+ * runtime is substrate: its instance list spans every module at once, so it
+ * cannot be narrowed by any one module's record rules. Same UX-only caveat —
+ * `workflowAdmin` behind each route is the control.
+ */
+function OperationsNavSection() {
+  const mine = trpcReact.platform.authz.grants.mine.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+  });
+  if (!holdsAnyRole(mine.data, ['administrator'])) return null;
+
+  return (
+    <>
+      <NavSectionLabel>Operations</NavSectionLabel>
+      <div className="flex flex-col gap-0.5">
+        <Link to="/admin/workflow/instances" className={navItemClass}>
+          <NavItemInner icon={<Workflow size={20} strokeWidth={1.9} />} label="Workflows" />
+        </Link>
+        <Link to="/admin/workflow/scheduled-actions" className={navItemClass}>
+          <NavItemInner icon={<AlarmClock size={20} strokeWidth={1.9} />} label="Timers" />
+        </Link>
+      </div>
+    </>
+  );
+}
+
+/**
  * The Access section, shown only to holders of the roles that can actually use
  * it (core plan 04 §9.4).
  *
@@ -167,6 +196,7 @@ function Sidebar({ user }: { user: AppShellUser | null }) {
         </div>
         <ConfigurationNavSection />
         <AccessNavSection />
+        <OperationsNavSection />
       </nav>
       {user && (
         <div className="shrink-0 border-t border-white/[0.07] p-3">

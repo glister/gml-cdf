@@ -35,7 +35,7 @@ import { attachUpdatedAtTrigger, withStandardColumns } from '../migration-helper
  * TRUNCATE are revoked — there is no path that removes a version row.
  *
  * The `value` column is `jsonb` and deliberately untyped in SQL: the code-side
- * schema registry (`@repo/trpc/src/config/registry.ts`) is what makes JSONB safe
+ * schema registry (`@repo/config`) is what makes JSONB safe
  * here, validating on write **and** on read (ADR-0016). No `CHECK` constraint
  * could express a per-key Zod schema, so none pretends to.
  */

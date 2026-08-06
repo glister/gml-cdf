@@ -24,9 +24,9 @@ import {
   restoreUsers,
 } from '@repo/identity';
 import { protectedProcedure, roleProcedure, router, type TRPCContext } from '../../trpc.js';
-import { externalAccessDefaultDays } from '../../config/index.js';
-import { getConfig } from '../../lib/config.js';
-import { ceilingForRoles, journalSpecialCategoryRead } from '../../lib/field-classification.js';
+import { externalAccessDefaultDays, getConfig } from '@repo/config';
+import { ceilingForRoles } from '../../lib/field-classification.js';
+import { journalSpecialCategoryRead } from '../../lib/special-category-journal.js';
 import { scopeFor, scopePersons } from '../../lib/scope.js';
 import { personFlagClassification } from '../../schemas.js';
 import {

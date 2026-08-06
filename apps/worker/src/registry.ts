@@ -3,17 +3,25 @@ import type { DB } from '@repo/db';
 import type { ServiceBus, ServiceBusReceivedMessage, ServiceBusReceiver } from '@repo/service-bus';
 import type { Logger } from 'winston';
 import { handlers } from './handlers/index.js';
-import type { HandlerContext, SubscriptionHandler } from './types.js';
+import { PoisonMessageError, type HandlerContext, type SubscriptionHandler } from './types.js';
 
 /** Minimal surface of a receiver needed to ack/nack — keeps tests trivial. */
 export interface Completable {
   completeMessage(message: ServiceBusReceivedMessage): Promise<void>;
   abandonMessage(message: ServiceBusReceivedMessage): Promise<void>;
+  deadLetterMessage(
+    message: ServiceBusReceivedMessage,
+    options?: { deadLetterReason?: string; deadLetterErrorDescription?: string },
+  ): Promise<void>;
 }
 
 /**
- * Run one message through its handler: complete on success, abandon on throw.
- * Exported so the ack/nack semantics can be unit-tested without a live bus.
+ * Run one message through its handler: complete on success, abandon on throw —
+ * except for a {@link PoisonMessageError}, which dead-letters immediately
+ * because redelivery cannot help (core plan 07 §5.4).
+ *
+ * Exported so the ack/nack/dead-letter semantics can be unit-tested without a
+ * live bus.
  */
 export async function handleMessage(
   receiver: Completable,
@@ -25,9 +33,16 @@ export async function handleMessage(
     await handler(message, ctx);
     await receiver.completeMessage(message);
   } catch (error) {
-    ctx.logger.error('handler failed; abandoning message', {
-      error: error instanceof Error ? error.message : String(error),
-    });
+    const detail = error instanceof Error ? error.message : String(error);
+    if (error instanceof PoisonMessageError) {
+      ctx.logger.error('poison message; dead-lettering', { error: detail });
+      await receiver.deadLetterMessage(message, {
+        deadLetterReason: 'PoisonMessage',
+        deadLetterErrorDescription: detail,
+      });
+      return;
+    }
+    ctx.logger.error('handler failed; abandoning message', { error: detail });
     await receiver.abandonMessage(message);
   }
 }

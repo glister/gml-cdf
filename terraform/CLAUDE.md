@@ -13,27 +13,37 @@ One root config parameterized per environment (`environments/dev.tfvars`,
   Server), `container-registry` (ACR), `key-vault` (secrets + RBAC), `service-bus`
   (namespace + queues/topics/subscriptions), `storage` (account + blob container),
   `identity` (user-assigned MI + least-privilege role assignments),
-  `observability` (Log Analytics), `dns-and-certs` (delegated DNS zone, records,
-  managed certificates, hostname bindings).
+  `observability` (Log Analytics), `custom-domains` (managed certificates +
+  hostname bindings; **DNS is not managed here**).
 - `.terraform.lock.hcl` is committed; `.terraform/` and `*.tfstate*` are ignored.
 
 ## Custom domains
 
-`modules/dns-and-certs` owns the whole chain — zone, records, managed certs,
-bindings — but it is **two-phase**, because a zone's name servers only exist
-after Terraform creates the zone:
+**DNS is not in Terraform.** `cdfencing.co.uk` is hosted at Krystal and the
+hosting package does not allow delegating a child zone to Azure, so the records
+are hand-made in their panel. `modules/custom-domains` owns only the managed
+certificates and the hostname bindings.
 
-1. `enable_custom_domain_bindings = false` → zone + records. Read
-   `terraform output dns_name_servers`.
-2. Delegate those NS records at the registrar (Krystal hosts
-   `cdfencing.co.uk`), confirm with `dig NS <zone>`.
+Every hostname is a **subdomain** of the Krystal zone — no apex is involved — so
+all of them are plain `CNAME`s validated by `CNAME`. There is no A record and no
+dependency on the Container Apps environment IP.
+
+Two-phase, because a certificate cannot be issued until its CNAME resolves:
+
+1. `enable_custom_domains = false` (the shipped default) → apply, then read
+   `terraform output -json dns_records_required`.
+2. Create those CNAME + `asuid` TXT records at Krystal; confirm with `dig`.
 3. Flip to `true` → certificates issued, hostnames bound.
 
 Hostnames are **derived from `app_url`/`api_url`**, never declared separately, so
-the certificate can only be issued for the name the app actually answers to. The
-web hostname is the zone apex, which takes an `A` record to the Container App
-Environment's static IP — a CNAME is illegal at an apex and Azure DNS alias
-records cannot target a Container App. Full procedure: runbook §11.
+a certificate can only be issued for the name the app actually answers to.
+`dns_records_required` renders hosts relative to `dns_parent_zone`, which is how
+Krystal's panel expects them.
+
+Because the records live outside Terraform's state, `terraform plan` cannot
+detect drift on them — and a broken CNAME surfaces as a failed certificate
+_renewal_ months later, not an immediate error. Full procedure and caveats:
+runbook §11.
 
 ## Secrets flow
 

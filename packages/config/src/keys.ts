@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ROLE_KEYS } from '@repo/domain';
 import { defineConfigKey } from './registry.js';
 
 /**
@@ -55,4 +56,54 @@ export const externalAccessDefaultDays = defineConfigKey({
     'Default number of days an external’s access runs from creation, when no explicit expiry date is given. Applies to agency, subcontractor, self-employed, external-organisation and candidate records; employees never expire.',
   editableBy: ['administrator'],
   registeredBy: '06',
+});
+
+// --- Workflow runtime (core plan 07 §6) --------------------------------------
+//
+// The pilot `platform.demo.request` shape's two decision points. They exist to
+// prove the mechanism end to end without HR: an approver policy resolved from
+// configuration at execution time, and a timer lead time resolved when the
+// timer is created. Real business keys — `hr.leave.approvers`, fit-note
+// thresholds, reminder cadences — are registered by their owning plans.
+//
+// The qualified names are declared once in `@repo/domain`
+// (`workflow/demo-config-keys.ts`) so the definition's `config:` references, the
+// guard that reads the resolved value, and these registrations cannot drift.
+
+/**
+ * Who may approve or reject a demo request — the `by` decision point (WF-2).
+ *
+ * A **role**, never a person: membership resolves at execution time, so a
+ * leaver stops approving the moment their grant ends and no definition changes
+ * (PL-021). Changing this in the admin UI changes who may take the next
+ * transition, with no release — which is the whole demonstration.
+ */
+export const workflowDemoApproverRole = defineConfigKey({
+  namespace: 'platform.workflow.demo',
+  key: 'approver_role',
+  schema: z.enum(ROLE_KEYS),
+  defaultValue: 'administrator',
+  description:
+    'Role permitted to approve or reject a demo workflow request. Demonstration key for the workflow runtime — it governs no real business process.',
+  editableBy: ['administrator'],
+  registeredBy: '07',
+});
+
+/**
+ * How long a demo request stands before its expiry timer fires (WF-8).
+ *
+ * Read when the timer is created, so changing it moves the deadline for every
+ * request started afterwards while leaving timers already scheduled where they
+ * are — the same "a change never rewrites the past" property every real lead
+ * time (fit-note chase, probation review) inherits.
+ */
+export const workflowDemoExpiryHours = defineConfigKey({
+  namespace: 'platform.workflow.demo',
+  key: 'expiry_hours',
+  schema: z.number().int().min(1).max(8760),
+  defaultValue: 72,
+  description:
+    'Hours a demo workflow request stands before it expires itself. Demonstration key for the workflow runtime.',
+  editableBy: ['administrator'],
+  registeredBy: '07',
 });

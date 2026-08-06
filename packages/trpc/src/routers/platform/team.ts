@@ -19,7 +19,7 @@ import {
   isExclusionViolation,
   isForeignKeyViolation,
   isUniqueViolation,
-} from '../../lib/pg-errors.js';
+} from '@repo/db';
 // Lookups and teams are two halves of one service with one maintenance role set
 // (§5.1), so the builder is defined once beside the primary router rather than
 // duplicated here where the two could silently drift apart.

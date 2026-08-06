@@ -12,6 +12,7 @@ export {
   type Grant,
   type GrantState,
 } from './authz/grants.js';
+export { MODULE_KEYS, ROLE_KEYS, type ModuleKey, type RoleKey } from './authz/roles.js';
 export {
   matchDuplicate,
   normaliseIdentityValue,
@@ -37,7 +38,9 @@ export {
   eventDefinition,
   isEventType,
   platformDemoPinged,
+  workflowTransitionedPayload,
   type EventDefinition,
   type EventType,
   type EventPayload,
 } from './events/index.js';
+export * from './workflow/index.js';

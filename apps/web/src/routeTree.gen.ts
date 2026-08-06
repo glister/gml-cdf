@@ -18,6 +18,7 @@ import { Route as AuthenticatedAdminTeamsIndexRouteImport } from './routes/_auth
 import { Route as AuthenticatedAdminReferenceDataIndexRouteImport } from './routes/_authenticated/admin/reference-data/index';
 import { Route as AuthenticatedAdminPeopleIndexRouteImport } from './routes/_authenticated/admin/people/index';
 import { Route as AuthenticatedAdminConfigIndexRouteImport } from './routes/_authenticated/admin/config/index';
+import { Route as AuthenticatedAdminWorkflowScheduledActionsRouteImport } from './routes/_authenticated/admin/workflow/scheduled-actions';
 import { Route as AuthenticatedAdminTeamsTeamIdRouteImport } from './routes/_authenticated/admin/teams/$teamId';
 import { Route as AuthenticatedAdminReferenceDataListTypeRouteImport } from './routes/_authenticated/admin/reference-data/$listType';
 import { Route as AuthenticatedAdminPeopleNewRouteImport } from './routes/_authenticated/admin/people/new';
@@ -27,6 +28,8 @@ import { Route as AuthenticatedAdminConfigQualifiedKeyRouteImport } from './rout
 import { Route as AuthenticatedAdminAuthzRolesRouteImport } from './routes/_authenticated/admin/authz/roles';
 import { Route as AuthenticatedAdminAuthzGrantsRouteImport } from './routes/_authenticated/admin/authz/grants';
 import { Route as AuthenticatedAdminAuthzAllocationsRouteImport } from './routes/_authenticated/admin/authz/allocations';
+import { Route as AuthenticatedAdminWorkflowInstancesIndexRouteImport } from './routes/_authenticated/admin/workflow/instances/index';
+import { Route as AuthenticatedAdminWorkflowInstancesInstanceIdRouteImport } from './routes/_authenticated/admin/workflow/instances/$instanceId';
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -74,6 +77,12 @@ const AuthenticatedAdminConfigIndexRoute =
   AuthenticatedAdminConfigIndexRouteImport.update({
     id: '/config/',
     path: '/config/',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any);
+const AuthenticatedAdminWorkflowScheduledActionsRoute =
+  AuthenticatedAdminWorkflowScheduledActionsRouteImport.update({
+    id: '/workflow/scheduled-actions',
+    path: '/workflow/scheduled-actions',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any);
 const AuthenticatedAdminTeamsTeamIdRoute =
@@ -130,6 +139,18 @@ const AuthenticatedAdminAuthzAllocationsRoute =
     path: '/authz/allocations',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any);
+const AuthenticatedAdminWorkflowInstancesIndexRoute =
+  AuthenticatedAdminWorkflowInstancesIndexRouteImport.update({
+    id: '/workflow/instances/',
+    path: '/workflow/instances/',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any);
+const AuthenticatedAdminWorkflowInstancesInstanceIdRoute =
+  AuthenticatedAdminWorkflowInstancesInstanceIdRouteImport.update({
+    id: '/workflow/instances/$instanceId',
+    path: '/workflow/instances/$instanceId',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any);
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute;
@@ -145,10 +166,13 @@ export interface FileRoutesByFullPath {
   '/admin/people/new': typeof AuthenticatedAdminPeopleNewRoute;
   '/admin/reference-data/$listType': typeof AuthenticatedAdminReferenceDataListTypeRoute;
   '/admin/teams/$teamId': typeof AuthenticatedAdminTeamsTeamIdRoute;
+  '/admin/workflow/scheduled-actions': typeof AuthenticatedAdminWorkflowScheduledActionsRoute;
   '/admin/config/': typeof AuthenticatedAdminConfigIndexRoute;
   '/admin/people/': typeof AuthenticatedAdminPeopleIndexRoute;
   '/admin/reference-data/': typeof AuthenticatedAdminReferenceDataIndexRoute;
   '/admin/teams/': typeof AuthenticatedAdminTeamsIndexRoute;
+  '/admin/workflow/instances/$instanceId': typeof AuthenticatedAdminWorkflowInstancesInstanceIdRoute;
+  '/admin/workflow/instances/': typeof AuthenticatedAdminWorkflowInstancesIndexRoute;
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute;
@@ -164,10 +188,13 @@ export interface FileRoutesByTo {
   '/admin/people/new': typeof AuthenticatedAdminPeopleNewRoute;
   '/admin/reference-data/$listType': typeof AuthenticatedAdminReferenceDataListTypeRoute;
   '/admin/teams/$teamId': typeof AuthenticatedAdminTeamsTeamIdRoute;
+  '/admin/workflow/scheduled-actions': typeof AuthenticatedAdminWorkflowScheduledActionsRoute;
   '/admin/config': typeof AuthenticatedAdminConfigIndexRoute;
   '/admin/people': typeof AuthenticatedAdminPeopleIndexRoute;
   '/admin/reference-data': typeof AuthenticatedAdminReferenceDataIndexRoute;
   '/admin/teams': typeof AuthenticatedAdminTeamsIndexRoute;
+  '/admin/workflow/instances/$instanceId': typeof AuthenticatedAdminWorkflowInstancesInstanceIdRoute;
+  '/admin/workflow/instances': typeof AuthenticatedAdminWorkflowInstancesIndexRoute;
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport;
@@ -185,10 +212,13 @@ export interface FileRoutesById {
   '/_authenticated/admin/people/new': typeof AuthenticatedAdminPeopleNewRoute;
   '/_authenticated/admin/reference-data/$listType': typeof AuthenticatedAdminReferenceDataListTypeRoute;
   '/_authenticated/admin/teams/$teamId': typeof AuthenticatedAdminTeamsTeamIdRoute;
+  '/_authenticated/admin/workflow/scheduled-actions': typeof AuthenticatedAdminWorkflowScheduledActionsRoute;
   '/_authenticated/admin/config/': typeof AuthenticatedAdminConfigIndexRoute;
   '/_authenticated/admin/people/': typeof AuthenticatedAdminPeopleIndexRoute;
   '/_authenticated/admin/reference-data/': typeof AuthenticatedAdminReferenceDataIndexRoute;
   '/_authenticated/admin/teams/': typeof AuthenticatedAdminTeamsIndexRoute;
+  '/_authenticated/admin/workflow/instances/$instanceId': typeof AuthenticatedAdminWorkflowInstancesInstanceIdRoute;
+  '/_authenticated/admin/workflow/instances/': typeof AuthenticatedAdminWorkflowInstancesIndexRoute;
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
@@ -206,10 +236,13 @@ export interface FileRouteTypes {
     | '/admin/people/new'
     | '/admin/reference-data/$listType'
     | '/admin/teams/$teamId'
+    | '/admin/workflow/scheduled-actions'
     | '/admin/config/'
     | '/admin/people/'
     | '/admin/reference-data/'
-    | '/admin/teams/';
+    | '/admin/teams/'
+    | '/admin/workflow/instances/$instanceId'
+    | '/admin/workflow/instances/';
   fileRoutesByTo: FileRoutesByTo;
   to:
     | '/'
@@ -225,10 +258,13 @@ export interface FileRouteTypes {
     | '/admin/people/new'
     | '/admin/reference-data/$listType'
     | '/admin/teams/$teamId'
+    | '/admin/workflow/scheduled-actions'
     | '/admin/config'
     | '/admin/people'
     | '/admin/reference-data'
-    | '/admin/teams';
+    | '/admin/teams'
+    | '/admin/workflow/instances/$instanceId'
+    | '/admin/workflow/instances';
   id:
     | '__root__'
     | '/'
@@ -245,10 +281,13 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/people/new'
     | '/_authenticated/admin/reference-data/$listType'
     | '/_authenticated/admin/teams/$teamId'
+    | '/_authenticated/admin/workflow/scheduled-actions'
     | '/_authenticated/admin/config/'
     | '/_authenticated/admin/people/'
     | '/_authenticated/admin/reference-data/'
-    | '/_authenticated/admin/teams/';
+    | '/_authenticated/admin/teams/'
+    | '/_authenticated/admin/workflow/instances/$instanceId'
+    | '/_authenticated/admin/workflow/instances/';
   fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
@@ -322,6 +361,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminConfigIndexRouteImport;
       parentRoute: typeof AuthenticatedAdminRoute;
     };
+    '/_authenticated/admin/workflow/scheduled-actions': {
+      id: '/_authenticated/admin/workflow/scheduled-actions';
+      path: '/workflow/scheduled-actions';
+      fullPath: '/admin/workflow/scheduled-actions';
+      preLoaderRoute: typeof AuthenticatedAdminWorkflowScheduledActionsRouteImport;
+      parentRoute: typeof AuthenticatedAdminRoute;
+    };
     '/_authenticated/admin/teams/$teamId': {
       id: '/_authenticated/admin/teams/$teamId';
       path: '/teams/$teamId';
@@ -385,6 +431,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminAuthzAllocationsRouteImport;
       parentRoute: typeof AuthenticatedAdminRoute;
     };
+    '/_authenticated/admin/workflow/instances/': {
+      id: '/_authenticated/admin/workflow/instances/';
+      path: '/workflow/instances';
+      fullPath: '/admin/workflow/instances/';
+      preLoaderRoute: typeof AuthenticatedAdminWorkflowInstancesIndexRouteImport;
+      parentRoute: typeof AuthenticatedAdminRoute;
+    };
+    '/_authenticated/admin/workflow/instances/$instanceId': {
+      id: '/_authenticated/admin/workflow/instances/$instanceId';
+      path: '/workflow/instances/$instanceId';
+      fullPath: '/admin/workflow/instances/$instanceId';
+      preLoaderRoute: typeof AuthenticatedAdminWorkflowInstancesInstanceIdRouteImport;
+      parentRoute: typeof AuthenticatedAdminRoute;
+    };
   }
 }
 
@@ -398,10 +458,13 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminPeopleNewRoute: typeof AuthenticatedAdminPeopleNewRoute;
   AuthenticatedAdminReferenceDataListTypeRoute: typeof AuthenticatedAdminReferenceDataListTypeRoute;
   AuthenticatedAdminTeamsTeamIdRoute: typeof AuthenticatedAdminTeamsTeamIdRoute;
+  AuthenticatedAdminWorkflowScheduledActionsRoute: typeof AuthenticatedAdminWorkflowScheduledActionsRoute;
   AuthenticatedAdminConfigIndexRoute: typeof AuthenticatedAdminConfigIndexRoute;
   AuthenticatedAdminPeopleIndexRoute: typeof AuthenticatedAdminPeopleIndexRoute;
   AuthenticatedAdminReferenceDataIndexRoute: typeof AuthenticatedAdminReferenceDataIndexRoute;
   AuthenticatedAdminTeamsIndexRoute: typeof AuthenticatedAdminTeamsIndexRoute;
+  AuthenticatedAdminWorkflowInstancesInstanceIdRoute: typeof AuthenticatedAdminWorkflowInstancesInstanceIdRoute;
+  AuthenticatedAdminWorkflowInstancesIndexRoute: typeof AuthenticatedAdminWorkflowInstancesIndexRoute;
 }
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
@@ -418,11 +481,17 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminReferenceDataListTypeRoute:
     AuthenticatedAdminReferenceDataListTypeRoute,
   AuthenticatedAdminTeamsTeamIdRoute: AuthenticatedAdminTeamsTeamIdRoute,
+  AuthenticatedAdminWorkflowScheduledActionsRoute:
+    AuthenticatedAdminWorkflowScheduledActionsRoute,
   AuthenticatedAdminConfigIndexRoute: AuthenticatedAdminConfigIndexRoute,
   AuthenticatedAdminPeopleIndexRoute: AuthenticatedAdminPeopleIndexRoute,
   AuthenticatedAdminReferenceDataIndexRoute:
     AuthenticatedAdminReferenceDataIndexRoute,
   AuthenticatedAdminTeamsIndexRoute: AuthenticatedAdminTeamsIndexRoute,
+  AuthenticatedAdminWorkflowInstancesInstanceIdRoute:
+    AuthenticatedAdminWorkflowInstancesInstanceIdRoute,
+  AuthenticatedAdminWorkflowInstancesIndexRoute:
+    AuthenticatedAdminWorkflowInstancesIndexRoute,
 };
 
 const AuthenticatedAdminRouteWithChildren =

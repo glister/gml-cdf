@@ -17,14 +17,16 @@ import {
 // effect of loading their definition module, so importing the registry alone
 // would list whatever happened to have been loaded — an empty browser in the
 // worst case. The "lists the pilot key" test is the tripwire for that mistake.
-import { configRegistry, qualifiedName, type ConfigKeyDef } from '../../config/index.js';
 import {
-  ConfigEffectiveFromError,
-  ConfigWriteConflictError,
+  configRegistry,
+  qualifiedName,
   resetConfig,
   resolveConfig,
   setConfig,
-} from '../../lib/config.js';
+  ConfigEffectiveFromError,
+  ConfigWriteConflictError,
+  type ConfigKeyDef,
+} from '@repo/config';
 import { decodeCursor, encodeCursor, keysetBoundary, timestampSortKey } from '../../lib/keyset.js';
 import type { RoleKey } from '../../lib/constants.js';
 

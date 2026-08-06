@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./schemas": "./src/schemas.ts"
   },
   "scripts": {
     "lint": "eslint .",
@@ -12,9 +13,11 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@repo/config": "workspace:*",
     "@repo/db": "workspace:*",
     "@repo/domain": "workspace:*",
     "@repo/identity": "workspace:*",
+    "@repo/workflow": "workspace:*",
     "@trpc/server": "^11.0.0",
     "kysely": "^0.29.0",
     "zod": "^4.0.0"

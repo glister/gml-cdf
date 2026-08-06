@@ -5,6 +5,16 @@
  * literals for CHECK columns rather than importing from here (avoids a cycle).
  */
 
+/**
+ * The role and module vocabulary now lives in `@repo/domain` (`authz/roles.ts`)
+ * and is re-exported here so every call site — `roleProcedure`, `schemas.ts`,
+ * the web nav — is unchanged. It moved down because `@repo/config` types each
+ * key's `editableBy` against `RoleKey` and the workflow runtime resolves `by`
+ * policies to role keys, and `@repo/domain` is the only package below all three
+ * (core 07 §5.2 write-back, 2026-08-05).
+ */
+export { MODULE_KEYS, ROLE_KEYS, type ModuleKey, type RoleKey } from '@repo/domain';
+
 /** Better Auth admin-plugin roles. */
 export const USER_ROLES = ['admin', 'agent'] as const;
 export type UserRole = (typeof USER_ROLES)[number];
@@ -55,52 +65,9 @@ export const PERSON_SORTS = ['created_at', 'family_name', 'access_valid_until'] 
 export type PersonSort = (typeof PERSON_SORTS)[number];
 
 // --- Authorisation (core plan 04, ADR-0015) ---------------------------------
-
-/**
- * The seeded role set (SoW §10 + `external_administrator`, CORE-05). Mirrors
- * `platform.role.key`, which is deliberately NOT CHECK-constrained — roles are
- * data (PL-002), so adding one in Phase 2 needs no migration. This tuple exists
- * to make `roleProcedure([...])` arguments type-safe; a role key that is in the
- * table but not here simply cannot be named by a builder at compile time.
- */
-export const ROLE_KEYS = [
-  'administrator',
-  'hr_user',
-  'line_manager',
-  'finance',
-  'it',
-  'transport',
-  'office_admin',
-  'director',
-  'employee',
-  'external',
-  'external_administrator',
-] as const;
-export type RoleKey = (typeof ROLE_KEYS)[number];
-
-/**
- * The grant-scope keys — which functional area a role applies in. Mirrors the
- * `platform.role_grant.module` CHECK. A code-level constant, not reference data:
- * adding a module is a code change by definition (ADR-0008).
- *
- * Note the asymmetry: `platform` is one coarse scope covering every shared
- * service (identity, reference data, config, documents, calendar, audit,
- * evidence), while the HR module is subdivided into nine areas so the restricted
- * ones (`hr.er`, `hr.wellbeing`) can be granted separately.
- */
-export const MODULE_KEYS = [
-  'platform',
-  'hr.core',
-  'hr.onboarding',
-  'hr.holiday_leave',
-  'hr.sickness_absence',
-  'hr.er',
-  'hr.ld',
-  'hr.offboarding',
-  'hr.wellbeing',
-  'hr.reporting',
-] as const;
-export type ModuleKey = (typeof MODULE_KEYS)[number];
+//
+// `ROLE_KEYS` / `MODULE_KEYS` are re-exported at the top of this file from
+// `@repo/domain`; the rest of the vocabulary stays here.
 
 /**
  * Field sensitivity classes (PL-003, ADR-0015), ordered least → most sensitive.
@@ -181,3 +148,28 @@ export type TeamSort = (typeof TEAM_SORTS)[number];
  */
 export const CONFIG_SORTS = ['key', 'updated_at'] as const;
 export type ConfigSort = (typeof CONFIG_SORTS)[number];
+
+// --- Workflow runtime & scheduled actions (core plan 07, ADR-0013) ----------
+
+/**
+ * Sort columns for the instance list. `updated_at` is the useful default for an
+ * operator ("what moved recently?"); `created_at` answers "what has been open
+ * longest?".
+ */
+export const WORKFLOW_INSTANCE_SORTS = ['created_at', 'updated_at'] as const;
+export type WorkflowInstanceSort = (typeof WORKFLOW_INSTANCE_SORTS)[number];
+
+/**
+ * `platform.scheduled_action.status`. Mirrors the CHECK constraint and the
+ * inlined literals in `.kysely-codegenrc.json`.
+ */
+export const SCHEDULED_ACTION_STATUSES = ['pending', 'enqueued', 'executed', 'cancelled'] as const;
+export type ScheduledActionStatus = (typeof SCHEDULED_ACTION_STATUSES)[number];
+
+/** Who created a timer. Mirrors `platform.scheduled_action.source`. */
+export const SCHEDULED_ACTION_SOURCES = ['workflow', 'manual', 'system'] as const;
+export type ScheduledActionSource = (typeof SCHEDULED_ACTION_SOURCES)[number];
+
+/** Sort columns for the timers table. Due date is what an operator scans by. */
+export const SCHEDULED_ACTION_SORTS = ['due_at', 'created_at'] as const;
+export type ScheduledActionSort = (typeof SCHEDULED_ACTION_SORTS)[number];

@@ -22,7 +22,6 @@ api_url    = "https://api.connect.cdfencing.co.uk"
 # better_auth_secret) come from TF_VAR_* in CI.
 
 # --- Custom domains (runbook §11) ---
-# Phase 1: apply with bindings disabled, delegate the name servers at Krystal.
-# Phase 2: set enable_custom_domain_bindings = true and re-apply.
-dns_zone_name                 = "connect.cdfencing.co.uk"
-enable_custom_domain_bindings = false
+# DNS stays at Krystal and is created by hand. Leave false until the records
+# from `terraform output dns_records_required` exist and resolve, then flip.
+enable_custom_domains = false

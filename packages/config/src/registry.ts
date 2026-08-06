@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import type { RoleKey } from '../lib/constants.js';
+import type { RoleKey } from '@repo/domain';
 
 /**
  * The code-side configuration schema registry (core plan 06 §4.6, ADR-0016).

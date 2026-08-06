@@ -1,5 +1,5 @@
 /**
- * Postgres integrity errors → tRPC errors.
+ * Postgres integrity-error predicates.
  *
  * Several invariants in this codebase are enforced by the database rather than
  * by application checks — unique codes, the team-membership overlap EXCLUDE
@@ -9,6 +9,12 @@
  * driver error. Mapping them here keeps the guarantee in the database and the
  * message intelligible in the UI, instead of tempting a pre-flight SELECT that
  * would race anyway.
+ *
+ * Lives in `@repo/db` rather than `@repo/trpc` because three layers now need it
+ * — the routers that map a violation to a `CONFLICT`, `@repo/config`'s
+ * supersede write path, and the workflow runtime — and these are predicates over
+ * driver errors, not HTTP-shaped translations. The mapping to a `TRPCError`
+ * stays at the procedure boundary, where it belongs.
  */
 
 /** SQLSTATE codes we translate. */

@@ -8,17 +8,32 @@ import { startOutboxRelay } from './outbox-relay.js';
 const logger = createLogger({ service: 'relay-test', level: 'silent' });
 const noDb = undefined as unknown as Kysely<DB>;
 
+/**
+ * The relay opens **two** senders since core plan 07 — the `domain-events` topic
+ * and the `effects` queue — so the fake hands out one per destination and the
+ * test asserts both are closed on shutdown.
+ */
 function fakeSb() {
-  const sender = { sendMessages: vi.fn(async () => {}), close: vi.fn(async () => {}) };
-  const sb = { sender: () => sender } as unknown as ServiceBus;
-  return { sb, sender };
+  const senders = new Map<
+    string,
+    { sendMessages: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn> }
+  >();
+  const sender = (name: string) => {
+    const existing = senders.get(name);
+    if (existing) return existing;
+    const created = { sendMessages: vi.fn(async () => {}), close: vi.fn(async () => {}) };
+    senders.set(name, created);
+    return created;
+  };
+  const sb = { sender } as unknown as ServiceBus;
+  return { sb, senders, topicSender: sender('domain-events'), effectsSender: sender('effects') };
 }
 
 const tick = (ms = 25) => new Promise((r) => setTimeout(r, ms));
 
 describe('startOutboxRelay', () => {
-  it('polls the outbox and stops cleanly, closing the sender', async () => {
-    const { sb, sender } = fakeSb();
+  it('polls the outbox and stops cleanly, closing both senders', async () => {
+    const { sb, topicSender, effectsSender } = fakeSb();
     const runBatch = vi.fn(async () => 0); // outbox always empty
 
     const relay = startOutboxRelay({ db: noDb, sb, logger }, { runBatch, pollIntervalMs: 2 });
@@ -26,7 +41,8 @@ describe('startOutboxRelay', () => {
     await relay.stop();
 
     expect(runBatch).toHaveBeenCalled();
-    expect(sender.close).toHaveBeenCalledOnce();
+    expect(topicSender.close).toHaveBeenCalledOnce();
+    expect(effectsSender.close).toHaveBeenCalledOnce();
 
     // No further ticks after stop().
     const callsAtStop = runBatch.mock.calls.length;

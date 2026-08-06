@@ -12,7 +12,7 @@ import {
   updateLookupValueInput,
 } from '../../schemas.js';
 import { decodeCursor, encodeCursor, keysetBoundary, timestampSortKey } from '../../lib/keyset.js';
-import { isUniqueViolation } from '../../lib/pg-errors.js';
+import { isUniqueViolation } from '@repo/db';
 
 /**
  * Tier 1 reference data (core plan 05 §5.1, PL-005/005b/006/007, ADR-0016).

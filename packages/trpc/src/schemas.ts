@@ -13,15 +13,26 @@ import {
   PROFILE_STATUSES,
   RELATIONSHIP_TYPES,
   ROLE_KEYS,
+  SCHEDULED_ACTION_SORTS,
+  SCHEDULED_ACTION_STATUSES,
   SORT_DIRECTIONS,
   TEAM_SORTS,
   USER_ROLES,
+  WORKFLOW_INSTANCE_SORTS,
 } from './lib/constants.js';
 
 /**
  * Flat module of Zod input/output schemas + inferred types. Enums are derived
  * from the constant tuples in `./lib/constants.ts`. Every router pulls its
  * validators from here.
+ *
+ * **Exported as the `@repo/trpc/schemas` subpath, and that is how clients must
+ * import it.** A form validating with a shared schema needs the Zod object at
+ * *runtime*, and reaching it through the package root would pull in the router —
+ * and therefore `@trpc/server` — landing "You're trying to use @trpc/server in a
+ * non-server environment" in the browser. This module imports nothing but Zod
+ * and the constant tuples, so the subpath is safe in any bundle. The root export
+ * stays type-only on the client (`import type { AppRouter }`).
  */
 
 export const sortDirEnum = z.enum(SORT_DIRECTIONS);
@@ -699,3 +710,68 @@ export const configHistoryRowSchema = z.object({
   createdByName: z.string().nullable(),
 });
 export type ConfigHistoryRow = z.infer<typeof configHistoryRowSchema>;
+
+// --- Workflow runtime & scheduled actions (core plan 07 §5.3) ---------------
+
+/**
+ * Execute a named action on an instance. `expectedState` is optimistic
+ * concurrency for automation — a client that read the case a moment ago passes
+ * the state it saw, and a mismatch is a conflict rather than a silent overwrite.
+ */
+export const workflowTransitionInput = z.object({
+  instanceId: z.uuid(),
+  action: z.string().trim().min(1).max(100),
+  comment: z.string().trim().max(2000).optional(),
+  /** Caller-supplied action input, handed to the guards. */
+  input: z.record(z.string(), z.unknown()).optional(),
+  expectedState: z.string().trim().max(100).optional(),
+  onBehalfOf: z.uuid().optional(),
+});
+export type WorkflowTransitionInput = z.infer<typeof workflowTransitionInput>;
+
+export const workflowInstanceRefInput = z.object({ instanceId: z.uuid() });
+
+export const workflowListInstancesInput = z.object({
+  workflowKey: z.string().trim().max(200).optional(),
+  currentState: z.string().trim().max(100).optional(),
+  /** `true` = still running, `false` = completed. Omitted = both. */
+  active: z.boolean().optional(),
+  subjectStreamType: z.string().trim().max(100).optional(),
+  subjectStreamId: z.uuid().optional(),
+  cursor: z.string().optional(),
+  limit: z.number().int().min(1).max(100).default(25),
+  sort: z.enum(WORKFLOW_INSTANCE_SORTS).default('created_at'),
+  sortDir: z.enum(SORT_DIRECTIONS).default('desc'),
+});
+export type WorkflowListInstancesInput = z.infer<typeof workflowListInstancesInput>;
+
+export const listScheduledActionsInput = z.object({
+  status: z.enum(SCHEDULED_ACTION_STATUSES).optional(),
+  actionType: z.string().trim().max(200).optional(),
+  dueFrom: z.iso.datetime().optional(),
+  dueTo: z.iso.datetime().optional(),
+  workflowInstanceId: z.uuid().optional(),
+  subjectStreamType: z.string().trim().max(100).optional(),
+  subjectStreamId: z.uuid().optional(),
+  cursor: z.string().optional(),
+  limit: z.number().int().min(1).max(100).default(25),
+  sort: z.enum(SCHEDULED_ACTION_SORTS).default('due_at'),
+  sortDir: z.enum(SORT_DIRECTIONS).default('asc'),
+});
+export type ListScheduledActionsInput = z.infer<typeof listScheduledActionsInput>;
+
+/**
+ * A reason is mandatory. Cancelling a timer is a decision someone made, and the
+ * journal event carries the reason so the trail explains it later.
+ */
+export const cancelScheduledActionInput = z.object({
+  id: z.uuid(),
+  reason: z.string().trim().min(1).max(500),
+});
+export type CancelScheduledActionInput = z.infer<typeof cancelScheduledActionInput>;
+
+export const rescheduleActionInput = z.object({
+  id: z.uuid(),
+  dueAt: z.iso.datetime(),
+});
+export type RescheduleActionInput = z.infer<typeof rescheduleActionInput>;

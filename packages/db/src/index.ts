@@ -11,8 +11,11 @@ import type {
   PlatformPersonMerge,
   PlatformRole,
   PlatformRoleGrant,
+  PlatformScheduledAction,
   PlatformTeam,
   PlatformTeamMembership,
+  PlatformWorkflowInstance,
+  PlatformWorkflowTransition,
   Session,
   User,
   Verification,
@@ -27,6 +30,12 @@ export {
   type AppendEventInput,
 } from './journal.js';
 export { relayOutboxBatch, recordConsumptionOnce } from './outbox.js';
+export {
+  isCheckViolation,
+  isExclusionViolation,
+  isForeignKeyViolation,
+  isUniqueViolation,
+} from './pg-errors.js';
 export { makeSnapshot, type SnapshotEnvelope, type MakeSnapshotArgs } from './lib/snapshot.js';
 export {
   activeOn,
@@ -36,6 +45,7 @@ export {
 } from './lib/effective-dating.js';
 export {
   grantRole,
+  loadGrantsForPerson,
   revokeGrant,
   revokeAllGrantsForPerson,
   type GrantRoleInput,
@@ -43,6 +53,13 @@ export {
   type RevokedGrantSummary,
 } from './authz.js';
 export type { DB } from './types.js';
+/**
+ * The generated jsonb/timestamp aliases. Re-exported because a router selecting
+ * a `jsonb` column would otherwise infer a type that can only be named through
+ * `@repo/db/src/types.js` — a deep path TypeScript rightly calls unportable
+ * (TS2742). Naming them here keeps consumers on the package's public surface.
+ */
+export type { Json, JsonArray, JsonObject, JsonPrimitive, JsonValue, Timestamp } from './types.js';
 export type {
   Account,
   PlatformConfigEntry,
@@ -55,8 +72,11 @@ export type {
   PlatformPersonMerge,
   PlatformRole,
   PlatformRoleGrant,
+  PlatformScheduledAction,
   PlatformTeam,
   PlatformTeamMembership,
+  PlatformWorkflowInstance,
+  PlatformWorkflowTransition,
   Session,
   User,
   Verification,
@@ -132,3 +152,17 @@ export type TeamMembershipUpdate = Updateable<PlatformTeamMembership>;
 export type ConfigEntryRecord = Selectable<PlatformConfigEntry>;
 export type NewConfigEntry = Insertable<PlatformConfigEntry>;
 export type ConfigEntryUpdate = Updateable<PlatformConfigEntry>;
+
+// Workflow runtime & scheduled actions (core plan 07, ADR-0013). There is no
+// `WorkflowTransitionUpdate`: the transition log is append-only at the database
+// level, so a row is only ever inserted (ADR-0011).
+export type WorkflowInstanceRecord = Selectable<PlatformWorkflowInstance>;
+export type NewWorkflowInstance = Insertable<PlatformWorkflowInstance>;
+export type WorkflowInstanceUpdate = Updateable<PlatformWorkflowInstance>;
+
+export type WorkflowTransitionRecord = Selectable<PlatformWorkflowTransition>;
+export type NewWorkflowTransition = Insertable<PlatformWorkflowTransition>;
+
+export type ScheduledActionRecord = Selectable<PlatformScheduledAction>;
+export type NewScheduledAction = Insertable<PlatformScheduledAction>;
+export type ScheduledActionUpdate = Updateable<PlatformScheduledAction>;
