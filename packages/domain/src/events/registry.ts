@@ -33,6 +33,14 @@ import {
   platformScheduledActionCancelled,
   platformScheduledActionRescheduled,
   platformScheduledActionScheduled,
+  platformTaskCancelled,
+  platformTaskClaimed,
+  platformTaskCompleted,
+  platformTaskDueRecomputed,
+  platformTaskGateOpened,
+  platformTaskRaised,
+  platformTaskReleased,
+  platformTaskUnblocked,
   platformTeamArchived,
   platformTeamCreated,
   platformTeamMembershipAdded,
@@ -102,6 +110,15 @@ export const eventTypes = {
   'platform.scheduled_action.scheduled': platformScheduledActionScheduled,
   'platform.scheduled_action.rescheduled': platformScheduledActionRescheduled,
   'platform.scheduled_action.cancelled': platformScheduledActionCancelled,
+  // Task & checklist engine (core plan 08, PL-013…015).
+  'platform.task.raised': platformTaskRaised,
+  'platform.task.unblocked': platformTaskUnblocked,
+  'platform.task.claimed': platformTaskClaimed,
+  'platform.task.released': platformTaskReleased,
+  'platform.task.completed': platformTaskCompleted,
+  'platform.task.cancelled': platformTaskCancelled,
+  'platform.task.due_recomputed': platformTaskDueRecomputed,
+  'platform.task.gate.opened': platformTaskGateOpened,
 } as const;
 
 /** The union of all registered event-type names. */

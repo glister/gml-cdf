@@ -12,7 +12,11 @@
       "platform.role_grant.module": "'platform' | 'hr.core' | 'hr.onboarding' | 'hr.holiday_leave' | 'hr.sickness_absence' | 'hr.er' | 'hr.ld' | 'hr.offboarding' | 'hr.wellbeing' | 'hr.reporting'",
       "platform.lookup.list_type": "'department' | 'job_role' | 'document_category' | 'sickness_type' | 'ppe_type' | 'leaver_reason' | 'equipment_type'",
       "platform.scheduled_action.status": "Generated<'pending' | 'enqueued' | 'executed' | 'cancelled'>",
-      "platform.scheduled_action.source": "'workflow' | 'manual' | 'system'"
+      "platform.scheduled_action.source": "'workflow' | 'manual' | 'system'",
+      "platform.task.status": "Generated<'blocked' | 'open' | 'done' | 'cancelled'>",
+      "platform.task.due_mode": "Generated<'none' | 'absolute' | 'anchor_relative'>",
+      "platform.task.source": "'workflow' | 'manual'",
+      "platform.task_dependency.depends_on_kind": "'task' | 'gate'"
     }
   }
 }
