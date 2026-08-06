@@ -1,5 +1,6 @@
 import { router } from './trpc.js';
 import { usersRouter } from './routers/users.js';
+import { approvalsRouter } from './routers/platform/approvals.js';
 import { authzRouter } from './routers/platform/authz.js';
 import { configRouter } from './routers/platform/config.js';
 import { identityRouter } from './routers/platform/identity.js';
@@ -24,6 +25,7 @@ export const appRouter = router({
     config: configRouter,
     workflow: workflowRouter,
     tasks: tasksRouter,
+    approvals: approvalsRouter,
   }),
 });
 

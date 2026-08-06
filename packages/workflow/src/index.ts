@@ -88,6 +88,7 @@
 
 export {
   executeTransition,
+  executeTransitionIn,
   startWorkflow,
   WorkflowAlreadyActiveError,
   type ExecuteTransitionInput,

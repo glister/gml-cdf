@@ -49,6 +49,13 @@ import { requireSubjectLoader } from './subjects.js';
  * that serialises concurrent actors, and a blocked guard must roll back to
  * leaving **nothing** behind — including any writes a caller had already made.
  * A caller that needs to write alongside a transition registers an effect.
+ *
+ * `executeTransitionIn` is that same body on a transaction the caller already
+ * holds, added for core plan 09: an approval decision and the case move it
+ * authorises are **one** business fact, so the decisive decision fires its
+ * transition inside its own transaction rather than after it. Use it only when
+ * composing a transition into a larger atomic fact; the default is still the
+ * asymmetry above.
  */
 
 /**
@@ -277,233 +284,253 @@ export async function executeTransition(
   db: Kysely<DB>,
   input: ExecuteTransitionInput,
 ): Promise<TransitionResult> {
-  return db.transaction().execute(async (trx): Promise<TransitionResult> => {
-    const instance = await trx
-      .selectFrom('platform.workflow_instance')
-      .selectAll()
-      .where('id', '=', input.instanceId)
-      .where('deleted_at', 'is', null)
-      .forUpdate()
-      .executeTakeFirst();
+  return db.transaction().execute((trx) => executeTransitionIn(trx, input));
+}
 
-    if (!instance) {
-      return { ok: false, code: 'NOT_FOUND', detail: `no workflow instance '${input.instanceId}'` };
-    }
+/**
+ * {@link executeTransition}, on a transaction the caller already holds.
+ *
+ * Added for core plan 09 (its §5.5 / §12.1): the approval engine's decisive
+ * decision must fire the pending workflow transition **in the same
+ * transaction** as the decision row and its journal event, because an approval
+ * and the case move it authorises are one business fact. Committing the
+ * decision and then failing to advance the case would leave a request marked
+ * approved and a workflow sitting behind it.
+ *
+ * Everything below is what `executeTransition` used to hold inline, unchanged —
+ * the row lock still serialises concurrent actors, and a hard guard still rolls
+ * back to having written nothing. The only difference is **whose** transaction
+ * that rollback discards: a caller passing its own accepts that a blocked guard
+ * takes their writes with it, which for plan 09 is precisely the wanted
+ * behaviour.
+ *
+ * Prefer `executeTransition` unless you are composing a transition into a
+ * larger atomic fact. Plan 07 §5.2's original asymmetry — `startWorkflow` takes
+ * a transaction, `executeTransition` owns one — still describes the default.
+ */
+export async function executeTransitionIn(
+  trx: Transaction<DB>,
+  input: ExecuteTransitionInput,
+): Promise<TransitionResult> {
+  const instance = await trx
+    .selectFrom('platform.workflow_instance')
+    .selectAll()
+    .where('id', '=', input.instanceId)
+    .where('deleted_at', 'is', null)
+    .forUpdate()
+    .executeTakeFirst();
 
-    if (input.expectedState !== undefined && input.expectedState !== instance.current_state) {
+  if (!instance) {
+    return { ok: false, code: 'NOT_FOUND', detail: `no workflow instance '${input.instanceId}'` };
+  }
+
+  if (input.expectedState !== undefined && input.expectedState !== instance.current_state) {
+    return {
+      ok: false,
+      code: 'CONFLICT',
+      detail: `expected state '${input.expectedState}' but the instance is in '${instance.current_state}'`,
+    };
+  }
+
+  const def = requireDefinition(instance.workflow_key, instance.definition_version);
+  const transitionDef = def.transitions.find(
+    (t) => t.from === instance.current_state && t.action === input.action,
+  );
+  if (!transitionDef) {
+    const known = def.transitions.some((t) => t.action === input.action);
+    return known
+      ? {
+          ok: false,
+          code: 'CONFLICT',
+          detail: `'${input.action}' is not available from state '${instance.current_state}'`,
+        }
+      : {
+          ok: false,
+          code: 'UNKNOWN_ACTION',
+          detail: `'${input.action}' is not an action of '${def.key}' v${def.version}`,
+        };
+  }
+
+  const config = await resolveRefs(trx, configRefsFor(transitionDef), input.now);
+
+  const roles = rolesFor(transitionDef.by, config);
+  if (roles === 'system') {
+    if (input.actorPersonId !== null) {
       return {
         ok: false,
-        code: 'CONFLICT',
-        detail: `expected state '${input.expectedState}' but the instance is in '${instance.current_state}'`,
+        code: 'FORBIDDEN',
+        detail: `'${input.action}' is a system transition — it is taken by timers and automation, not by a person`,
       };
     }
-
-    const def = requireDefinition(instance.workflow_key, instance.definition_version);
-    const transitionDef = def.transitions.find(
-      (t) => t.from === instance.current_state && t.action === input.action,
-    );
-    if (!transitionDef) {
-      const known = def.transitions.some((t) => t.action === input.action);
-      return known
-        ? {
-            ok: false,
-            code: 'CONFLICT',
-            detail: `'${input.action}' is not available from state '${instance.current_state}'`,
-          }
-        : {
-            ok: false,
-            code: 'UNKNOWN_ACTION',
-            detail: `'${input.action}' is not an action of '${def.key}' v${def.version}`,
-          };
-    }
-
-    const config = await resolveRefs(trx, configRefsFor(transitionDef), input.now);
-
-    const roles = rolesFor(transitionDef.by, config);
-    if (roles === 'system') {
-      if (input.actorPersonId !== null) {
-        return {
-          ok: false,
-          code: 'FORBIDDEN',
-          detail: `'${input.action}' is a system transition — it is taken by timers and automation, not by a person`,
-        };
-      }
-    } else {
-      if (input.actorPersonId === null) {
-        return {
-          ok: false,
-          code: 'FORBIDDEN',
-          detail: `'${input.action}' requires a person holding one of: ${roles.join(', ') || '(none — the policy resolved to no role)'}`,
-        };
-      }
-      const grants = await loadGrantsForPerson(trx, input.actorPersonId);
-      if (!hasRole(grants, roles, def.module as ModuleKey, input.now)) {
-        return {
-          ok: false,
-          code: 'FORBIDDEN',
-          detail: `'${input.action}' requires one of ${roles.join(', ')} in module '${def.module}'`,
-        };
-      }
-    }
-
-    const subject = await requireSubjectLoader(def.key)(trx, instance);
-    const evaluation = evaluateTransition(
-      def,
-      instance.current_state,
-      input.action,
-      guardRegistry,
-      {
-        subject,
-        input: input.input ?? {},
-        config,
-        now: input.now,
-      },
-    );
-
-    if (!evaluation.ok) {
-      // Not a business fact: no state, no transition row, no event. The
-      // transaction commits having written nothing, which is exactly right —
-      // "someone tried and was refused" is an application log line, and an
-      // audit trail full of refusals would bury the decisions that did happen.
+  } else {
+    if (input.actorPersonId === null) {
       return {
         ok: false,
-        code: evaluation.reason === 'guard-blocked' ? 'GUARD_BLOCKED' : 'CONFLICT',
-        detail: evaluation.detail,
+        code: 'FORBIDDEN',
+        detail: `'${input.action}' requires a person holding one of: ${roles.join(', ') || '(none — the policy resolved to no role)'}`,
       };
     }
-
-    const updated = await trx
-      .updateTable('platform.workflow_instance')
-      .set({
-        current_state: evaluation.to,
-        updated_by: input.actorPersonId,
-        ...(evaluation.terminal ? { completed_at: input.now } : {}),
-      })
-      .where('id', '=', instance.id)
-      .returningAll()
-      .executeTakeFirstOrThrow();
-
-    const transitionId = newUuidV7();
-    // `EffectRef.params` is `Record<string, unknown>` in the definition model and
-    // JSON-shaped in the event schema; the definition's own serialisability
-    // check (WF-1) is what has already guaranteed the values really are JSON.
-    const effects: TransitionedPayload['effects'] = evaluation.effects.map((e) => ({
-      name: e.name,
-      params: (e.params ?? {}) as TransitionedPayload['effects'][number]['params'],
-    }));
-
-    const transition = await trx
-      .insertInto('platform.workflow_transition')
-      .values({
-        id: transitionId,
-        instance_id: instance.id,
-        from_state: instance.current_state,
-        to_state: evaluation.to,
-        action: input.action,
-        actor_person_id: input.actorPersonId,
-        on_behalf_of: input.onBehalfOf ?? null,
-        comment: input.comment ?? null,
-        guard_results: JSON.stringify(evaluation.guardResults) as never,
-        resolved_config: JSON.stringify(config) as never,
-        effects: JSON.stringify(effects) as never,
-        occurred_at: input.now,
-        created_by: input.actorPersonId,
-      })
-      .returningAll()
-      .executeTakeFirstOrThrow();
-
-    // A definition may declare a domain-specific fact instead of the generic
-    // type. ADR-0021 requires `stream_type` to be the event type's
-    // `<module>.<entity>` prefix, so the override is journalled on the SUBJECT's
-    // stream and its prefix must match — enforced here rather than trusted,
-    // because a mismatch would corrupt the grammar for every consumer.
-    const emits = evaluation.emits;
-    if (emits !== undefined) {
-      const prefix = emits.split('.').slice(0, 2).join('.');
-      if (prefix !== instance.subject_stream_type) {
-        throw new Error(
-          `workflow '${def.key}' declares emits '${emits}', whose stream prefix '${prefix}' does not match the instance's subject stream '${instance.subject_stream_type}' (ADR-0021)`,
-        );
-      }
+    const grants = await loadGrantsForPerson(trx, input.actorPersonId);
+    if (!hasRole(grants, roles, def.module as ModuleKey, input.now)) {
+      return {
+        ok: false,
+        code: 'FORBIDDEN',
+        detail: `'${input.action}' requires one of ${roles.join(', ')} in module '${def.module}'`,
+      };
     }
+  }
 
-    const payload: TransitionedPayload = {
-      transitionId,
-      instanceId: instance.id,
-      workflowKey: def.key,
-      definitionVersion: def.version,
-      subjectStreamType: instance.subject_stream_type,
-      subjectStreamId: instance.subject_stream_id,
-      from: instance.current_state,
-      to: evaluation.to,
+  const subject = await requireSubjectLoader(def.key)(trx, instance);
+  const evaluation = evaluateTransition(def, instance.current_state, input.action, guardRegistry, {
+    subject,
+    input: input.input ?? {},
+    config,
+    now: input.now,
+  });
+
+  if (!evaluation.ok) {
+    // Not a business fact: no state, no transition row, no event. The
+    // transaction commits having written nothing, which is exactly right —
+    // "someone tried and was refused" is an application log line, and an
+    // audit trail full of refusals would bury the decisions that did happen.
+    return {
+      ok: false,
+      code: evaluation.reason === 'guard-blocked' ? 'GUARD_BLOCKED' : 'CONFLICT',
+      detail: evaluation.detail,
+    };
+  }
+
+  const updated = await trx
+    .updateTable('platform.workflow_instance')
+    .set({
+      current_state: evaluation.to,
+      updated_by: input.actorPersonId,
+      ...(evaluation.terminal ? { completed_at: input.now } : {}),
+    })
+    .where('id', '=', instance.id)
+    .returningAll()
+    .executeTakeFirstOrThrow();
+
+  const transitionId = newUuidV7();
+  // `EffectRef.params` is `Record<string, unknown>` in the definition model and
+  // JSON-shaped in the event schema; the definition's own serialisability
+  // check (WF-1) is what has already guaranteed the values really are JSON.
+  const effects: TransitionedPayload['effects'] = evaluation.effects.map((e) => ({
+    name: e.name,
+    params: (e.params ?? {}) as TransitionedPayload['effects'][number]['params'],
+  }));
+
+  const transition = await trx
+    .insertInto('platform.workflow_transition')
+    .values({
+      id: transitionId,
+      instance_id: instance.id,
+      from_state: instance.current_state,
+      to_state: evaluation.to,
       action: input.action,
-      guardWarnings: evaluation.warnings.map((w) => w.guard),
-      effects,
-      completed: evaluation.terminal,
-    };
-    const actor = {
-      actorPersonId: input.actorPersonId,
-      onBehalfOf: input.onBehalfOf ?? null,
-      correlationId: input.correlationId,
-    };
+      actor_person_id: input.actorPersonId,
+      on_behalf_of: input.onBehalfOf ?? null,
+      comment: input.comment ?? null,
+      guard_results: JSON.stringify(evaluation.guardResults) as never,
+      resolved_config: JSON.stringify(config) as never,
+      effects: JSON.stringify(effects) as never,
+      occurred_at: input.now,
+      created_by: input.actorPersonId,
+    })
+    .returningAll()
+    .executeTakeFirstOrThrow();
 
-    if (emits === undefined) {
-      await appendEvent(trx, {
-        streamType: 'platform.workflow_instance',
-        streamId: instance.id,
-        eventType: 'platform.workflow_instance.transitioned',
-        payload,
-        ...actor,
-      });
-    } else {
-      // The override's name is only known at runtime, so the literal-keyed
-      // registry cannot type it. The cast is to the generic type's name
-      // specifically, which is exactly the contract an override signs up to:
-      // it may rename the fact, not reshape it, and it registers against the
-      // shared `workflowTransitionedPayload` schema. `appendEvent` still
-      // validates the name and the payload against the registry and throws
-      // **before insert** if either is wrong — the check that actually matters.
-      await appendEvent(trx, {
+  // A definition may declare a domain-specific fact instead of the generic
+  // type. ADR-0021 requires `stream_type` to be the event type's
+  // `<module>.<entity>` prefix, so the override is journalled on the SUBJECT's
+  // stream and its prefix must match — enforced here rather than trusted,
+  // because a mismatch would corrupt the grammar for every consumer.
+  const emits = evaluation.emits;
+  if (emits !== undefined) {
+    const prefix = emits.split('.').slice(0, 2).join('.');
+    if (prefix !== instance.subject_stream_type) {
+      throw new Error(
+        `workflow '${def.key}' declares emits '${emits}', whose stream prefix '${prefix}' does not match the instance's subject stream '${instance.subject_stream_type}' (ADR-0021)`,
+      );
+    }
+  }
+
+  const payload: TransitionedPayload = {
+    transitionId,
+    instanceId: instance.id,
+    workflowKey: def.key,
+    definitionVersion: def.version,
+    subjectStreamType: instance.subject_stream_type,
+    subjectStreamId: instance.subject_stream_id,
+    from: instance.current_state,
+    to: evaluation.to,
+    action: input.action,
+    guardWarnings: evaluation.warnings.map((w) => w.guard),
+    effects,
+    completed: evaluation.terminal,
+  };
+  const actor = {
+    actorPersonId: input.actorPersonId,
+    onBehalfOf: input.onBehalfOf ?? null,
+    correlationId: input.correlationId,
+  };
+
+  if (emits === undefined) {
+    await appendEvent(trx, {
+      streamType: 'platform.workflow_instance',
+      streamId: instance.id,
+      eventType: 'platform.workflow_instance.transitioned',
+      payload,
+      ...actor,
+    });
+  } else {
+    // The override's name is only known at runtime, so the literal-keyed
+    // registry cannot type it. The cast is to the generic type's name
+    // specifically, which is exactly the contract an override signs up to:
+    // it may rename the fact, not reshape it, and it registers against the
+    // shared `workflowTransitionedPayload` schema. `appendEvent` still
+    // validates the name and the payload against the registry and throws
+    // **before insert** if either is wrong — the check that actually matters.
+    await appendEvent(trx, {
+      streamType: instance.subject_stream_type,
+      streamId: instance.subject_stream_id,
+      eventType: emits as 'platform.workflow_instance.transitioned',
+      payload,
+      ...actor,
+    });
+  }
+
+  if (evaluation.terminal) {
+    // The "a human got there before the chaser" sweep. In the same transaction
+    // as the completion, so there is no window in which a finished case still
+    // has a live timer pointing at it.
+    await cancelScheduledActions(trx, {
+      workflowInstanceId: instance.id,
+      reason: `workflow completed in state '${evaluation.to}'`,
+      actorPersonId: input.actorPersonId,
+      correlationId: input.correlationId,
+    });
+  }
+
+  if (evaluation.schedule.length > 0) {
+    const scheduleConfig = await resolveRefs(
+      trx,
+      scheduleConfigRefs(evaluation.schedule),
+      input.now,
+    );
+    await scheduleRefs(trx, evaluation.schedule, {
+      anchor: input.now,
+      config: scheduleConfig,
+      subject: {
         streamType: instance.subject_stream_type,
         streamId: instance.subject_stream_id,
-        eventType: emits as 'platform.workflow_instance.transitioned',
-        payload,
-        ...actor,
-      });
-    }
+      },
+      workflowInstanceId: instance.id,
+      enteringState: evaluation.to,
+      createdBy: input.actorPersonId,
+      correlationId: input.correlationId,
+    });
+  }
 
-    if (evaluation.terminal) {
-      // The "a human got there before the chaser" sweep. In the same transaction
-      // as the completion, so there is no window in which a finished case still
-      // has a live timer pointing at it.
-      await cancelScheduledActions(trx, {
-        workflowInstanceId: instance.id,
-        reason: `workflow completed in state '${evaluation.to}'`,
-        actorPersonId: input.actorPersonId,
-        correlationId: input.correlationId,
-      });
-    }
-
-    if (evaluation.schedule.length > 0) {
-      const scheduleConfig = await resolveRefs(
-        trx,
-        scheduleConfigRefs(evaluation.schedule),
-        input.now,
-      );
-      await scheduleRefs(trx, evaluation.schedule, {
-        anchor: input.now,
-        config: scheduleConfig,
-        subject: {
-          streamType: instance.subject_stream_type,
-          streamId: instance.subject_stream_id,
-        },
-        workflowInstanceId: instance.id,
-        enteringState: evaluation.to,
-        createdBy: input.actorPersonId,
-        correlationId: input.correlationId,
-      });
-    }
-
-    return { ok: true, instance: updated, transition, warnings: [...evaluation.warnings] };
-  });
+  return { ok: true, instance: updated, transition, warnings: [...evaluation.warnings] };
 }
