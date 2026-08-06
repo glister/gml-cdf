@@ -41,6 +41,69 @@ export interface Account {
   user_id: string;
 }
 
+export interface PlatformApprovalAssignee {
+  created_at: Generated<Timestamp>;
+  created_by: string | null;
+  delegation_id: string | null;
+  id: string;
+  notified_at: Timestamp | null;
+  person_id: string;
+  request_id: string;
+  source: "policy_role" | "designated" | "delegation";
+  source_role_id: string | null;
+}
+
+export interface PlatformApprovalDecision {
+  actor_person_id: string;
+  created_at: Generated<Timestamp>;
+  created_by: string | null;
+  decided_at: Timestamp;
+  decision: "approved" | "rejected";
+  delegation_id: string | null;
+  id: string;
+  reason: string | null;
+  request_id: string;
+  warnings_acknowledged: Generated<Json>;
+}
+
+export interface PlatformApprovalDelegation {
+  created_at: Generated<Timestamp>;
+  created_by: string;
+  delegate_person_id: string;
+  delegator_person_id: string;
+  deleted_at: Timestamp | null;
+  id: string;
+  reason: string | null;
+  revoked_at: Timestamp | null;
+  subject_type: string | null;
+  updated_at: Generated<Timestamp>;
+  updated_by: string;
+  valid_from: Timestamp;
+  valid_to: Timestamp;
+}
+
+export interface PlatformApprovalRequest {
+  /**
+   * PII-minimal facts for warning providers and threshold rules: ids, dates, amounts (ADR-0019). Never names or free text — a provider needing detail reads it live under its own RBAC.
+   */
+  context: Generated<Json>;
+  created_at: Generated<Timestamp>;
+  created_by: string | null;
+  decided_at: Timestamp | null;
+  deleted_at: Timestamp | null;
+  id: string;
+  policy_key: string;
+  policy_version: number | null;
+  requested_by: string | null;
+  status: Generated<"pending" | "approved" | "rejected" | "cancelled">;
+  subject_id: string;
+  subject_type: string;
+  updated_at: Generated<Timestamp>;
+  updated_by: string | null;
+  workflow_action: string | null;
+  workflow_instance_id: string | null;
+}
+
 export interface PlatformConfigEntry {
   created_at: Generated<Timestamp>;
   created_by: string;
@@ -370,6 +433,10 @@ export interface Verification {
 
 export interface DB {
   account: Account;
+  "platform.approval_assignee": PlatformApprovalAssignee;
+  "platform.approval_decision": PlatformApprovalDecision;
+  "platform.approval_delegation": PlatformApprovalDelegation;
+  "platform.approval_request": PlatformApprovalRequest;
   "platform.config_entry": PlatformConfigEntry;
   "platform.domain_event": PlatformDomainEvent;
   "platform.event_consumption": PlatformEventConsumption;

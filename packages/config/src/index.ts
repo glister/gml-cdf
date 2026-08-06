@@ -53,4 +53,15 @@ export {
   type SetConfigResult,
 } from './resolve.js';
 
+export {
+  approvalSubjectTypes,
+  defineApprovalSubject,
+  isApprovalSubject,
+  requireApprovalSubject,
+  unregisterApprovalSubjectForTests,
+  ApprovalSubjectUnknownError,
+  type ApprovalSubjectDef,
+  type DefineApprovalSubjectInput,
+} from './approval-subjects.js';
+
 export * from './keys.js';

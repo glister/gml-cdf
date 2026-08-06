@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { defineFieldClassification, schemaUpTo } from './lib/field-classification.js';
 import {
+  APPROVAL_ASSIGNEE_SOURCES,
+  APPROVAL_DECISIONS,
+  APPROVAL_SORTS,
+  APPROVAL_STATUSES,
   CONFIG_SORTS,
   FIELD_CLASSES,
   GRANT_STATES,
@@ -1025,3 +1029,288 @@ export const caseProgressOutput = z.object({
   ),
 });
 export type CaseProgressOutput = z.infer<typeof caseProgressOutput>;
+
+// --- Approval engine (core plan 09 §5.1) ------------------------------------
+
+export const approvalStatusSchema = z.enum(APPROVAL_STATUSES);
+export type ApprovalStatusValue = z.infer<typeof approvalStatusSchema>;
+
+export const approvalDecisionSchema = z.enum(APPROVAL_DECISIONS);
+export const approvalAssigneeSourceSchema = z.enum(APPROVAL_ASSIGNEE_SOURCES);
+
+/** The business record a sign-off is about, in journal vocabulary (ADR-0021). */
+export const approvalSubjectRef = z.object({
+  subjectType: z
+    .string()
+    .trim()
+    .min(1)
+    .max(100)
+    .regex(/^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/, 'subjectType is <module>.<entity> (ADR-0021)'),
+  subjectId: z.uuid(),
+});
+export type ApprovalSubjectRef = z.infer<typeof approvalSubjectRef>;
+
+/**
+ * The PII-minimal facts warning providers and threshold rules read (§4.2).
+ *
+ * Values are scalars only — no nested objects, no arrays. That is not a
+ * convenience limit: `context` is journalled on the `requested` event, and the
+ * moment it can carry a structure it can carry a profile row (ADR-0019). A
+ * provider that needs richer detail queries for it live, under its own RBAC.
+ */
+export const approvalContextSchema = z.record(
+  z.string().trim().min(1).max(100),
+  z.union([z.string().max(200), z.number(), z.boolean(), z.null()]),
+);
+export type ApprovalContext = z.infer<typeof approvalContextSchema>;
+
+/**
+ * A warning acknowledgement — the pair that is stored and journalled (PL-017).
+ *
+ * `message` and `detail` are rendered live and deliberately never persisted:
+ * they are prose about people ("Sam and Alex are already off that week") and
+ * would drag exactly the content ADR-0019 keeps out of the journal into an
+ * append-only table.
+ */
+export const warningAckSchema = z.object({
+  provider: z.string().trim().min(1).max(100),
+  code: z.string().trim().min(1).max(100),
+});
+export type WarningAck = z.infer<typeof warningAckSchema>;
+
+/**
+ * A live warning, as `previewWarnings` and `byId` return it.
+ *
+ * `severity` is fixed at `'warning'` on purpose. PL-017 and HL-038 are explicit
+ * that clash and capacity information **informs** and never blocks; adding an
+ * `'error'` level would be the first step towards a provider that auto-rejects,
+ * which §1's anti-scope rules out. A rule that must block is a workflow guard
+ * (plan 07), not a warning.
+ */
+export const approvalWarningSchema = z.object({
+  provider: z.string(),
+  code: z.string(),
+  severity: z.literal('warning'),
+  message: z.string(),
+  detail: z.unknown().optional(),
+});
+export type ApprovalWarning = z.infer<typeof approvalWarningSchema>;
+
+/** Open a standalone request (§5.1). Workflow-bound ones open server-side. */
+export const submitApprovalInput = approvalSubjectRef.extend({
+  context: approvalContextSchema.default({}),
+  /** What the requester was shown and ticked at submit — codes only. */
+  acknowledgedWarnings: z.array(warningAckSchema).max(50).default([]),
+});
+export type SubmitApprovalInput = z.infer<typeof submitApprovalInput>;
+
+export const previewWarningsInput = approvalSubjectRef.extend({
+  context: approvalContextSchema.default({}),
+});
+
+/**
+ * Record the decisive decision (PL-016).
+ *
+ * The `superRefine` is the **belt** for the mandatory rejection reason; the
+ * `approval_decision_reason_chk` CHECK constraint is the braces. Both exist
+ * because AC-D2 requires a reasonless rejection to be impossible "via the UI,
+ * the API and direct SQL", and a schema alone cannot speak for the third.
+ */
+export const decideApprovalInput = z
+  .object({
+    requestId: z.uuid(),
+    decision: approvalDecisionSchema,
+    reason: z.string().trim().max(4000).optional(),
+    acknowledgedWarnings: z.array(warningAckSchema).max(50).default([]),
+  })
+  .superRefine((input, ctx) => {
+    if (input.decision === 'rejected' && (input.reason ?? '').length === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['reason'],
+        message: 'a reason is required when rejecting — the requester is told why',
+      });
+    }
+  });
+export type DecideApprovalInput = z.infer<typeof decideApprovalInput>;
+
+export const cancelApprovalInput = z.object({
+  requestId: z.uuid(),
+  reason: z.string().trim().max(4000).optional(),
+});
+
+export const approvalRefInput = z.object({ requestId: z.uuid() });
+
+/** What `submit` answers with — including "nobody needed to approve this". */
+export const submitApprovalOutput = z.object({
+  /** `null` when the threshold did not call for approval (§12.2 Q2). */
+  requestId: z.uuid().nullable(),
+  status: approvalStatusSchema.nullable(),
+  /** True when the threshold auto-approved it; the fact is journalled either way. */
+  autoApproved: z.boolean(),
+  /** How many people the policy resolved to — 0 is a real, journalled answer. */
+  notifiedCount: z.number().int(),
+});
+
+/** A request as most surfaces need it. */
+export const approvalRequestSchema = approvalSubjectRef.extend({
+  id: z.uuid(),
+  status: approvalStatusSchema,
+  policyKey: z.string(),
+  policyVersion: z.number().int().nullable(),
+  workflowInstanceId: z.uuid().nullable(),
+  workflowAction: z.string().nullable(),
+  requestedBy: z.uuid().nullable(),
+  requestedByName: z.string().nullable(),
+  context: approvalContextSchema,
+  submittedAt: z.iso.datetime(),
+  decidedAt: z.iso.datetime().nullable(),
+});
+export type ApprovalRequest = z.infer<typeof approvalRequestSchema>;
+
+/**
+ * The approvals inbox. Every facet is a `WHERE`/`ORDER BY` in SQL, and so is
+ * **eligibility** — the caller's live role grants and delegations are joined
+ * into the query (ADR-0004, §5.1). Nothing is filtered over the loaded page,
+ * which with keyset pagination would also corrupt the page boundary.
+ */
+export const approvalInboxInput = z.object({
+  cursor: z.string().nullish(),
+  limit: z.number().int().min(1).max(100).default(25),
+  /** Defaults to the outstanding set — an inbox of decided requests is a report. */
+  status: z.array(approvalStatusSchema).min(1).max(4).optional(),
+  subjectType: z.string().trim().max(100).optional(),
+  /**
+   * Include requests the caller may act on only through an override role.
+   * Off by default, so HR's inbox is *their* work rather than everyone's
+   * (HL-033: they may act on any request without being shown all of them).
+   */
+  includeOverride: z.boolean().default(false),
+  sort: z.enum(APPROVAL_SORTS).default('submitted'),
+  sortDir: z.enum(SORT_DIRECTIONS).default('asc'),
+});
+export type ApprovalInboxInput = z.infer<typeof approvalInboxInput>;
+
+/** A row in the inbox. `waitingDays` is computed in SQL, like `overdue` on tasks. */
+export const approvalListItemSchema = approvalSubjectRef.extend({
+  id: z.uuid(),
+  status: approvalStatusSchema,
+  policyKey: z.string(),
+  requestedBy: z.uuid().nullable(),
+  requestedByName: z.string().nullable(),
+  submittedAt: z.iso.datetime(),
+  decidedAt: z.iso.datetime().nullable(),
+  /** Whole days the request has been outstanding — the chase's raw material. */
+  waitingDays: z.number().int(),
+  /** True when the caller reaches this request only via an override role. */
+  viaOverride: z.boolean(),
+  /** Set when the caller's authority comes from a delegation. */
+  viaDelegationId: z.uuid().nullable(),
+});
+export type ApprovalListItem = z.infer<typeof approvalListItemSchema>;
+
+export const approvalInboxOutput = z.object({
+  items: z.array(approvalListItemSchema),
+  nextCursor: z.string().nullable(),
+});
+
+/** Who was asked, and whether they were told (§4.5 — the notification record). */
+export const approvalAssigneeSchema = z.object({
+  personId: z.uuid(),
+  personName: z.string().nullable(),
+  source: approvalAssigneeSourceSchema,
+  roleName: z.string().nullable(),
+  delegationId: z.uuid().nullable(),
+  notifiedAt: z.iso.datetime().nullable(),
+});
+
+/** The decisive decision, as the detail screen renders it. */
+export const approvalDecisionRecordSchema = z.object({
+  id: z.uuid(),
+  decision: approvalDecisionSchema,
+  actorPersonId: z.uuid(),
+  actorName: z.string().nullable(),
+  delegationId: z.uuid().nullable(),
+  /** Whose authority the decider was carrying, when it came via a delegation. */
+  onBehalfOfName: z.string().nullable(),
+  reason: z.string().nullable(),
+  acknowledgedWarnings: z.array(warningAckSchema),
+  decidedAt: z.iso.datetime(),
+});
+
+/**
+ * Request detail: the row, who was asked, the decision, and **live** warnings.
+ *
+ * `viewerCanDecide` is re-computed on every read from live policy resolution
+ * (§4.5), which is why the decision screen can honestly grey out its buttons for
+ * someone who was notified yesterday and has since left the role.
+ */
+export const approvalDetailSchema = z.object({
+  request: approvalRequestSchema,
+  assignees: z.array(approvalAssigneeSchema),
+  decision: approvalDecisionRecordSchema.nullable(),
+  warnings: z.array(approvalWarningSchema),
+  viewerCanDecide: z.boolean(),
+  /** Set when the viewer's authority comes from a delegation. */
+  viewerDelegationId: z.uuid().nullable(),
+  /** Why they cannot decide, when they cannot — shown rather than left blank. */
+  viewerCannotDecideReason: z
+    .enum(['not_eligible', 'already_decided', 'cancelled', 'is_requester'])
+    .nullable(),
+});
+export type ApprovalDetail = z.infer<typeof approvalDetailSchema>;
+
+export const listApprovalsBySubjectInput = approvalSubjectRef;
+
+// --- Delegations (HL-035 driver) --------------------------------------------
+
+export const approvalDelegationSchema = z.object({
+  id: z.uuid(),
+  delegatorPersonId: z.uuid(),
+  delegatorName: z.string().nullable(),
+  delegatePersonId: z.uuid(),
+  delegateName: z.string().nullable(),
+  /** `null` = every subject type. */
+  subjectType: z.string().nullable(),
+  validFrom: z.iso.datetime(),
+  validTo: z.iso.datetime(),
+  revokedAt: z.iso.datetime().nullable(),
+  reason: z.string().nullable(),
+  /** Computed in SQL against `now()`, so the list and the resolver agree. */
+  active: z.boolean(),
+});
+export type ApprovalDelegation = z.infer<typeof approvalDelegationSchema>;
+
+export const listDelegationsInput = z.object({
+  /** Omitted = the caller's own. Naming someone else is an administrator act. */
+  personId: z.uuid().optional(),
+  /** Include lapsed and revoked ones — off by default. */
+  includeInactive: z.boolean().default(false),
+});
+
+export const createDelegationInput = z
+  .object({
+    delegatePersonId: z.uuid(),
+    /** Omitted = every subject type. */
+    subjectType: z.string().trim().max(100).optional(),
+    validFrom: z.iso.datetime(),
+    validTo: z.iso.datetime(),
+    reason: z.string().trim().max(1000).optional(),
+    /**
+     * Administrators arranging cover for an absent approver (HL-035). Omitted
+     * means the caller is delegating their own authority.
+     */
+    delegatorPersonId: z.uuid().optional(),
+  })
+  .superRefine((input, ctx) => {
+    if (Date.parse(input.validTo) <= Date.parse(input.validFrom)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['validTo'],
+        message: 'the delegation must end after it starts',
+      });
+    }
+  });
+export type CreateDelegationInput = z.infer<typeof createDelegationInput>;
+
+export const revokeDelegationInput = z.object({ delegationId: z.uuid() });
