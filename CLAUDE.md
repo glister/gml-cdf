@@ -21,6 +21,10 @@ Stack and versions are in the `package.json` manifests. The non-obvious parts:
 - `docs/adr/` holds architecture decision records; `docs/plan/phase-01/` is the
   Phase 1 build contract (core, HR and mobile plan sets). **Plan documents are
   the source of truth for feature work** — implement them via `/implement-plan`.
+  **`docs/` is a separate git repository** (`gml-cdf-docs`), nested here and
+  listed in this repo's `.gitignore` — so edits to it never show up in this
+  repo's `git status`, and a clean tree here says nothing about whether the
+  written record is current. Commit them with `git -C docs …`.
 
 ## Design system
 
