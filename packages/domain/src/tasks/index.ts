@@ -38,3 +38,23 @@ export {
   type TaskAction,
   type TaskStatus,
 } from './status.js';
+
+export {
+  defineTaskList,
+  requireTaskList,
+  taskListKeys,
+  taskSourceRef,
+  unregisterTaskListForTests,
+  TaskListDefinitionError,
+  TaskListNotRegisteredError,
+  type TaskListDefinition,
+  type TaskListDueSpec,
+  type TaskListItemSpec,
+} from './lists.js';
+
+export {
+  pilotChecklist,
+  PILOT_CHECKLIST_KEY,
+  PILOT_START_ANCHOR,
+  PILOT_VERIFICATION_GATE,
+} from './pilot-checklist.js';

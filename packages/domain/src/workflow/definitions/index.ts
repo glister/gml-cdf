@@ -1,5 +1,6 @@
 import type { WorkflowDefinition } from '../types.js';
 import { demoRequestV1 } from './demo-request.js';
+import { pilotChecklistWorkflowV1 } from './pilot-checklist.js';
 
 /**
  * The workflow definition registry (core plan 07 §5.1, WF-1/WF-4).
@@ -22,7 +23,10 @@ export function definitionId(key: string, version: number): string {
 }
 
 const definitions = new Map<string, WorkflowDefinition>(
-  [demoRequestV1].map((def) => [definitionId(def.key, def.version), def as WorkflowDefinition]),
+  [demoRequestV1, pilotChecklistWorkflowV1].map((def) => [
+    definitionId(def.key, def.version),
+    def as WorkflowDefinition,
+  ]),
 );
 
 /** Thrown when an instance is pinned to a version no longer in the registry. */
@@ -69,4 +73,4 @@ export function unregisterDefinitionForTests(key: string, version: number): void
   definitions.delete(definitionId(key, version));
 }
 
-export { demoRequestV1 };
+export { demoRequestV1, pilotChecklistWorkflowV1 };

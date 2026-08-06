@@ -21,6 +21,36 @@ export type {
   RateLimiter,
 } from './trpc.js';
 
+/**
+ * The task engine's workflow effects (core plan 08 §9.6).
+ *
+ * Exported for its **module-load side effects** as much as for the names: the
+ * `tasks.*` handlers and the pilot subject loader register when this module is
+ * loaded, so any consumer of `@repo/trpc` — the API, which executes transitions,
+ * and the worker, which also dispatches their effects — sees one registry.
+ */
+export {
+  openGateEffect,
+  raiseTaskListEffect,
+  recomputeDueDatesEffect,
+  TASK_EFFECTS,
+} from './lib/task-effects.js';
+
+/** The task engine's transactional services (core plan 08 §5.1). */
+export {
+  cancelTask,
+  claimTask,
+  completeTask,
+  openGate,
+  raiseTaskList,
+  recomputeDueDates,
+  releaseTask,
+  TaskForbiddenError,
+  TaskNotFoundError,
+  TaskSpecError,
+  type TaskListItem,
+} from './lib/tasks.js';
+
 /** Grant resolution for the API context factory (core plan 04 §9.3). */
 export { loadGrantsForPerson } from './lib/grants-context.js';
 

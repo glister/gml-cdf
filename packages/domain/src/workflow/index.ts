@@ -55,6 +55,7 @@ export {
   definitionId,
   demoRequestV1,
   latestDefinition,
+  pilotChecklistWorkflowV1,
   registerDefinitionForTests,
   requireDefinition,
   unregisterDefinitionForTests,

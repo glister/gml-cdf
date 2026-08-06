@@ -61,6 +61,43 @@ async function grantAdministratorEverywhere(personId: string): Promise<void> {
 }
 
 /**
+ * Grant the operational roles the pilot task list assigns to (core plan 08 §9.6).
+ *
+ * The pilot checklist assigns to `it` and `transport` — never to a person — so
+ * without these grants the seeded admin sees an empty my-tasks list and would
+ * reasonably conclude the engine is broken. Granting them here is also the
+ * clearest demonstration of the model: the tasks exist either way, and it is the
+ * *grant* that decides whose list they appear on (PL-014, ON AC-5).
+ */
+async function grantPilotOperationalRoles(personId: string): Promise<void> {
+  const roles = await db
+    .selectFrom('platform.role')
+    .select(['id', 'key'])
+    .where('key', 'in', ['it', 'transport'])
+    .execute();
+  if (roles.length === 0) {
+    // eslint-disable-next-line no-console
+    console.warn('! seed: operational roles missing — run migrations first');
+    return;
+  }
+  for (const role of roles) {
+    await db
+      .insertInto('platform.role_grant')
+      .values({
+        id: newUuidV7(),
+        person_id: personId,
+        role_id: role.id,
+        module: 'platform',
+        created_by: personId,
+      })
+      .onConflict((oc) => oc.doNothing())
+      .execute();
+  }
+  // eslint-disable-next-line no-console
+  console.log(`✔ seed: pilot operational roles granted (${roles.map((r) => r.key).join(', ')})`);
+}
+
+/**
  * Dev placeholders for the seven Phase 1 Tier 1 lists (core plan 05 §9.1).
  * Production values come from the config workshops and the Breathe HR export.
  *
@@ -200,6 +237,7 @@ async function seed(): Promise<void> {
     // the admin can authenticate but reaches no product surface.
     if (existing.person_id) {
       await grantAdministratorEverywhere(existing.person_id);
+      await grantPilotOperationalRoles(existing.person_id);
       await seedReferenceData(existing.person_id);
     }
   } else {
@@ -226,6 +264,7 @@ async function seed(): Promise<void> {
     });
     await db.insertInto('user').values(admin).execute();
     await grantAdministratorEverywhere(personId);
+    await grantPilotOperationalRoles(personId);
     await seedReferenceData(personId);
 
     // eslint-disable-next-line no-console

@@ -1,6 +1,8 @@
 import { TRPCError } from '@trpc/server';
 import { sql } from 'kysely';
-import { CycleError, hasRole, UnknownAnchorError } from '@repo/domain';
+import { newUuidV7 } from '@repo/db';
+import { CycleError, hasRole, pilotChecklistWorkflowV1, UnknownAnchorError } from '@repo/domain';
+import { startWorkflow } from '@repo/workflow';
 import { protectedProcedure, roleProcedure, router, type TRPCContext } from '../../trpc.js';
 import {
   cancelTaskInput,
@@ -46,6 +48,13 @@ import {
  * role list at each procedure.
  */
 const taskAdmin = roleProcedure(['administrator', 'hr_user'], { module: 'platform' });
+
+/**
+ * The synthetic case the pilot slice runs against (§9.6). No table stands behind
+ * it — deliberately, so the demonstration carries no HR content and the engine
+ * is shown to work against an arbitrary stream.
+ */
+export const PILOT_CASE_STREAM_TYPE = 'platform.pilot_case';
 
 /** Roles that may act on any task, and see any case's progress. */
 const OVERSIGHT_ROLES = ['administrator', 'hr_user'] as const;
@@ -375,16 +384,14 @@ export const tasksRouter = router({
   claim: protectedProcedure.input(taskRefInput).mutation(async ({ ctx, input }) => {
     const actorPersonId = requireActor(ctx);
     try {
-      const task = await ctx.db
-        .transaction()
-        .execute((trx) =>
-          claimTask(trx, {
-            ...input,
-            actorPersonId,
-            correlationId: ctx.correlationId,
-            now: new Date(),
-          }),
-        );
+      const task = await ctx.db.transaction().execute((trx) =>
+        claimTask(trx, {
+          ...input,
+          actorPersonId,
+          correlationId: ctx.correlationId,
+          now: new Date(),
+        }),
+      );
       return { claimedBy: task.claimed_by };
     } catch (error) {
       throw toTRPCError(error);
@@ -394,16 +401,14 @@ export const tasksRouter = router({
   release: protectedProcedure.input(taskRefInput).mutation(async ({ ctx, input }) => {
     const actorPersonId = requireActor(ctx);
     try {
-      await ctx.db
-        .transaction()
-        .execute((trx) =>
-          releaseTask(trx, {
-            ...input,
-            actorPersonId,
-            correlationId: ctx.correlationId,
-            now: new Date(),
-          }),
-        );
+      await ctx.db.transaction().execute((trx) =>
+        releaseTask(trx, {
+          ...input,
+          actorPersonId,
+          correlationId: ctx.correlationId,
+          now: new Date(),
+        }),
+      );
       return { claimedBy: null };
     } catch (error) {
       throw toTRPCError(error);
@@ -500,6 +505,40 @@ export const tasksRouter = router({
     } catch (error) {
       throw toTRPCError(error);
     }
+  }),
+
+  /**
+   * Start a pilot case (core plan 08 §9.6) — the demo slice's entry point.
+   *
+   * The engine is generic, so demonstrating it needs *some* case, and Phase 1
+   * has no HR module to supply one. This mints a synthetic case and starts the
+   * `platform.pilot.checklist` workflow against it; taking that workflow's
+   * `begin` transition (through the generic `platform.workflow.transition`) is
+   * what raises the three-task list through the `tasks.raiseList` effect.
+   *
+   * Demo-only, and it retires with the pilot shape — exactly as plan 07's
+   * `platform.demo.request` will. `startWorkflow` is deliberately not a generic
+   * procedure (plan 07 §5.3): instances are started by owning-domain code, and
+   * for the pilot, this is that code.
+   */
+  startPilotCase: taskAdmin.mutation(async ({ ctx }) => {
+    const actorPersonId = requireActor(ctx);
+    const streamId = newUuidV7();
+    const { instance } = await ctx.db.transaction().execute((trx) =>
+      startWorkflow(trx, {
+        workflowKey: pilotChecklistWorkflowV1.key,
+        subject: { streamType: PILOT_CASE_STREAM_TYPE, streamId },
+        actorPersonId,
+        now: new Date(),
+        correlationId: ctx.correlationId,
+      }),
+    );
+    return {
+      instanceId: instance.id,
+      streamType: PILOT_CASE_STREAM_TYPE,
+      streamId,
+      state: instance.current_state,
+    };
   }),
 
   /**
