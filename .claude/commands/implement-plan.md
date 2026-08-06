@@ -16,6 +16,29 @@ This command is resumable: always start from the first unchecked item in the
 plan's §9 backlog (within the requested scope). Re-invoking after an
 interruption continues where the last run stopped.
 
+## 0. `docs/` is a separate git repository — read this first
+
+`docs/` is its own repo (`git@github.com:glister/gml-cdf-docs.git`, branch
+`main`), nested inside the working tree and listed in the main repo's
+`.gitignore`. Everything you write back — plan documents, ADRs, the
+implementation notes, `STATUS.md` — lives there, **not** in the repo your code
+commits go to.
+
+Three consequences, and the first is the one that bites:
+
+- **A clean `git status` in the main repo tells you nothing about the record.**
+  Doc changes are invisible to it. Check `git -C docs status` explicitly.
+  Skipping this is how three plans' worth of write-backs once drifted a week
+  behind the code while every tree looked clean.
+- **The plan update cannot literally share a commit with the code.** The rule is
+  therefore **one commit in each repo, back to back**, per milestone — code
+  first, then `git -C docs commit`. Never the code alone.
+- **Commit only your own write-backs.** That repo often carries unrelated
+  in-flight work (editorial passes, runbooks, an earlier plan's uncommitted
+  write-backs). Check what is already dirty before staging, and if your changes
+  are entangled with someone else's, ask how they want it split rather than
+  sweeping it all into a commit that misdescribes it.
+
 ## 1. Orientation — read before any code
 
 Read these in order. Do not skim; later steps depend on details in each.
@@ -83,16 +106,21 @@ Read these in order. Do not skim; later steps depend on details in each.
   proceed with the plan's web scope; never scaffold app-wide rails (auth,
   navigation, upload client, shared components) inside a feature plan's run.
 - The working tree is clean and you are on `main` (or an agreed base).
+- **`docs/` is clean too, and on `main`** — `git -C docs status` (§0). If it is
+  already dirty, note exactly what and whose before you add to it; you will need
+  that to keep your commit honest at the end.
 - Create a branch: `plan/<set>-<nn>-<slug>`, e.g. `plan/core-03-identity` or
-  `plan/hr-04-entitlement`. All work happens on this branch.
+  `plan/hr-04-entitlement`. All work happens on this branch. The `docs/` repo
+  stays on `main` — it is not branched per plan.
 
 ## 3. The plan is the source of truth — write-back rules
 
 - **§4 DDL is the spec.** Implement it as written. When building reveals a
   necessary deviation (column type, constraint, index, rename), make the change
-  **in the plan document in the same commit as the code**, with a dated Change
-  log entry saying what changed and why. The plan and the migrations must never
-  disagree at any commit.
+  **in the plan document as part of the same milestone as the code** (§0 — the
+  doc commit is its own, in `docs/`), with a dated Change log entry saying what
+  changed and why. The plan and the migrations must never disagree once a
+  milestone is finished.
 - **A table not in the plan is a stop-and-ask.** If approved, add it to the
   plan's §4 **and** to the canonical inventory in
   `phase-1-implementation-notes.md` §6, following the attribution pattern
@@ -204,12 +232,18 @@ Read these in order. Do not skim; later steps depend on details in each.
 
 - **One commit per completed §9 milestone** (9.1 foundations, 9.2 domain
   logic, …). Message format: `plan(<set>-<nn>): <milestone> — <summary>`.
-- Plan-document updates (ticked boxes, change log, inventory) ride **in the
-  same commit** as the code they describe.
+- **Then immediately commit the matching write-backs in `docs/`** — ticked
+  boxes, change-log entry, reconciliation-log rows, inventory (§0). Message
+  format: `docs(<set>-<nn>): <milestone> — <what the record now says>`. Doing it
+  at the end of the run instead is how the record drifts; do it while the
+  reasoning is still in front of you.
+- A milestone is not finished until **both** commits exist. If you find yourself
+  starting the next milestone with `git -C docs status` dirty, you skipped one.
 - Pre-commit runs lint-staged, typecheck, and the test suite. Failures are
   fixed at the root cause — including pre-existing failures your change
   surfaces. **Never** `--no-verify`, never skip hooks, never weaken or delete
-  a test to make it pass.
+  a test to make it pass. (The `docs/` repo has no hooks — but review your own
+  diff there before committing, since nothing else will.)
 
 ## 7. Completion
 
@@ -218,11 +252,19 @@ When the backlog (or the requested scope) is done:
 1. Run the full gate: `pnpm build`, `pnpm typecheck`, `pnpm test`,
    `pnpm lint`.
 2. Walk §13; tick what genuinely holds, leave the rest unchecked with a note.
-3. Push the branch and open a PR with `gh`. The PR body lists: requirements
+   Update the plan's frontmatter (`status`, `last_updated`) and the plan set's
+   `STATUS.md`.
+3. **Commit and push `docs/`** — the §13 walk, frontmatter and `STATUS.md`
+   changes from step 2, plus anything from earlier milestones still uncommitted
+   (§0). `git -C docs status` must end **empty**, and `git -C docs push origin
+main` must succeed. A green PR over a stale record is a failed run.
+4. Push the branch and open a PR with `gh`. The PR body lists: requirements
    satisfied (by ref), plan deviations written back (with change-log dates),
    migrations added, new secrets the user must provide, and open questions
-   raised or resolved during the run.
-4. Report the same summary to the user, plus anything left unchecked and why.
+   raised or resolved during the run. Note that the plan write-backs are in the
+   `docs` repo, with the commit ref, so a reviewer knows where to look.
+5. Report the same summary to the user, plus anything left unchecked and why.
+   Confirm both repos are clean and pushed — state the two commit refs.
 
 ## 8. Stop-and-ask triggers (any of these halts work for user input)
 
@@ -237,3 +279,6 @@ When the backlog (or the requested scope) is done:
 - Anything requires a real secret (`.env.secrets` value) you don't have.
 - A pre-commit/test failure whose correct fix would change behaviour outside
   this plan's ownership.
+- **Your write-backs in `docs/` are entangled with someone else's uncommitted
+  work** and cannot be staged separately (§0) — ask how to split it rather than
+  committing a mixture under a message that describes only your half.
