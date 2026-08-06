@@ -45,3 +45,4 @@ export {
 } from './events/index.js';
 export * from './workflow/index.js';
 export * from './tasks/index.js';
+export * from './approvals/index.js';
