@@ -217,6 +217,49 @@ export interface PlatformScheduledAction {
   workflow_instance_id: string | null;
 }
 
+export interface PlatformTask {
+  anchor_name: string | null;
+  anchor_offset_days: number | null;
+  assignee_role_id: string;
+  cancel_reason: string | null;
+  claimed_at: Timestamp | null;
+  claimed_by: string | null;
+  completed_at: Timestamp | null;
+  completed_by: string | null;
+  completion_note: string | null;
+  created_at: Generated<Timestamp>;
+  created_by: string | null;
+  deleted_at: Timestamp | null;
+  description: string | null;
+  due_at: Timestamp | null;
+  due_mode: Generated<"none" | "absolute" | "anchor_relative">;
+  id: string;
+  lane: string | null;
+  source: "workflow" | "manual";
+  source_ref: string | null;
+  status: Generated<"blocked" | "open" | "done" | "cancelled">;
+  stream_id: string;
+  stream_type: string;
+  /**
+   * Instructions, never personal or special-category data (ADR-0015/0019). The task links to its record; the record enforces field-level RBAC.
+   */
+  title: string;
+  updated_at: Generated<Timestamp>;
+  updated_by: string | null;
+  workflow_instance_id: string | null;
+}
+
+export interface PlatformTaskDependency {
+  created_at: Generated<Timestamp>;
+  created_by: string | null;
+  depends_on_kind: "task" | "gate";
+  depends_on_task_id: string | null;
+  gate_key: string | null;
+  id: string;
+  satisfied_at: Timestamp | null;
+  task_id: string;
+}
+
 export interface PlatformTeam {
   /**
    * Optional hex colour for calendar rendering (plan 12 colour-by-team; core plan 05 §12.2 Q7). NULL means the consumer falls back to its own per-kind colours.
@@ -338,6 +381,8 @@ export interface DB {
   "platform.role": PlatformRole;
   "platform.role_grant": PlatformRoleGrant;
   "platform.scheduled_action": PlatformScheduledAction;
+  "platform.task": PlatformTask;
+  "platform.task_dependency": PlatformTaskDependency;
   "platform.team": PlatformTeam;
   "platform.team_membership": PlatformTeamMembership;
   "platform.workflow_instance": PlatformWorkflowInstance;

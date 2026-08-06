@@ -16,6 +16,10 @@ import {
   SCHEDULED_ACTION_SORTS,
   SCHEDULED_ACTION_STATUSES,
   SORT_DIRECTIONS,
+  TASK_DEPENDENCY_KINDS,
+  TASK_DUE_MODES,
+  TASK_SORTS,
+  TASK_STATUSES,
   TEAM_SORTS,
   USER_ROLES,
   WORKFLOW_INSTANCE_SORTS,
@@ -775,3 +779,249 @@ export const rescheduleActionInput = z.object({
   dueAt: z.iso.datetime(),
 });
 export type RescheduleActionInput = z.infer<typeof rescheduleActionInput>;
+
+// --- Task & checklist engine (core plan 08 §5.1) ----------------------------
+
+export const taskStatusSchema = z.enum(TASK_STATUSES);
+export type TaskStatusValue = z.infer<typeof taskStatusSchema>;
+
+export const taskDependencyKindSchema = z.enum(TASK_DEPENDENCY_KINDS);
+
+/** A stream reference — the case a task belongs to, in journal vocabulary. */
+export const taskStreamRef = z.object({
+  streamType: z
+    .string()
+    .trim()
+    .min(1)
+    .max(100)
+    .regex(/^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/, 'streamType is <module>.<entity> (ADR-0021)'),
+  streamId: z.uuid(),
+});
+export type TaskStreamRef = z.infer<typeof taskStreamRef>;
+
+/**
+ * How a task's due date is expressed (PL-013), as a discriminated union so the
+ * three shapes of the table's CHECK constraints are unrepresentable-if-wrong at
+ * the boundary too.
+ *
+ * `anchor_relative` carries the *spec*, not a date: the engine resolves it
+ * against the anchor values the caller supplies, and re-resolves it when the
+ * anchor later moves. An offset of ±366 days is the outer bound — beyond a year
+ * either side of an anchor the relationship is not a due date, it is a coincidence.
+ */
+export const dueSpecSchema = z.discriminatedUnion('mode', [
+  z.object({ mode: z.literal('none') }),
+  z.object({ mode: z.literal('absolute'), dueAt: z.iso.datetime() }),
+  z.object({
+    mode: z.literal('anchor_relative'),
+    anchorName: z.string().trim().min(1).max(100),
+    offsetDays: z.number().int().min(-366).max(366),
+  }),
+]);
+export type DueSpec = z.infer<typeof dueSpecSchema>;
+
+/** `platform.task.due_mode`, for outputs that echo the stored mode. */
+export const taskDueModeSchema = z.enum(TASK_DUE_MODES);
+
+/**
+ * One item in a task list handed to `raiseTaskList` (and the shape a workflow
+ * definition's `tasks.raiseList` effect params carry).
+ *
+ * `ref` is **list-local**: dependencies inside one raise name each other by ref,
+ * because the ids do not exist until the insert. `gates` are named conditions on
+ * the case; a task carrying one is raised `blocked` unless that gate has already
+ * opened. Titles are instructions, never personal data (§8).
+ */
+export const taskSpecSchema = z.object({
+  ref: z
+    .string()
+    .trim()
+    .min(1)
+    .max(100)
+    .regex(/^[a-z0-9][a-z0-9_.-]*$/, 'ref is a short slug: lowercase letters, digits, _ . -'),
+  title: z.string().trim().min(1).max(200),
+  description: z.string().trim().max(4000).optional(),
+  lane: z.string().trim().min(1).max(100).optional(),
+  assigneeRoleId: z.uuid(),
+  due: dueSpecSchema.default({ mode: 'none' }),
+  /** List-local refs of tasks that must reach a terminal state first. */
+  dependsOn: z.array(z.string().trim().min(1).max(100)).max(50).default([]),
+  /** Named gates on the case that must open first. */
+  gates: z.array(z.string().trim().min(1).max(100)).max(20).default([]),
+  /** Provenance, e.g. `platform.pilot.checklist@1#it_setup`. */
+  sourceRef: z.string().trim().max(200).optional(),
+});
+export type TaskSpec = z.infer<typeof taskSpecSchema>;
+
+/**
+ * Anchor values supplied by the raising module — `{ start_date: '2026-09-14' }`.
+ * The engine defines no anchor vocabulary: it resolves what it is given and
+ * rejects a task whose anchor is absent, rather than guessing a date.
+ */
+export const taskAnchorsSchema = z.record(z.string().trim().min(1).max(100), z.iso.date());
+export type TaskAnchors = z.infer<typeof taskAnchorsSchema>;
+
+/**
+ * My-tasks. Every facet below is a `WHERE`/`ORDER BY` in SQL (ADR-0004) — the
+ * client collects intent and passes it on, and never filters the page it holds.
+ */
+export const myTasksInput = z.object({
+  cursor: z.string().nullish(),
+  limit: z.number().int().min(1).max(100).default(25),
+  /** Defaults to the actionable set — what is on the caller's plate now. */
+  status: z.array(taskStatusSchema).min(1).max(4).optional(),
+  lane: z.string().trim().max(100).optional(),
+  streamType: z.string().trim().max(100).optional(),
+  streamId: z.uuid().optional(),
+  overdueOnly: z.boolean().default(false),
+  dueBefore: z.iso.datetime().optional(),
+  /** ILIKE on title — applied in SQL. */
+  search: z.string().trim().max(200).optional(),
+  sort: z.enum(TASK_SORTS).default('due'),
+  sortDir: z.enum(SORT_DIRECTIONS).default('asc'),
+});
+export type MyTasksInput = z.infer<typeof myTasksInput>;
+
+/**
+ * A row in a task list. `overdue` is **computed in SQL**, not derived here from
+ * `dueAt`: the list, the dashboard counts and the reminder sweep must agree on
+ * one expression, and a second one in JavaScript is how they stop agreeing.
+ */
+export const taskSummarySchema = z.object({
+  id: z.uuid(),
+  streamType: z.string(),
+  streamId: z.uuid(),
+  lane: z.string().nullable(),
+  title: z.string(),
+  assigneeRoleId: z.uuid(),
+  assigneeRoleName: z.string(),
+  claimedBy: z.uuid().nullable(),
+  claimedByName: z.string().nullable(),
+  status: taskStatusSchema,
+  dueAt: z.iso.datetime().nullable(),
+  overdue: z.boolean(),
+  blockedCount: z.number().int(),
+  raisedAt: z.iso.datetime(),
+});
+export type TaskSummary = z.infer<typeof taskSummarySchema>;
+
+export const myTasksOutput = z.object({
+  items: z.array(taskSummarySchema),
+  nextCursor: z.string().nullable(),
+});
+
+export const taskRefInput = z.object({ taskId: z.uuid() });
+
+/** One edge on the detail screen's "what blocks this" panel. */
+export const taskDependencySchema = z.object({
+  id: z.uuid(),
+  kind: taskDependencyKindSchema,
+  dependsOnTaskId: z.uuid().nullable(),
+  dependsOnTaskTitle: z.string().nullable(),
+  dependsOnTaskStatus: taskStatusSchema.nullable(),
+  gateKey: z.string().nullable(),
+  satisfiedAt: z.iso.datetime().nullable(),
+});
+
+export const taskDetailSchema = taskSummarySchema.extend({
+  description: z.string().nullable(),
+  dueMode: taskDueModeSchema,
+  anchorName: z.string().nullable(),
+  anchorOffsetDays: z.number().int().nullable(),
+  source: z.enum(['workflow', 'manual']),
+  sourceRef: z.string().nullable(),
+  workflowInstanceId: z.uuid().nullable(),
+  claimedAt: z.iso.datetime().nullable(),
+  completedAt: z.iso.datetime().nullable(),
+  completedByName: z.string().nullable(),
+  completionNote: z.string().nullable(),
+  cancelReason: z.string().nullable(),
+  /** What blocks this task. */
+  dependencies: z.array(taskDependencySchema),
+  /** What completing this task unlocks. */
+  unlocks: z.array(
+    z.object({
+      id: z.uuid(),
+      title: z.string(),
+      status: taskStatusSchema,
+      lane: z.string().nullable(),
+    }),
+  ),
+  /** Whether the caller holds the assignee role — drives the action buttons. */
+  canAct: z.boolean(),
+});
+export type TaskDetail = z.infer<typeof taskDetailSchema>;
+
+export const completeTaskInput = z.object({
+  taskId: z.uuid(),
+  note: z.string().trim().max(2000).optional(),
+  /**
+   * HR/Administrator completing for someone else. Journalled as `onBehalfOf` —
+   * an override is a decision, and the trail says whose (ADR-0011).
+   */
+  onBehalfOf: z.uuid().optional(),
+});
+export type CompleteTaskInput = z.infer<typeof completeTaskInput>;
+
+export const cancelTaskInput = z.object({
+  taskId: z.uuid(),
+  reason: z.string().trim().min(1).max(500),
+});
+export type CancelTaskInput = z.infer<typeof cancelTaskInput>;
+
+/**
+ * An ad-hoc task on a case. Dependencies are given as **existing task ids** in
+ * the same stream (a manual task joins a graph that already exists), and gates
+ * by key. Cycles are rejected before anything is written.
+ */
+export const createManualTaskInput = taskStreamRef.extend({
+  title: z.string().trim().min(1).max(200),
+  description: z.string().trim().max(4000).optional(),
+  lane: z.string().trim().min(1).max(100).optional(),
+  assigneeRoleId: z.uuid(),
+  due: dueSpecSchema.default({ mode: 'none' }),
+  /** Anchor values, required when `due.mode` is `anchor_relative`. */
+  anchors: taskAnchorsSchema.default({}),
+  dependsOnTaskIds: z.array(z.uuid()).max(50).default([]),
+  gates: z.array(z.string().trim().min(1).max(100)).max(20).default([]),
+});
+export type CreateManualTaskInput = z.infer<typeof createManualTaskInput>;
+
+export const caseProgressInput = taskStreamRef;
+
+/**
+ * The generic case dashboard's numbers (PL-015). Every figure is one grouped
+ * SQL pass over `platform.task` / `platform.task_dependency` — there is no
+ * stored "percent complete" and no JavaScript arithmetic over a page of rows.
+ */
+export const caseProgressOutput = z.object({
+  lanes: z.array(
+    z.object({
+      lane: z.string().nullable(),
+      total: z.number().int(),
+      done: z.number().int(),
+      open: z.number().int(),
+      blocked: z.number().int(),
+      cancelled: z.number().int(),
+      overdue: z.number().int(),
+      nextDueAt: z.iso.datetime().nullable(),
+    }),
+  ),
+  gates: z.array(
+    z.object({
+      gateKey: z.string(),
+      open: z.boolean(),
+      blockedTaskCount: z.number().int(),
+    }),
+  ),
+  bottlenecks: z.array(
+    z.object({
+      kind: taskDependencyKindSchema,
+      ref: z.string(),
+      title: z.string().nullable(),
+      blockedCount: z.number().int(),
+      oldestBlockedRaisedAt: z.iso.datetime(),
+    }),
+  ),
+});
+export type CaseProgressOutput = z.infer<typeof caseProgressOutput>;

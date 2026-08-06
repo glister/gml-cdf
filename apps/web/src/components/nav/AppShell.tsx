@@ -3,10 +3,12 @@ import { Link } from '@tanstack/react-router';
 import {
   AlarmClock,
   ChevronDown,
+  ClipboardList,
   GitMerge,
   KeyRound,
   LayoutDashboard,
   List,
+  ListChecks,
   Menu,
   ShieldCheck,
   SlidersHorizontal,
@@ -119,6 +121,12 @@ function OperationsNavSection() {
         <Link to="/admin/workflow/scheduled-actions" className={navItemClass}>
           <NavItemInner icon={<AlarmClock size={20} strokeWidth={1.9} />} label="Timers" />
         </Link>
+        <Link to="/tasks/pilot" className={navItemClass}>
+          <NavItemInner
+            icon={<ClipboardList size={20} strokeWidth={1.9} />}
+            label="Pilot checklist"
+          />
+        </Link>
       </div>
     </>
   );
@@ -183,6 +191,17 @@ function Sidebar({ user }: { user: AppShellUser | null }) {
               icon={<LayoutDashboard size={20} strokeWidth={1.9} />}
               label="Dashboard"
             />
+          </Link>
+        </div>
+        <div className="flex flex-col gap-0.5">
+          {/*
+            My tasks is for everyone, and needs no role check: the list is
+            self-scoping — it shows the tasks of the roles the caller holds, so
+            someone with no operational role simply sees an empty list rather
+            than something they should not have seen.
+          */}
+          <Link to="/tasks" activeOptions={{ exact: true }} className={navItemClass}>
+            <NavItemInner icon={<ListChecks size={20} strokeWidth={1.9} />} label="My tasks" />
           </Link>
         </div>
         <NavSectionLabel>People</NavSectionLabel>

@@ -1,3 +1,9 @@
+// Side-effect import: loading `@repo/trpc` registers the `tasks.*` effect
+// handlers and the pilot subject loader in `@repo/workflow`'s registries (core
+// plan 08 §9.6). Without it the effects consumer below would dead-letter every
+// `tasks.raiseList` message as an unknown effect — the registry is populated by
+// the owning plan's module, and someone has to load it in this process.
+import '@repo/trpc';
 import type { HandlerRegistration } from '../types.js';
 import { effectsHandler } from './effects.js';
 import { helloWorldHandler } from './hello-world.js';

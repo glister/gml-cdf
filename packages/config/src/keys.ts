@@ -107,3 +107,99 @@ export const workflowDemoExpiryHours = defineConfigKey({
   editableBy: ['administrator'],
   registeredBy: '07',
 });
+
+// --- Task & checklist engine (core plan 08 §6) -------------------------------
+//
+// Four decision points, and one thing they have in common: every one of them is
+// a number or a cadence a business user might reasonably want to change, and a
+// hardcoded value would mean a release to change how often people are chased or
+// what time of day work is due (PL-029). None of them names a person — the
+// engine assigns to roles, and membership resolves at use time (PL-021).
+
+/**
+ * How often an incomplete task is chased (PL-020, ON-047/OF-008).
+ *
+ * Stored as the `cadenceRef` on each pending reminder occurrence and resolved
+ * **as-at each firing** by plan 10's reminder handler, so changing it here moves
+ * the next chase for every outstanding task with no release and no backfill
+ * (AC-D6). ISO-8601 duration, matching the shape plans 09 and 10 use.
+ */
+export const tasksReminderCadence = defineConfigKey({
+  namespace: 'platform.tasks.reminder',
+  key: 'cadence',
+  schema: z.string().regex(/^P(?!$)(\d+D|\d+W)$/, 'an ISO-8601 day or week duration, e.g. P1D'),
+  defaultValue: 'P1D',
+  description:
+    'How often an incomplete task is chased, as an ISO-8601 duration (P1D = daily, P7D = weekly). Read afresh at every firing, so a change takes effect from the next chase.',
+  editableBy: ['administrator', 'hr_user'],
+  registeredBy: '08',
+});
+
+/**
+ * When the chase starts, relative to the due date (PL-020, ON-049).
+ *
+ * Negative chases **before** the deadline, which is what ON-049 asks for on
+ * onboarding tasks; zero starts on the day. Bounded at a fortnight either side:
+ * beyond that the reminder is no longer about the deadline.
+ */
+export const tasksReminderStartOffsetDays = defineConfigKey({
+  namespace: 'platform.tasks.reminder',
+  key: 'start_offset_days',
+  schema: z.number().int().min(-14).max(14),
+  defaultValue: 0,
+  description:
+    'Days relative to a task’s due date at which chasing begins. Negative starts before the deadline (e.g. -2 = two days before), 0 starts on the day.',
+  editableBy: ['administrator', 'hr_user'],
+  registeredBy: '08',
+});
+
+/**
+ * What to do about a task with no due date.
+ *
+ * `from_raise` chases on the cadence from the moment it is raised; `none`
+ * leaves it alone. The choice matters because most tasks in a raised lane have
+ * no individual deadline — the case does — and chasing all of them daily from
+ * day one is how a notification system teaches people to ignore it.
+ */
+export const tasksReminderNoDueDate = defineConfigKey({
+  namespace: 'platform.tasks.reminder',
+  key: 'no_due_date',
+  schema: z.enum(['from_raise', 'none']),
+  defaultValue: 'from_raise',
+  description:
+    'Whether tasks with no due date are chased at all: from_raise starts the cadence when the task is raised; none leaves them unchased until someone sets a due date.',
+  editableBy: ['administrator', 'hr_user'],
+  registeredBy: '08',
+});
+
+/**
+ * The local time an anchor-relative due date lands on (PL-013).
+ *
+ * "Due on the 11th" is not an instant until you say what time and where, and
+ * `start_date − 3d` has to become a `timestamptz`. Split from the zone below so
+ * each edits as a plain text field rather than as JSON — the same value the plan
+ * catalogued as `17:00 Europe/London`, in the two halves that are separately
+ * meaningful.
+ */
+export const tasksDueTimeOfDay = defineConfigKey({
+  namespace: 'platform.tasks.due',
+  key: 'time_of_day',
+  schema: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'a 24-hour local time, HH:MM'),
+  defaultValue: '17:00',
+  description:
+    'Local time of day an anchor-relative due date falls due, as HH:MM. The end of the working day, so a task due “on the 11th” is not overdue at one minute past midnight.',
+  editableBy: ['administrator'],
+  registeredBy: '08',
+});
+
+/** The zone {@link tasksDueTimeOfDay} is interpreted in. */
+export const tasksDueTimeZone = defineConfigKey({
+  namespace: 'platform.tasks.due',
+  key: 'time_zone',
+  schema: z.string().regex(/^[A-Za-z]+\/[A-Za-z_+-]+$/, 'an IANA time zone, e.g. Europe/London'),
+  defaultValue: 'Europe/London',
+  description:
+    'IANA time zone the due time-of-day is interpreted in. Changing it moves future resolutions only — due dates already resolved keep the instant they were given.',
+  editableBy: ['administrator'],
+  registeredBy: '08',
+});
