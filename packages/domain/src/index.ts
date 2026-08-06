@@ -44,3 +44,4 @@ export {
   type EventPayload,
 } from './events/index.js';
 export * from './workflow/index.js';
+export * from './tasks/index.js';

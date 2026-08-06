@@ -681,3 +681,178 @@ export const platformWorkflowInstanceDemoOutcomeRecorded = defineEvent(
   1,
   z.strictObject({ outcome: z.enum(['approved', 'rejected', 'expired']) }),
 );
+
+// --- Task & checklist engine (core plan 08 §4.2, PL-013…015) ----------------
+//
+// Every task fact is journalled on the **task's own row**
+// (`stream_type='platform.task'`, `stream_id=<task id>`), with the case it
+// belongs to travelling as `caseStreamType`/`caseStreamId` in the payload —
+// exactly the correction plan 07 made for `platform.workflow_instance.*`
+// (ADR-0021: `stream_type` is the event type's `<module>.<entity>` prefix, and
+// the plan's original "stream = the case" pairing would have been the only place
+// in the system where the two disagreed). A case's trail stays one indexed query:
+// find the case's task ids, then read their streams.
+//
+// The single exception is `platform.task.gate.opened`, which is journalled on
+// the **case** stream — see its own note.
+//
+// Payloads carry ids, keys and decisions. **No titles, no descriptions, no
+// names** (ADR-0019): a task's title is instruction text authored by a raising
+// definition, and the moment one is copied into a payload the journal starts
+// accumulating free text nobody classified.
+
+/** The case a task belongs to — the raising module's stream, not this one's. */
+const caseStream = {
+  caseStreamType: streamTypeName,
+  caseStreamId: z.uuid(),
+};
+
+/** What a dependency waits on: another task, or a named gate on the case. */
+const blockerRef = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('task'), taskId: z.uuid() }),
+  z.strictObject({ kind: z.literal('gate'), gateKey: z.string().min(1).max(100) }),
+]);
+
+/**
+ * A task was created — by a workflow effect (`tasks.raiseList`) or by hand.
+ *
+ * `initialStatus` and `blockedBy` are here because "why did this land blocked?"
+ * is the first question anyone asks of a stuck case, and answering it from the
+ * trail alone means not having to reconstruct the dependency rows as they stood
+ * at raise time.
+ */
+export const platformTaskRaised = defineEvent(
+  'platform.task.raised',
+  1,
+  z.strictObject({
+    ...caseStream,
+    assigneeRoleId: z.uuid(),
+    lane: z.string().max(100).nullable(),
+    dueMode: z.enum(['none', 'absolute', 'anchor_relative']),
+    dueAt: z.iso.datetime().nullable(),
+    anchorName: z.string().max(100).nullable(),
+    anchorOffsetDays: z.number().int().nullable(),
+    source: z.enum(['workflow', 'manual']),
+    sourceRef: z.string().max(200).nullable(),
+    workflowInstanceId: z.uuid().nullable(),
+    initialStatus: z.enum(['blocked', 'open']),
+    /** The unsatisfied edges at raise time; empty when the task started open. */
+    blockedBy: z.array(blockerRef),
+  }),
+);
+
+/**
+ * A task's last unsatisfied dependency cleared: `blocked → open`.
+ *
+ * Emitted once per task per unblocking, in the same transaction as the
+ * completion or gate opening that caused it — so "work became actionable" is a
+ * fact with a cause, not something inferred by diffing two reads.
+ */
+export const platformTaskUnblocked = defineEvent(
+  'platform.task.unblocked',
+  1,
+  z.strictObject({
+    ...caseStream,
+    assigneeRoleId: z.uuid(),
+    /** The edge whose satisfaction was the last one outstanding. */
+    satisfiedBy: blockerRef,
+  }),
+);
+
+/** Someone in the assignee role took the task to work on. Metadata, not state. */
+export const platformTaskClaimed = defineEvent(
+  'platform.task.claimed',
+  1,
+  z.strictObject({ ...caseStream, assigneeRoleId: z.uuid() }),
+);
+
+/** A claim was given up — the task returns to the role's shared pool. */
+export const platformTaskReleased = defineEvent(
+  'platform.task.released',
+  1,
+  z.strictObject({ ...caseStream, assigneeRoleId: z.uuid() }),
+);
+
+/**
+ * A task was completed. `noteProvided` rather than the note itself: completion
+ * notes are free text a user typed, and the journal records that one exists and
+ * where to find it (ADR-0019).
+ *
+ * `override` marks an HR/Administrator completion of a task assigned to a role
+ * they do not hold — the envelope's `on_behalf_of` says for whom.
+ */
+export const platformTaskCompleted = defineEvent(
+  'platform.task.completed',
+  1,
+  z.strictObject({
+    ...caseStream,
+    assigneeRoleId: z.uuid(),
+    noteProvided: z.boolean(),
+    override: z.boolean(),
+    /** Overdue at the moment of completion — the reporting feed's raw material. */
+    overdue: z.boolean(),
+    /** Tasks this completion unblocked, each with its own `unblocked` event. */
+    unblockedTaskIds: z.array(z.uuid()),
+  }),
+);
+
+/**
+ * A task was cancelled. A cancelled prerequisite satisfies its reverse edges
+ * (§4.1) — otherwise its dependents would wait for something that will never
+ * happen — so this event carries what it unblocked, like completion does.
+ */
+export const platformTaskCancelled = defineEvent(
+  'platform.task.cancelled',
+  1,
+  z.strictObject({
+    ...caseStream,
+    assigneeRoleId: z.uuid(),
+    /** Short operator rationale. Content rule §8: never special-category detail. */
+    reason: z.string().min(1).max(500),
+    unblockedTaskIds: z.array(z.uuid()),
+  }),
+);
+
+/**
+ * An anchor moved and the task's due date was re-resolved (PL-013). Only
+ * non-terminal anchor-relative tasks whose date actually changed emit this — a
+ * recomputation that lands on the same instant is not a fact.
+ */
+export const platformTaskDueRecomputed = defineEvent(
+  'platform.task.due_recomputed',
+  1,
+  z.strictObject({
+    ...caseStream,
+    anchorName: z.string().max(100),
+    anchorOffsetDays: z.number().int(),
+    fromDueAt: z.iso.datetime().nullable(),
+    toDueAt: z.iso.datetime(),
+  }),
+);
+
+/**
+ * A named gate opened for a case (§4.1) — the licence check passed, or the gate
+ * was bypassed (ON-035).
+ *
+ * **The one task event journalled on the case's stream rather than on
+ * `platform.task`.** A gate is case-scoped and has no row of its own, so there
+ * is no task id to hang it on — and a gate can legitimately open before any
+ * gated task exists, which is precisely the case `raiseTaskList` must be able to
+ * look up later. Putting it on the case makes that lookup a keyed, indexed read
+ * (`stream_type`, `stream_id`, `event_type`) instead of a scan over payloads.
+ * ADR-0021's rule that `stream_type` is the event type's prefix therefore does
+ * not hold for this one type; it is recorded in core plan 08 §4.2 and §12.1
+ * rather than left as a silent divergence.
+ */
+export const platformTaskGateOpened = defineEvent(
+  'platform.task.gate.opened',
+  1,
+  z.strictObject({
+    gateKey: z.string().min(1).max(100),
+    /** How many blocking edges this opening satisfied. */
+    dependenciesSatisfied: z.number().int().min(0),
+    /** Tasks that became actionable as a result, each with its own event. */
+    unblockedTaskIds: z.array(z.uuid()),
+    workflowInstanceId: z.uuid().nullable(),
+  }),
+);

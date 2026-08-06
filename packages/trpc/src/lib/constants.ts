@@ -173,3 +173,32 @@ export type ScheduledActionSource = (typeof SCHEDULED_ACTION_SOURCES)[number];
 /** Sort columns for the timers table. Due date is what an operator scans by. */
 export const SCHEDULED_ACTION_SORTS = ['due_at', 'created_at'] as const;
 export type ScheduledActionSort = (typeof SCHEDULED_ACTION_SORTS)[number];
+
+// --- Task & checklist engine (core plan 08, PL-013…015) ---------------------
+
+/**
+ * `platform.task.status`. Mirrors the CHECK constraint and the inlined literals
+ * in `.kysely-codegenrc.json`. `blocked → open` is automatic (dependency
+ * satisfaction); `done` and `cancelled` are terminal (§4.3).
+ */
+export const TASK_STATUSES = ['blocked', 'open', 'done', 'cancelled'] as const;
+export type TaskStatus = (typeof TASK_STATUSES)[number];
+
+/** `platform.task.due_mode` — absolute, anchor-relative, or no due date. */
+export const TASK_DUE_MODES = ['none', 'absolute', 'anchor_relative'] as const;
+export type TaskDueMode = (typeof TASK_DUE_MODES)[number];
+
+/** `platform.task.source` — raised by a workflow effect, or created by hand. */
+export const TASK_SOURCES = ['workflow', 'manual'] as const;
+export type TaskSource = (typeof TASK_SOURCES)[number];
+
+/** `platform.task_dependency.depends_on_kind`. */
+export const TASK_DEPENDENCY_KINDS = ['task', 'gate'] as const;
+export type TaskDependencyKind = (typeof TASK_DEPENDENCY_KINDS)[number];
+
+/**
+ * Sort columns for my-tasks. `due` is the working order (what is next, nulls
+ * last); `raised` answers "what landed on me recently?".
+ */
+export const TASK_SORTS = ['due', 'raised'] as const;
+export type TaskSort = (typeof TASK_SORTS)[number];

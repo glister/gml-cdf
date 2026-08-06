@@ -12,6 +12,8 @@ import type {
   PlatformRole,
   PlatformRoleGrant,
   PlatformScheduledAction,
+  PlatformTask,
+  PlatformTaskDependency,
   PlatformTeam,
   PlatformTeamMembership,
   PlatformWorkflowInstance,
@@ -73,6 +75,8 @@ export type {
   PlatformRole,
   PlatformRoleGrant,
   PlatformScheduledAction,
+  PlatformTask,
+  PlatformTaskDependency,
   PlatformTeam,
   PlatformTeamMembership,
   PlatformWorkflowInstance,
@@ -166,3 +170,14 @@ export type NewWorkflowTransition = Insertable<PlatformWorkflowTransition>;
 export type ScheduledActionRecord = Selectable<PlatformScheduledAction>;
 export type NewScheduledAction = Insertable<PlatformScheduledAction>;
 export type ScheduledActionUpdate = Updateable<PlatformScheduledAction>;
+
+// Task & checklist engine (core plan 08, PL-013…015). Both tables are mutable
+// process state (ADR-0012): `task_dependency` rows are satisfied in place, so
+// they carry an `Updateable` alias even though a row is never deleted.
+export type TaskRecord = Selectable<PlatformTask>;
+export type NewTask = Insertable<PlatformTask>;
+export type TaskUpdate = Updateable<PlatformTask>;
+
+export type TaskDependencyRecord = Selectable<PlatformTaskDependency>;
+export type NewTaskDependency = Insertable<PlatformTaskDependency>;
+export type TaskDependencyUpdate = Updateable<PlatformTaskDependency>;
