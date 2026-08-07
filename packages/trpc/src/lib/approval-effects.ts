@@ -1,7 +1,11 @@
 import { z } from 'zod';
 import { recordConsumptionOnce } from '@repo/db';
 import { effectIdempotencyKey, registerEffect, type EffectHandler } from '@repo/workflow';
-import { ApprovalConflictError, openApprovalRequest } from './approvals.js';
+import {
+  cancelApprovalsForInstance,
+  openApprovalRequest,
+  ApprovalConflictError,
+} from './approvals.js';
 
 /**
  * The approval engine's workflow effects (core plan 09 §5.5, ADR-0013).
@@ -31,6 +35,7 @@ import { ApprovalConflictError, openApprovalRequest } from './approvals.js';
 /** Effect-registry names, exported so a conformance test can assert them. */
 export const APPROVAL_EFFECTS = {
   open: 'approval.open',
+  cancel: 'approval.cancel',
 } as const;
 
 /**
@@ -117,4 +122,53 @@ export const openApprovalEffect: EffectHandler = async (envelope, { db, logger }
   });
 };
 
+/**
+ * `approval.cancel` — withdraw whatever sign-off this case was waiting on.
+ *
+ * Declared on a transition that abandons a case mid-approval, so a request never
+ * outlives the thing it was about: a leave booking cancelled while its approval
+ * is pending must not leave a manager with a decision to make about nothing.
+ *
+ * **Declared, not automatic.** The runtime cancels an instance's pending
+ * *timers* on a terminal transition, and it would have been possible to hang
+ * approval cancellation off the same hook — but `@repo/workflow` cannot import
+ * this package, and more importantly not every terminal transition should do
+ * this: `approve` and `reject` are terminal too, and by the time they run the
+ * request is already decided. Naming it on the transitions that mean it keeps
+ * the definition honest about what it does (ADR-0013).
+ *
+ * Idempotent twice over: the claim ledger stops a redelivery, and
+ * `cancelApprovalsForInstance` only ever matches rows still `pending`.
+ */
+export const cancelApprovalEffect: EffectHandler = async (envelope, { db, logger }) => {
+  const instanceId = envelope.source.kind === 'transition' ? envelope.source.instanceId : null;
+  if (instanceId === null) {
+    // A timer or manual source has no instance to cancel approvals for. Not an
+    // error — a definition that declared it there simply has nothing to do.
+    logger.info('approval.cancel: no workflow instance on this effect source');
+    return;
+  }
+
+  await db.transaction().execute(async (trx) => {
+    const first = await recordConsumptionOnce(
+      trx,
+      `effect:${APPROVAL_EFFECTS.cancel}`,
+      effectIdempotencyKey(envelope.source),
+    );
+    if (!first) {
+      logger.info('approval.cancel: duplicate delivery ignored', { instanceId });
+      return;
+    }
+
+    const cancelled = await cancelApprovalsForInstance(trx, {
+      workflowInstanceId: instanceId,
+      actorPersonId: null,
+      correlationId: envelope.correlationId,
+      now: new Date(),
+    });
+    logger.info('approval.cancel: withdrew pending requests', { instanceId, cancelled });
+  });
+};
+
 registerEffect(APPROVAL_EFFECTS.open, openApprovalEffect);
+registerEffect(APPROVAL_EFFECTS.cancel, cancelApprovalEffect);

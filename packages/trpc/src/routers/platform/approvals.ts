@@ -1,6 +1,8 @@
 import { TRPCError } from '@trpc/server';
 import { sql, type Expression, type SqlBool } from 'kysely';
-import { hasRole, type RoleKey } from '@repo/domain';
+import { newUuidV7 } from '@repo/db';
+import { hasRole, PILOT_SIGNOFF_KEY, PILOT_SIGNOFF_SUBJECT, type RoleKey } from '@repo/domain';
+import { startWorkflow } from '@repo/workflow';
 import { approvalSubjectTypes, requireApprovalSubject } from '@repo/config';
 import { protectedProcedure, roleProcedure, router, type TRPCContext } from '../../trpc.js';
 import {
@@ -843,6 +845,40 @@ export const approvalsRouter = router({
         throw toTRPCError(error);
       }
     }),
+  }),
+
+  /**
+   * Start a pilot sign-off case (core plan 09 §9.8) — the demo slice's entry
+   * point, and the **workflow-bound** half of §5.5.
+   *
+   * The engine is generic, so demonstrating it needs *some* case, and Phase 1
+   * has no HR module to supply one. This mints a synthetic subject and starts
+   * the `platform.pilot.signoff` workflow against it; taking that workflow's
+   * `submit` transition (through the generic `platform.workflow.transition`) is
+   * what opens the approval request via the `approval.open` effect, and the
+   * decisive decision fires `approve` back the other way — atomically with the
+   * decision (AC-D7).
+   *
+   * Demo-only, and it retires with the pilot shape.
+   */
+  startPilotSignoff: approvalAdmin.mutation(async ({ ctx }) => {
+    const actorPersonId = requireActor(ctx);
+    const streamId = newUuidV7();
+    const { instance } = await ctx.db.transaction().execute((trx) =>
+      startWorkflow(trx, {
+        workflowKey: PILOT_SIGNOFF_KEY,
+        subject: { streamType: PILOT_SIGNOFF_SUBJECT, streamId },
+        actorPersonId,
+        now: new Date(),
+        correlationId: ctx.correlationId,
+      }),
+    );
+    return {
+      instanceId: instance.id,
+      subjectType: PILOT_SIGNOFF_SUBJECT,
+      subjectId: streamId,
+      state: instance.current_state,
+    };
   }),
 
   /**

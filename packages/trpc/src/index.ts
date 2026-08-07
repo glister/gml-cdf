@@ -60,7 +60,17 @@ export {
  * see one registry. The decisive decision's transition is deliberately *not* an
  * effect — it fires inside the decide transaction; see that module's header.
  */
-export { openApprovalEffect, APPROVAL_EFFECTS } from './lib/approval-effects.js';
+export {
+  cancelApprovalEffect,
+  openApprovalEffect,
+  APPROVAL_EFFECTS,
+} from './lib/approval-effects.js';
+
+/**
+ * The pilot slice's warning provider and subject loader (core plan 09 §9.8),
+ * exported for their module-load side effects. Retires with the pilot.
+ */
+export { PILOT_LARGE_AMOUNT_CODE, PILOT_WARNING_PROVIDER } from './lib/approval-pilot.js';
 
 /** The approval engine's transactional services (core plan 09 §5.1). */
 export {
