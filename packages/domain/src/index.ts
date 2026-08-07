@@ -57,3 +57,4 @@ export * from './workflow/index.js';
 export * from './tasks/index.js';
 export * from './approvals/index.js';
 export * from './notifications/index.js';
+export * from './documents/index.js';
