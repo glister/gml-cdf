@@ -198,3 +198,54 @@ export const approvalPendingReminder: ReminderKindDef = {
 
 registerReminderKind(taskIncompleteReminder);
 registerReminderKind(approvalPendingReminder);
+
+/**
+ * `admin.test_unread` — the **pilot slice's** reminder (§9.7), and the whole of
+ * PL-020 demonstrated with no HR module in existence.
+ *
+ * Its source is an `admin.test` notification, and it is satisfied when every
+ * in-app copy of that notification has been read. So an administrator can watch
+ * the entire contract work end to end: a chase goes out on the cadence, and
+ * again, and the moment a recipient opens their inbox the series stops — with
+ * no code, no HR record and no feature wiring anywhere in it.
+ *
+ * "No deliveries yet" counts as **unsatisfied**, deliberately. It means the
+ * dispatch has not landed rather than that nobody has anything to read, and
+ * treating an absent delivery as read would make the pilot pass by doing
+ * nothing.
+ *
+ * It retires with the pilot, exactly as core plan 07's `platform.demo.request`
+ * shape, plan 08's `platform.pilot_case` and plan 09's
+ * `platform.pilot_signoff` will.
+ */
+export const adminTestUnreadReminder: ReminderKindDef = {
+  reminderKind: 'admin.test_unread',
+  registeredBy: '10',
+  async isSatisfied(db, { sourceId }) {
+    const deliveries = await db
+      .selectFrom('platform.notification_delivery')
+      .select(['read_at'])
+      .where('notification_id', '=', sourceId)
+      .where('channel', '=', 'in_app')
+      .execute();
+    if (deliveries.length === 0) return false;
+    return deliveries.every((delivery) => delivery.read_at !== null);
+  },
+  async describe(db, { sourceId }) {
+    const notification = await db
+      .selectFrom('platform.notification')
+      .select(['id', 'title'])
+      .where('id', '=', sourceId)
+      .where('deleted_at', 'is', null)
+      .executeTakeFirst();
+    if (!notification) return null;
+    return {
+      sourceLabel: 'test notification',
+      label: notification.title,
+      dueDate: null,
+      actionUrl: '/notifications',
+    };
+  },
+};
+
+registerReminderKind(adminTestUnreadReminder);

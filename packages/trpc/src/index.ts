@@ -91,7 +91,6 @@ export {
   ApprovalTransitionError,
   APPROVAL_REMINDER_KIND,
   APPROVAL_STREAM_TYPE,
-  REMINDER_ACTION_TYPE as APPROVAL_REMINDER_ACTION_TYPE,
   type DesignatedResolver,
   type OpenApprovalResult,
   type ResolvedApprovalPolicy,
@@ -189,6 +188,7 @@ export {
 
 /** The reminder-kind registry — satisfaction checks (core plan 10 §5.5). */
 export {
+  adminTestUnreadReminder,
   registerReminderKind,
   reminderKindNames,
   requireReminderKind,

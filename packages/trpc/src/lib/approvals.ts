@@ -10,6 +10,7 @@ import {
 import {
   activeDelegations,
   assertDelegationValid,
+  cadenceDays,
   evaluateApprovalThreshold,
   expandApprovalPolicy,
   findEligible,
@@ -25,12 +26,14 @@ import {
   approvalsDelegationMaxDurationDays,
   approvalsReminderCadence,
   getConfig,
+  tasksDueTimeZone,
   qualifiedName,
   requireApprovalSubject,
   resolveConfig,
   type ApprovalSubjectDef,
 } from '@repo/config';
-import { cancelScheduledActions, executeTransitionIn, scheduleAction } from '@repo/workflow';
+import { executeTransitionIn } from '@repo/workflow';
+import { cancelReminders, scheduleReminder } from './notify.js';
 import type { ApprovalContext, WarningAck } from '../schemas.js';
 
 /**
@@ -260,10 +263,11 @@ export function assertDesignatedResolversRegistered(): void {
   }
 }
 
-// --- Reminder contract (plan 10's row shape, plan 07's timer) ----------------
-
-/** Plan 07's effect-registry name for a reminder occurrence (plan 10 §4.5). */
-export const REMINDER_ACTION_TYPE = 'notification.reminder';
+// --- Reminder contract (core plan 10's `scheduleReminder`) -------------------
+//
+// The action type used to be declared here, because plan 10 did not exist and
+// this engine wrote its own `scheduled_action` rows. It now comes from that
+// plan (`notify.js`), which owns the row, the handler and the wrapper alike.
 
 /** The reminder kind plan 10 binds a satisfaction check to (its §5.5 registry). */
 export const APPROVAL_REMINDER_KIND = 'approval.pending';
@@ -622,20 +626,22 @@ export async function openApprovalRequest(
 }
 
 /**
- * Schedule the first chase for a pending request, on plan 10's contract (its
- * §4.5): a `platform.scheduled_action` row with
- * `action_type='notification.reminder'` and the payload that plan's handler
- * reads.
+ * Schedule the first chase for a pending request, through core plan 10's
+ * `scheduleReminder` (its §5.2).
  *
- * Plan 10 is not built, so this goes through plan 07's `scheduleAction` rather
- * than plan 10's `scheduleReminder` wrapper — the row, its shape and its journal
- * event are identical either way, and when plan 10 lands it takes over both the
- * wrapper and the firing with nothing to migrate. Core plan 08 did the same for
- * task chases, and this plan's rows join those.
+ * This used to build the `scheduled_action` row by hand against that plan's
+ * §4.5 payload shape, because plan 10 did not exist yet — the row, its shape
+ * and its journal event were identical either way, which is what made the
+ * hand-off free when it landed (2026-08-07). Nothing was migrated: the rows
+ * simply started being executed, and this call site moved onto the wrapper.
  *
  * The recipient spec is `{ kind: 'policy' }`, **not** a resolved person list:
- * plan 10 re-resolves it at each send through `resolveApprovalPolicy`, so a
- * chase after a membership change reaches the new membership (PL-021, AC-D4).
+ * plan 10 re-resolves it at each send through `resolveApprovalPolicy` — this
+ * very function — so a chase after a membership change reaches the *new*
+ * membership (PL-021, AC-D4).
+ *
+ * The first chase is one cadence out, not immediate: chasing someone the instant
+ * you ask them is not a reminder.
  */
 async function scheduleApprovalReminder(
   trx: Transaction<DB>,
@@ -652,46 +658,21 @@ async function scheduleApprovalReminder(
     (await getConfig(trx, input.subject.reminderCadence, { at: input.now })) ??
     (await getConfig(trx, approvalsReminderCadence, { at: input.now }));
 
-  await scheduleAction(trx, {
-    dueAt: addIsoDuration(input.now, cadence),
-    actionType: REMINDER_ACTION_TYPE,
-    payload: {
-      reminderKind: APPROVAL_REMINDER_KIND,
-      sourceType: APPROVAL_STREAM_TYPE,
-      sourceId: request.id,
-      // Re-resolved at every send — never a person list frozen at submit.
-      recipient: { kind: 'policy', policyRef: `config:${request.policy_key}` },
-      subject: { streamType: request.subject_type, streamId: request.subject_id },
-      cadenceRef: reminderCadenceRef(input.subject),
-      occurrence: 1,
-    },
-    subject: { streamType: APPROVAL_STREAM_TYPE, streamId: request.id },
+  const timeZone = await getConfig(trx, tasksDueTimeZone, { at: input.now });
+
+  await scheduleReminder(trx, {
+    reminderKind: APPROVAL_REMINDER_KIND,
+    source: { streamType: APPROVAL_STREAM_TYPE, streamId: request.id },
+    subject: { streamType: request.subject_type, streamId: request.subject_id },
+    recipient: { kind: 'policy', policyRef: `config:${request.policy_key}` },
+    anchor: { mode: 'instant', at: input.now, offsetDays: cadenceDays(cadence) },
+    cadenceRef: reminderCadenceRef(input.subject),
+    timeZone,
     workflowInstanceId: request.workflow_instance_id,
-    source: 'workflow',
-    createdBy: input.actorPersonId,
+    actorPersonId: input.actorPersonId,
     correlationId: input.correlationId,
+    now: input.now,
   });
-}
-
-const DAY_MS = 86_400_000;
-
-/**
- * Add an ISO-8601 day/week duration to an instant.
- *
- * Deliberately narrow: the cadence schemas admit only `P<n>D` and `P<n>W`, so
- * there is no month or year arithmetic to get wrong here, and anything else is
- * rejected before it reaches this function.
- */
-function addIsoDuration(from: Date, duration: string): Date {
-  const match = /^P(\d+)([DW])$/.exec(duration);
-  if (!match) {
-    throw new ApprovalRequestError(
-      `'${duration}' is not a supported reminder cadence — use an ISO-8601 day or week duration, e.g. P1D`,
-    );
-  }
-  const amount = Number(match[1]);
-  const days = match[2] === 'W' ? amount * 7 : amount;
-  return new Date(from.getTime() + days * DAY_MS);
 }
 
 /**
@@ -709,9 +690,8 @@ async function cancelApprovalReminders(
     correlationId: string;
   },
 ): Promise<void> {
-  await cancelScheduledActions(trx, {
-    subject: { streamType: APPROVAL_STREAM_TYPE, streamId: input.requestId },
-    actionType: REMINDER_ACTION_TYPE,
+  await cancelReminders(trx, {
+    source: { streamType: APPROVAL_STREAM_TYPE, streamId: input.requestId },
     reason: input.reason,
     actorPersonId: input.actorPersonId,
     correlationId: input.correlationId,
