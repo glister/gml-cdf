@@ -15,8 +15,11 @@ import { Route as IndexRouteImport } from './routes/index';
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard';
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin';
 import { Route as AuthenticatedTasksIndexRouteImport } from './routes/_authenticated/tasks/index';
+import { Route as AuthenticatedApprovalsIndexRouteImport } from './routes/_authenticated/approvals/index';
 import { Route as AuthenticatedTasksPilotRouteImport } from './routes/_authenticated/tasks/pilot';
 import { Route as AuthenticatedTasksTaskIdRouteImport } from './routes/_authenticated/tasks/$taskId';
+import { Route as AuthenticatedApprovalsDelegationsRouteImport } from './routes/_authenticated/approvals/delegations';
+import { Route as AuthenticatedApprovalsRequestIdRouteImport } from './routes/_authenticated/approvals/$requestId';
 import { Route as AuthenticatedAdminTeamsIndexRouteImport } from './routes/_authenticated/admin/teams/index';
 import { Route as AuthenticatedAdminReferenceDataIndexRouteImport } from './routes/_authenticated/admin/reference-data/index';
 import { Route as AuthenticatedAdminPeopleIndexRouteImport } from './routes/_authenticated/admin/people/index';
@@ -63,6 +66,12 @@ const AuthenticatedTasksIndexRoute = AuthenticatedTasksIndexRouteImport.update({
   path: '/tasks/',
   getParentRoute: () => AuthenticatedRoute,
 } as any);
+const AuthenticatedApprovalsIndexRoute =
+  AuthenticatedApprovalsIndexRouteImport.update({
+    id: '/approvals/',
+    path: '/approvals/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any);
 const AuthenticatedTasksPilotRoute = AuthenticatedTasksPilotRouteImport.update({
   id: '/tasks/pilot',
   path: '/tasks/pilot',
@@ -72,6 +81,18 @@ const AuthenticatedTasksTaskIdRoute =
   AuthenticatedTasksTaskIdRouteImport.update({
     id: '/tasks/$taskId',
     path: '/tasks/$taskId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any);
+const AuthenticatedApprovalsDelegationsRoute =
+  AuthenticatedApprovalsDelegationsRouteImport.update({
+    id: '/approvals/delegations',
+    path: '/approvals/delegations',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any);
+const AuthenticatedApprovalsRequestIdRoute =
+  AuthenticatedApprovalsRequestIdRouteImport.update({
+    id: '/approvals/$requestId',
+    path: '/approvals/$requestId',
     getParentRoute: () => AuthenticatedRoute,
   } as any);
 const AuthenticatedAdminTeamsIndexRoute =
@@ -176,8 +197,11 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute;
   '/admin': typeof AuthenticatedAdminRouteWithChildren;
   '/dashboard': typeof AuthenticatedDashboardRoute;
+  '/approvals/$requestId': typeof AuthenticatedApprovalsRequestIdRoute;
+  '/approvals/delegations': typeof AuthenticatedApprovalsDelegationsRoute;
   '/tasks/$taskId': typeof AuthenticatedTasksTaskIdRoute;
   '/tasks/pilot': typeof AuthenticatedTasksPilotRoute;
+  '/approvals/': typeof AuthenticatedApprovalsIndexRoute;
   '/tasks/': typeof AuthenticatedTasksIndexRoute;
   '/admin/authz/allocations': typeof AuthenticatedAdminAuthzAllocationsRoute;
   '/admin/authz/grants': typeof AuthenticatedAdminAuthzGrantsRoute;
@@ -201,8 +225,11 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute;
   '/admin': typeof AuthenticatedAdminRouteWithChildren;
   '/dashboard': typeof AuthenticatedDashboardRoute;
+  '/approvals/$requestId': typeof AuthenticatedApprovalsRequestIdRoute;
+  '/approvals/delegations': typeof AuthenticatedApprovalsDelegationsRoute;
   '/tasks/$taskId': typeof AuthenticatedTasksTaskIdRoute;
   '/tasks/pilot': typeof AuthenticatedTasksPilotRoute;
+  '/approvals': typeof AuthenticatedApprovalsIndexRoute;
   '/tasks': typeof AuthenticatedTasksIndexRoute;
   '/admin/authz/allocations': typeof AuthenticatedAdminAuthzAllocationsRoute;
   '/admin/authz/grants': typeof AuthenticatedAdminAuthzGrantsRoute;
@@ -228,8 +255,11 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute;
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren;
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute;
+  '/_authenticated/approvals/$requestId': typeof AuthenticatedApprovalsRequestIdRoute;
+  '/_authenticated/approvals/delegations': typeof AuthenticatedApprovalsDelegationsRoute;
   '/_authenticated/tasks/$taskId': typeof AuthenticatedTasksTaskIdRoute;
   '/_authenticated/tasks/pilot': typeof AuthenticatedTasksPilotRoute;
+  '/_authenticated/approvals/': typeof AuthenticatedApprovalsIndexRoute;
   '/_authenticated/tasks/': typeof AuthenticatedTasksIndexRoute;
   '/_authenticated/admin/authz/allocations': typeof AuthenticatedAdminAuthzAllocationsRoute;
   '/_authenticated/admin/authz/grants': typeof AuthenticatedAdminAuthzGrantsRoute;
@@ -255,8 +285,11 @@ export interface FileRouteTypes {
     | '/login'
     | '/admin'
     | '/dashboard'
+    | '/approvals/$requestId'
+    | '/approvals/delegations'
     | '/tasks/$taskId'
     | '/tasks/pilot'
+    | '/approvals/'
     | '/tasks/'
     | '/admin/authz/allocations'
     | '/admin/authz/grants'
@@ -280,8 +313,11 @@ export interface FileRouteTypes {
     | '/login'
     | '/admin'
     | '/dashboard'
+    | '/approvals/$requestId'
+    | '/approvals/delegations'
     | '/tasks/$taskId'
     | '/tasks/pilot'
+    | '/approvals'
     | '/tasks'
     | '/admin/authz/allocations'
     | '/admin/authz/grants'
@@ -306,8 +342,11 @@ export interface FileRouteTypes {
     | '/login'
     | '/_authenticated/admin'
     | '/_authenticated/dashboard'
+    | '/_authenticated/approvals/$requestId'
+    | '/_authenticated/approvals/delegations'
     | '/_authenticated/tasks/$taskId'
     | '/_authenticated/tasks/pilot'
+    | '/_authenticated/approvals/'
     | '/_authenticated/tasks/'
     | '/_authenticated/admin/authz/allocations'
     | '/_authenticated/admin/authz/grants'
@@ -377,6 +416,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedTasksIndexRouteImport;
       parentRoute: typeof AuthenticatedRoute;
     };
+    '/_authenticated/approvals/': {
+      id: '/_authenticated/approvals/';
+      path: '/approvals';
+      fullPath: '/approvals/';
+      preLoaderRoute: typeof AuthenticatedApprovalsIndexRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
     '/_authenticated/tasks/pilot': {
       id: '/_authenticated/tasks/pilot';
       path: '/tasks/pilot';
@@ -389,6 +435,20 @@ declare module '@tanstack/react-router' {
       path: '/tasks/$taskId';
       fullPath: '/tasks/$taskId';
       preLoaderRoute: typeof AuthenticatedTasksTaskIdRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
+    '/_authenticated/approvals/delegations': {
+      id: '/_authenticated/approvals/delegations';
+      path: '/approvals/delegations';
+      fullPath: '/approvals/delegations';
+      preLoaderRoute: typeof AuthenticatedApprovalsDelegationsRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
+    '/_authenticated/approvals/$requestId': {
+      id: '/_authenticated/approvals/$requestId';
+      path: '/approvals/$requestId';
+      fullPath: '/approvals/$requestId';
+      preLoaderRoute: typeof AuthenticatedApprovalsRequestIdRouteImport;
       parentRoute: typeof AuthenticatedRoute;
     };
     '/_authenticated/admin/teams/': {
@@ -558,16 +618,23 @@ const AuthenticatedAdminRouteWithChildren =
 interface AuthenticatedRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRouteWithChildren;
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute;
+  AuthenticatedApprovalsRequestIdRoute: typeof AuthenticatedApprovalsRequestIdRoute;
+  AuthenticatedApprovalsDelegationsRoute: typeof AuthenticatedApprovalsDelegationsRoute;
   AuthenticatedTasksTaskIdRoute: typeof AuthenticatedTasksTaskIdRoute;
   AuthenticatedTasksPilotRoute: typeof AuthenticatedTasksPilotRoute;
+  AuthenticatedApprovalsIndexRoute: typeof AuthenticatedApprovalsIndexRoute;
   AuthenticatedTasksIndexRoute: typeof AuthenticatedTasksIndexRoute;
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRouteWithChildren,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedApprovalsRequestIdRoute: AuthenticatedApprovalsRequestIdRoute,
+  AuthenticatedApprovalsDelegationsRoute:
+    AuthenticatedApprovalsDelegationsRoute,
   AuthenticatedTasksTaskIdRoute: AuthenticatedTasksTaskIdRoute,
   AuthenticatedTasksPilotRoute: AuthenticatedTasksPilotRoute,
+  AuthenticatedApprovalsIndexRoute: AuthenticatedApprovalsIndexRoute,
   AuthenticatedTasksIndexRoute: AuthenticatedTasksIndexRoute,
 };
 

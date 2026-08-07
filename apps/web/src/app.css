@@ -163,6 +163,24 @@
   --color-state-danger-bg: var(--color-status-danger-bg);
   --color-state-danger-border: #eeb6b0;
   --color-state-danger-text: #b23a31;
+
+  /* Two-tier severity language (design system tokens/states.css).
+
+     `advisory` aliases the pending amber and `error` the danger red, and they
+     are kept as separate names on purpose: an advisory INFORMS and never blocks
+     the action, an error BLOCKS it. Approval soft warnings (PL-017) are the
+     canonical advisory — the guarantee that they cannot disable Approve is the
+     whole point of the language, and a component that reached for
+     `state-pending` directly would lose the distinction the moment someone
+     wondered whether an amber panel ought to gate a button. */
+  --color-severity-advisory: var(--color-state-pending);
+  --color-severity-advisory-bg: var(--color-state-pending-bg);
+  --color-severity-advisory-border: var(--color-state-pending-border);
+  --color-severity-advisory-text: var(--color-state-pending-text);
+  --color-severity-error: var(--color-state-danger);
+  --color-severity-error-bg: var(--color-state-danger-bg);
+  --color-severity-error-border: var(--color-state-danger-border);
+  --color-severity-error-text: var(--color-state-danger-text);
 }
 
 :root {
