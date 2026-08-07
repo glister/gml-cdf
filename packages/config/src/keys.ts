@@ -275,6 +275,157 @@ export const approvalsDelegationMaxDurationDays = defineConfigKey({
  * It retires with the pilot slice, exactly as plan 07's `platform.demo.request`
  * shape and plan 08's `platform.pilot_case` will.
  */
+// --- Notifications & reminders (core plan 10 §6) -----------------------------
+//
+// Six keys, and what they have in common is that every one of them is a lever a
+// business user should be able to pull without a release: how often people are
+// chased, which channels are live, how long a message stays in the inbox, and
+// which kinds are too chatty for email (PL-029).
+//
+// Note what is *not* here. Retry backoff and the maximum delivery attempt count
+// are operational tuning, not business decisions, and stay as code constants by
+// design — a key nobody in the business has an opinion about is a setting to get
+// wrong, not a decision point. And no key names a person: a notification
+// addresses a role or a policy, and membership resolves at send time (PL-021).
+
+/**
+ * How often an outstanding thing is chased when its own capability has not
+ * registered a rhythm of its own (PL-020).
+ *
+ * The platform floor rather than the usual answer: core plan 08's task chases
+ * and core plan 09's approval chases each carry their own key, and a reminder
+ * occurrence stores whichever `config:` reference its scheduler chose. This is
+ * what a reminder kind falls back to when it names none, and it is deliberately
+ * the same shape and default (`P1D` — daily until complete) so a reader
+ * comparing the three finds no surprise.
+ *
+ * Read **as-at each firing**, so an administrator lengthening it moves the next
+ * chase for everything outstanding, with no release and no backfill (AC-D7).
+ */
+export const notificationsDefaultReminderCadence = defineConfigKey({
+  namespace: 'platform.notifications',
+  key: 'default_reminder_cadence',
+  schema: z.string().regex(/^P(?!$)(\d+D|\d+W)$/, 'an ISO-8601 day or week duration, e.g. P1D'),
+  defaultValue: 'P1D',
+  description:
+    'How often an outstanding item is chased when its own capability names no cadence, as an ISO-8601 duration (P1D = daily, P7D = weekly). Read afresh at every firing, so a change takes effect from the next chase.',
+  editableBy: ['administrator', 'hr_user'],
+  registeredBy: '10',
+});
+
+/**
+ * Is the in-app channel live? (§6, AC-D8.)
+ *
+ * Ships `true` and would be an odd thing to turn off — the inbox is the channel
+ * with no delivery risk at all. It exists as a key for the same reason the
+ * others do: the dispatcher reads *every* channel's enablement the same way, so
+ * there is one code path and no special case that could drift.
+ */
+export const notificationsChannelInAppEnabled = defineConfigKey({
+  namespace: 'platform.notifications.channel.in_app',
+  key: 'enabled',
+  schema: z.boolean(),
+  defaultValue: true,
+  description:
+    'Whether in-app notifications are delivered. Turning this off records suppressed deliveries rather than skipping them silently, so the inbox emptying is explainable.',
+  editableBy: ['administrator'],
+  registeredBy: '10',
+});
+
+/**
+ * Is the email channel live?
+ *
+ * The one most likely to be used in anger: a provider outage or a deliverability
+ * problem is answered by turning email off for an afternoon, which leaves the
+ * in-app inbox working and records `suppressed` rows saying exactly why nobody
+ * got an email (AC-D8).
+ */
+export const notificationsChannelEmailEnabled = defineConfigKey({
+  namespace: 'platform.notifications.channel.email',
+  key: 'enabled',
+  schema: z.boolean(),
+  defaultValue: true,
+  description:
+    'Whether notification emails are sent. Turning this off during a provider outage records suppressed deliveries and leaves the in-app inbox unaffected.',
+  editableBy: ['administrator'],
+  registeredBy: '10',
+});
+
+/**
+ * Is the push channel live? **Ships `false`** (ADR-0024).
+ *
+ * The channel enum, the adapter seam, the per-channel delivery rows and this key
+ * all exist from day one, and the push build is the only thing that does not
+ * (§5.3). That is the shape of the deferral: turning it on later is a
+ * configuration change plus an adapter, not a schema migration — which is what a
+ * "designed now, built later" claim has to mean if it is to mean anything.
+ *
+ * Leaving it registered but false also means the dispatcher's suppression path
+ * is exercised by the default configuration on every send, rather than being
+ * dead code until someone flips a switch in production.
+ */
+export const notificationsChannelPushEnabled = defineConfigKey({
+  namespace: 'platform.notifications.channel.push',
+  key: 'enabled',
+  schema: z.boolean(),
+  defaultValue: false,
+  description:
+    'Whether push notifications are sent to the mobile app. Ships off: the channel is designed and wired but the Expo Push adapter and device registration are a later build (ADR-0024). Turning it on before then records suppressed deliveries.',
+  editableBy: ['administrator'],
+  registeredBy: '10',
+});
+
+/**
+ * How long a notification stays visible in the in-app inbox (§6, Q2).
+ *
+ * A visibility horizon, not a deletion policy: past it the message drops out of
+ * the inbox and its delivery rows stay exactly where they are. Erasure and
+ * retention are plan 16's, and a notification service quietly deleting its own
+ * evidence of what it sent would be the wrong half of that job done in the wrong
+ * place.
+ *
+ * 90 days is the working assumption pending CDF's answer on Q2 — bounded at a
+ * year because an inbox nobody can ever clear stops being an inbox.
+ */
+export const notificationsDefaultExpiry = defineConfigKey({
+  namespace: 'platform.notifications',
+  key: 'default_expiry',
+  schema: z.string().regex(/^P(?!$)(\d+D|\d+W)$/, 'an ISO-8601 day or week duration, e.g. P90D'),
+  defaultValue: 'P90D',
+  description:
+    'How long a notification stays visible in the in-app inbox, as an ISO-8601 duration. Past it the message drops out of the inbox; the delivery record is kept regardless — clearing it is retention policy, not inbox policy.',
+  editableBy: ['administrator'],
+  registeredBy: '10',
+});
+
+/**
+ * Per-kind channel overrides — the volume relief valve (§12.3, Q4).
+ *
+ * A notification kind registers the channels it *wants*; this overrides them for
+ * a named kind without a release, which is how CDF turns email off for a chatty
+ * kind while leaving the inbox entry intact. The value is a map of kind name to
+ * channel list, and an empty list is legitimate: it means "record it in the
+ * table, tell nobody" — the honest way to mute something without losing the
+ * trail that it happened.
+ *
+ * The value names kinds and channels only. It cannot name a person, which is
+ * the rule every key in this store obeys and the reason this one is safe to
+ * carry in full in its own audit event.
+ */
+export const notificationsKindChannelOverrides = defineConfigKey({
+  namespace: 'platform.notifications',
+  key: 'kind_channel_overrides',
+  schema: z.record(
+    z.string().regex(/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/, 'a registered notification kind'),
+    z.array(z.enum(['in_app', 'email', 'push'])),
+  ),
+  defaultValue: {},
+  description:
+    'Per-kind channel overrides: a map of notification kind to the channels it should use, overriding the kind’s registered defaults. An empty list mutes a kind on every channel while still recording it.',
+  editableBy: ['administrator'],
+  registeredBy: '10',
+});
+
 export const pilotSignoffSubject = defineApprovalSubject({
   subjectType: 'platform.pilot_signoff',
   policyDefault: {

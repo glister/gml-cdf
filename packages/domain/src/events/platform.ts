@@ -1045,3 +1045,161 @@ export const platformApprovalDelegationRevoked = defineEvent(
     alreadyExpired: z.boolean(),
   }),
 );
+
+// --- Notifications & reminders (core plan 10 §4.4, PL-019…021) ---------------
+//
+// Every payload here is **ids, kinds and counts**. None of them carries the
+// rendered `title`/`body`, the template params, or the recipient's name or
+// email — a payload that copied notification content would be a bug twice over
+// (ADR-0019, and SA-023's rule that special-category detail never reaches a
+// notification body in the first place, so it must certainly never reach the
+// permanent journal).
+//
+// `recipientPersonIds` on `sent` is the one place people appear, and surrogate
+// person ids are exactly what ADR-0019 sanctions: the fact worth keeping is
+// *that these people were told*, which is unanswerable without saying who.
+//
+// **Mark-read is deliberately absent.** Reading a notification is UI telemetry,
+// not a business fact; it is recorded on the delivery row's `read_at` and
+// nowhere else. Journalling it would put a row in an append-only table every
+// time anyone glanced at a bell icon (§4.4).
+
+/** A registered notification kind, e.g. `admin.test`, `reminder.chase`. */
+const notificationKindName = z.string().min(1).max(100);
+const recipientKindValues = z.enum(['role', 'policy', 'contextual']);
+const channelValues = z.enum(['in_app', 'email', 'push']);
+
+/**
+ * A notification was requested — appended in the requester's own transaction,
+ * beside the `platform.notification` insert (ADR-0010).
+ *
+ * **This event is the outbox record that causes the send.** Its `effects` array
+ * is read by the relay's payload-carried-effects rule and fanned onto the
+ * `effects` queue, so dispatch cannot be split from the state change that asked
+ * for it by a broker outage — there is no notification-specific relay routing,
+ * and no dual write (§4.4, §9.6).
+ */
+export const platformNotificationRequested = defineEvent(
+  'platform.notification.requested',
+  1,
+  z.strictObject({
+    kind: notificationKindName,
+    recipientKind: recipientKindValues,
+    /** What the message is about; `null` for a subject-less one (admin tests). */
+    subjectStreamType: streamTypeName.nullable(),
+    subjectStreamId: z.uuid().nullable(),
+    channels: z.array(channelValues),
+    /** What the relay fans onto the `effects` queue — the dispatch (§5.4). */
+    effects: z.array(effectRef),
+  }),
+);
+
+/**
+ * Dispatch completed: every delivery row exists and has been attempted at least
+ * once. Appended by the worker, not by the requester.
+ *
+ * `recipientPersonIds` is what makes the fact useful downstream — core plan 09
+ * stamps `approval_assignee.notified_at` from it, and the activity trail answers
+ * "who was told, and when?" without reading the delivery table.
+ */
+export const platformNotificationSent = defineEvent(
+  'platform.notification.sent',
+  1,
+  z.strictObject({
+    kind: notificationKindName,
+    recipientPersonIds: z.array(z.uuid()),
+    channels: z.array(channelValues),
+    /** Deliveries that came back `suppressed` because a channel is disabled. */
+    suppressedChannels: z.array(channelValues),
+  }),
+);
+
+/**
+ * A delivery exhausted its retries and went `dead` (§5.6).
+ *
+ * One event per dead delivery, not one per notification: a notification whose
+ * email failed while its in-app entry landed is a partial failure, and rolling
+ * that up would report it as either fine or broken when it is neither.
+ */
+export const platformNotificationDeliveryFailed = defineEvent(
+  'platform.notification.delivery_failed',
+  1,
+  z.strictObject({
+    kind: notificationKindName,
+    deliveryId: z.uuid(),
+    personId: z.uuid(),
+    channel: channelValues,
+    attemptCount: z.number().int().min(1),
+  }),
+);
+
+/**
+ * Resolution produced **nobody** — an empty role, or a policy resolving to no
+ * one (§5.1).
+ *
+ * Emitted instead of failing the dispatch, and emitted *loudly*: a silent drop
+ * is how a mis-configured role turns into a critical notification nobody ever
+ * receives and nobody ever notices. The dispatch still succeeds, because the
+ * fault is in the configuration and retrying it forever would not fix it.
+ */
+export const platformNotificationUnresolved = defineEvent(
+  'platform.notification.unresolved',
+  1,
+  z.strictObject({
+    kind: notificationKindName,
+    recipientKind: recipientKindValues,
+    /** The role or policy that resolved to nobody, for the admin diagnostic. */
+    recipientRef: z.string().max(200).nullable(),
+  }),
+);
+
+// Reminder lifecycle (PL-020). Journalled on the `platform.scheduled_action`
+// row the occurrence lives on, so "why was — or wasn't — this chased?" is
+// answerable from the timer's own stream. The `scheduled` half is covered by
+// plan 07's `platform.scheduled_action.scheduled`; these two record the reminder
+// facts that timer event cannot express, because they are about the *series*
+// rather than about one row.
+
+/** A reminder series was stopped early because its source was satisfied. */
+export const platformReminderCompleted = defineEvent(
+  'platform.reminder.completed',
+  1,
+  z.strictObject({
+    reminderKind: z.string().min(1).max(100),
+    sourceType: streamTypeName,
+    sourceId: z.uuid(),
+    /**
+     * How the series ended. `satisfied` is the ordinary case — the task was
+     * completed, the request decided. `until_reached` is a safety valve firing,
+     * which is worth distinguishing: it means the source is *still* outstanding
+     * and nobody will be chased about it again.
+     */
+    reason: z.enum(['satisfied', 'until_reached']),
+    /** How many chases were actually sent before it stopped. */
+    occurrences: z.number().int().min(0),
+  }),
+);
+
+/**
+ * A chase was sent, and the next occurrence scheduled.
+ *
+ * The counterpart to `completed`: between them the journal answers "how many
+ * times were they chased, and did it stop when it should have?" without joining
+ * scheduled-action rows to notifications. `cadence` is the value resolved
+ * **as-at this firing**, which is what makes an administrator's cadence change
+ * visible in the trail rather than only in its effects.
+ */
+export const platformReminderChased = defineEvent(
+  'platform.reminder.chased',
+  1,
+  z.strictObject({
+    reminderKind: z.string().min(1).max(100),
+    sourceType: streamTypeName,
+    sourceId: z.uuid(),
+    occurrence: z.number().int().min(1),
+    /** The ISO-8601 cadence in force at this firing, e.g. `P1D`. */
+    cadence: z.string().max(20),
+    /** `null` when a safety valve stopped the series with this firing. */
+    nextDueAt: z.iso.datetime().nullable(),
+  }),
+);
