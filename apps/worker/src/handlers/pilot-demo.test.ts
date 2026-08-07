@@ -74,6 +74,31 @@ describe('pilotDemoHandler', () => {
     expect(debug).toHaveBeenCalledWith('pilot-demo duplicate ignored', expect.anything());
   });
 
+  it('ignores an event of another type without touching the consumption ledger', async () => {
+    // An unfiltered topic subscription receives every relayed journal event.
+    // Parsing another one's payload against this registry entry would throw,
+    // abandon the message and cycle it to the dead-letter queue — for an event
+    // that was relayed perfectly correctly.
+    recordMock.mockClear();
+    recordMock.mockResolvedValue(true);
+    const c = ctx();
+    const info = vi.spyOn(c.logger, 'info');
+
+    await expect(
+      pilotDemoHandler(
+        envelopeMessage({
+          eventType: 'platform.notification.requested',
+          streamType: 'platform.notification',
+          payload: { kind: 'admin.test', recipientKind: 'role', channels: [], effects: [] },
+        }),
+        c,
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(recordMock).not.toHaveBeenCalled();
+    expect(info).not.toHaveBeenCalledWith('pilot-demo consumed', expect.anything());
+  });
+
   it('throws on a malformed envelope (message is abandoned/redelivered)', async () => {
     recordMock.mockResolvedValue(true);
     await expect(

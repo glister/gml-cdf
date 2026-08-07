@@ -1344,7 +1344,7 @@ export const deliveryStatusSchema = z.enum(DELIVERY_STATUSES);
 export const recipientSpecSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('role'),
-    roleId: z.uuid(),
+    roleId: z.uuid('choose a role'),
     /** Narrows to holders of that role *for this team* — see plan 09 §4.5. */
     teamId: z.uuid().nullish(),
   }),
