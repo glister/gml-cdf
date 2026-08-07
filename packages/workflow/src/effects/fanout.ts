@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { DomainEventRecord } from '@repo/db';
-import { effectMessageId, type EffectEnvelope } from './types.js';
+import { effectMessageId, type EffectEnvelope, type EffectSource } from './types.js';
 
 /**
  * Turning a journalled transition into effect messages (core plan 07 §5.4).
@@ -26,15 +26,33 @@ export const EFFECTS_QUEUE = 'effects';
  * is a structural test ("does this event carry effects?"), not a re-validation
  * of a payload the journal already validated against its registered schema.
  */
-const effectCarryingPayload = z.object({
+const effectList = z
+  .array(z.object({ name: z.string().min(1), params: z.record(z.string(), z.json()).optional() }))
+  .min(1);
+
+const transitionPayload = z.object({
   transitionId: z.uuid(),
   instanceId: z.uuid(),
   subjectStreamType: z.string(),
   subjectStreamId: z.uuid(),
-  effects: z
-    .array(z.object({ name: z.string().min(1), params: z.record(z.string(), z.json()).optional() }))
-    .min(1),
+  effects: effectList,
 });
+
+/**
+ * The second shape: **any** journalled event whose payload carries effects.
+ *
+ * Added by core plan 10, whose `platform.notification.requested` needs its
+ * dispatch to ride the outbox for exactly the reason a transition's effects do —
+ * so a committed fact can never lose its consequence to a broker outage — but
+ * which has no workflow instance to hang on. The rule generalises cleanly: the
+ * event id is the idempotency root, and the event's own stream is the subject,
+ * so nothing notification-specific appears anywhere in the relay.
+ *
+ * Checked **after** the transition shape, so a transition keeps its richer
+ * source (which carries the instance id handlers use) rather than being demoted
+ * to a bare event.
+ */
+const eventPayload = z.object({ effects: effectList });
 
 export interface EffectMessage {
   envelope: EffectEnvelope;
@@ -52,20 +70,44 @@ export interface EffectMessage {
  * journal rows, which carry no effects at all.
  */
 export function effectMessagesFor(event: DomainEventRecord): EffectMessage[] {
-  const parsed = effectCarryingPayload.safeParse(event.payload);
-  if (!parsed.success) return [];
+  const transition = transitionPayload.safeParse(event.payload);
+  if (transition.success) {
+    const { transitionId, instanceId, subjectStreamType, subjectStreamId, effects } =
+      transition.data;
+    const source: EffectSource = { kind: 'transition', transitionId, instanceId };
+    return toMessages(effects, source, event, {
+      streamType: subjectStreamType,
+      streamId: subjectStreamId,
+    });
+  }
 
-  const { transitionId, instanceId, subjectStreamType, subjectStreamId, effects } = parsed.data;
-  const source = { kind: 'transition' as const, transitionId, instanceId };
+  const carried = eventPayload.safeParse(event.payload);
+  if (!carried.success) return [];
 
+  const source: EffectSource = { kind: 'event', eventId: event.id };
+  // The event's own stream is the subject: `platform.notification.requested` is
+  // journalled on the notification row, and the notification id is exactly what
+  // the dispatch handler needs.
+  return toMessages(carried.data.effects, source, event, {
+    streamType: event.stream_type,
+    streamId: event.stream_id,
+  });
+}
+
+function toMessages(
+  effects: readonly { name: string; params?: Record<string, unknown> }[],
+  source: EffectSource,
+  event: DomainEventRecord,
+  subject: { streamType: string; streamId: string },
+): EffectMessage[] {
   return effects.map((effect) => ({
     envelope: {
       effect: effect.name,
-      params: effect.params ?? {},
+      params: (effect.params ?? {}) as EffectEnvelope['params'],
       source,
-      subject: { streamType: subjectStreamType, streamId: subjectStreamId },
-      // The causing event's correlation id, so a transition and everything it
-      // sets in motion share one thread through the logs and the journal.
+      subject,
+      // The causing event's correlation id, so a fact and everything it sets in
+      // motion share one thread through the logs and the journal.
       correlationId: event.correlation_id,
     },
     messageId: effectMessageId(source, effect.name),

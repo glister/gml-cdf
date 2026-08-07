@@ -6,6 +6,7 @@ import { configRouter } from './routers/platform/config.js';
 import { identityRouter } from './routers/platform/identity.js';
 import { journalRouter } from './routers/platform/journal.js';
 import { lookupRouter } from './routers/platform/lookup.js';
+import { notificationsRouter } from './routers/platform/notifications.js';
 import { tasksRouter } from './routers/platform/tasks.js';
 import { teamRouter } from './routers/platform/team.js';
 import { workflowRouter } from './routers/platform/workflow.js';
@@ -26,6 +27,7 @@ export const appRouter = router({
     workflow: workflowRouter,
     tasks: tasksRouter,
     approvals: approvalsRouter,
+    notifications: notificationsRouter,
   }),
 });
 

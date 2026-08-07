@@ -134,6 +134,70 @@ export {
   type RenderedNotification,
 } from './lib/notify-kinds.js';
 
+/**
+ * The notification service's transactional API (core plan 10 §5.2) and its
+ * effect handlers. Exported for the **module-load side effect** as much as for
+ * the names: `notification.dispatch` / `.retry` / `.reminder` register in
+ * `@repo/workflow`'s effect registry when this module loads, as do the in-app
+ * channel adapter and the two reminder kinds core plans 08 and 09 are already
+ * writing occurrences for. Without it the worker would dead-letter every
+ * reminder that came due.
+ */
+export {
+  cancelReminders,
+  requestNotification,
+  scheduleReminder,
+  NOTIFICATION_DISPATCH_EFFECT,
+  NOTIFICATION_RETRY_EFFECT,
+  NOTIFICATION_STREAM_TYPE,
+  REMINDER_ACTION_TYPE,
+  type RequestNotificationInput,
+  type ScheduleReminderInput,
+} from './lib/notify.js';
+
+export {
+  dispatchNotificationEffect,
+  reminderEffect,
+  retryNotificationEffect,
+  MAX_DELIVERY_ATTEMPTS,
+  NOTIFICATION_EFFECTS,
+} from './lib/notify-effects.js';
+
+/** Recipient resolution — the heart of PL-021 (core plan 10 §5.1). */
+export {
+  recipientRefOf,
+  registerSubjectContext,
+  resolveRecipients,
+  subjectContextStreamTypes,
+  unregisterSubjectContextForTests,
+  type ResolvedRecipient,
+  type SubjectContext,
+  type SubjectContextResolver,
+} from './lib/notify-resolve.js';
+
+/** The channel-adapter seam push slots into later (core plan 10 §5.3). */
+export {
+  channelAdapter,
+  inAppAdapter,
+  registerChannelAdapter,
+  registeredChannels,
+  unregisterChannelAdapterForTests,
+  type ChannelAdapter,
+  type ChannelSendContext,
+  type ChannelSendResult,
+} from './lib/notify-channels.js';
+
+/** The reminder-kind registry — satisfaction checks (core plan 10 §5.5). */
+export {
+  registerReminderKind,
+  reminderKindNames,
+  requireReminderKind,
+  unregisterReminderKindForTests,
+  ReminderKindUnknownError,
+  type ReminderDescription,
+  type ReminderKindDef,
+} from './lib/notify-reminders.js';
+
 /** Grant resolution for the API context factory (core plan 04 §9.3). */
 export { loadGrantsForPerson } from './lib/grants-context.js';
 

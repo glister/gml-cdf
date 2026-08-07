@@ -7,6 +7,12 @@
 // them in this process. One import covers every engine, which is the point of
 // registering through the package barrel.
 import '@repo/trpc';
+// Side-effect import: registers the **email** channel adapter (core plan 10
+// §5.3). It cannot live beside the in-app adapter in `@repo/trpc`, because that
+// package is imported by `apps/web` and a static `@repo/email` import would pull
+// a mail transport into the browser bundle. This app owns concrete services, so
+// it hands the adapter in — and the dispatcher never learns which process it is.
+import './notification-email-channel.js';
 import type { HandlerRegistration } from '../types.js';
 import { effectsHandler } from './effects.js';
 import { helloWorldHandler } from './hello-world.js';

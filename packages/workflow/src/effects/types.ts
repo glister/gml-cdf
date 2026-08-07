@@ -27,6 +27,20 @@ export const effectSourceSchema = z.discriminatedUnion('kind', [
     kind: z.literal('scheduled_action'),
     scheduledActionId: z.uuid(),
   }),
+  /**
+   * A journal event that carried effects but was not a workflow transition —
+   * added by core plan 10 (`platform.notification.requested`), whose dispatch
+   * has to ride the outbox for the same atomicity reason a transition's effects
+   * do, without a workflow instance existing to hang it on.
+   *
+   * The event id is as good an idempotency root as a transition id and for the
+   * same reason: it is a UUIDv7 that exists in the database before any message
+   * is sent, so "did I already do this?" is a primary-key lookup.
+   */
+  z.object({
+    kind: z.literal('event'),
+    eventId: z.uuid(),
+  }),
 ]);
 
 export type EffectSource = z.infer<typeof effectSourceSchema>;
@@ -54,9 +68,16 @@ export type EffectEnvelope = z.infer<typeof effectEnvelopeSchema>;
  * produce the *same* id, which is what T-S3 asserts).
  */
 export function effectMessageId(source: EffectSource, effect: string): string {
-  return source.kind === 'transition'
-    ? `t:${source.transitionId}:${effect}`
-    : `sa:${source.scheduledActionId}`;
+  switch (source.kind) {
+    case 'transition':
+      return `t:${source.transitionId}:${effect}`;
+    case 'scheduled_action':
+      return `sa:${source.scheduledActionId}`;
+    case 'event':
+      // Like a transition, one event may carry several effects, so the name
+      // completes the id.
+      return `e:${source.eventId}:${effect}`;
+  }
 }
 
 /**
@@ -65,5 +86,12 @@ export function effectMessageId(source: EffectSource, effect: string): string {
  * deterministic child-row ids.
  */
 export function effectIdempotencyKey(source: EffectSource): string {
-  return source.kind === 'transition' ? source.transitionId : source.scheduledActionId;
+  switch (source.kind) {
+    case 'transition':
+      return source.transitionId;
+    case 'scheduled_action':
+      return source.scheduledActionId;
+    case 'event':
+      return source.eventId;
+  }
 }
