@@ -51,6 +51,63 @@ export {
   type TaskListItem,
 } from './lib/tasks.js';
 
+/**
+ * The approval engine's workflow effect (core plan 09 §5.5).
+ *
+ * Exported for its **module-load side effect** as much as for the names: the
+ * `approval.open` handler registers when this module is loaded, so the API
+ * (which executes transitions) and the worker (which dispatches their effects)
+ * see one registry. The decisive decision's transition is deliberately *not* an
+ * effect — it fires inside the decide transaction; see that module's header.
+ */
+export {
+  cancelApprovalEffect,
+  openApprovalEffect,
+  APPROVAL_EFFECTS,
+} from './lib/approval-effects.js';
+
+/**
+ * The pilot slice's warning provider and subject loader (core plan 09 §9.8),
+ * exported for their module-load side effects. Retires with the pilot.
+ */
+export { PILOT_LARGE_AMOUNT_CODE, PILOT_WARNING_PROVIDER } from './lib/approval-pilot.js';
+
+/** The approval engine's transactional services (core plan 09 §5.1). */
+export {
+  assertDesignatedResolversRegistered,
+  cancelApprovalRequest,
+  cancelApprovalsForInstance,
+  createDelegation,
+  decideApproval,
+  openApprovalRequest,
+  registerDesignatedResolver,
+  resolveApprovalPolicy,
+  revokeDelegation,
+  unregisterDesignatedResolverForTests,
+  ApprovalConflictError,
+  ApprovalForbiddenError,
+  ApprovalNotFoundError,
+  ApprovalRequestError,
+  ApprovalTransitionError,
+  APPROVAL_REMINDER_KIND,
+  APPROVAL_STREAM_TYPE,
+  REMINDER_ACTION_TYPE as APPROVAL_REMINDER_ACTION_TYPE,
+  type DesignatedResolver,
+  type OpenApprovalResult,
+  type ResolvedApprovalPolicy,
+} from './lib/approvals.js';
+
+/** The warning-provider contract consuming modules register against (PL-017). */
+export {
+  collectWarnings,
+  registerWarningProvider,
+  unregisterWarningProviderForTests,
+  warningProviderNames,
+  WARNINGS_UNAVAILABLE_CODE,
+  type ApprovalWarningContext,
+  type ApprovalWarningProvider,
+} from './lib/approval-warnings.js';
+
 /** Grant resolution for the API context factory (core plan 04 §9.3). */
 export { loadGrantsForPerson } from './lib/grants-context.js';
 

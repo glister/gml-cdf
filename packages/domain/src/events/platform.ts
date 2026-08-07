@@ -856,3 +856,192 @@ export const platformTaskGateOpened = defineEvent(
     workflowInstanceId: z.uuid().nullable(),
   }),
 );
+
+// --- Approval engine (core plan 09, PL-016…018) ------------------------------
+//
+// **Streamed on the request row, not on the subject** — the same ADR-0021
+// correction plans 06, 07 and 08 each made in build. The ADR fixes `stream_type`
+// as the event type's `<module>.<entity>` prefix with the entity taken from the
+// table, so `platform.approval_request.approved` belongs on
+// `stream_type='platform.approval_request'`. Plan 09 §4.3 originally paired
+// `platform.approval.*` with the *subject's* stream; that pairing would have
+// been the only place in the system where the two disagreed.
+//
+// The subject is not lost. It travels as `subjectStreamType`/`subjectStreamId`
+// on every payload, so a booking's activity trail (plan 13) and the reporting
+// feed (plan 15) still fan out by it — one indexed read for "this booking's
+// approvals", and one task's own history becomes readable too, which the
+// original pairing could not do.
+//
+// Payloads carry ids, codes, policy keys and decisions. **Reason text stays on
+// the row** (ADR-0019): a rejection reason is free text a human typed, and the
+// journal records that one exists and where to find it, never its content.
+
+/** `{ provider, code }` — what a warning was, never what it said (PL-017). */
+const acknowledgedWarning = z.strictObject({
+  provider: z.string().min(1).max(100),
+  code: z.string().min(1).max(100),
+});
+
+/** The business record a sign-off is about, in journal stream vocabulary. */
+const approvalSubject = {
+  subjectStreamType: streamTypeName,
+  subjectStreamId: z.uuid(),
+};
+
+/** How an approver came to be asked — mirrors `approval_assignee.source`. */
+const approvalAssigneeRef = z.strictObject({
+  personId: z.uuid(),
+  source: z.enum(['policy_role', 'designated', 'delegation']),
+  /** Role **key**, not id: a payload read a year later should be legible. */
+  roleKey: z.string().max(100).nullable(),
+  designatedSource: z.string().max(100).nullable(),
+  delegationId: z.uuid().nullable(),
+});
+
+/**
+ * A sign-off was sought (PL-016).
+ *
+ * `assignees` is the notification record — who the policy resolved to *at this
+ * instant*, and how. It is deliberately not the authorisation set: eligibility
+ * is re-resolved live at decide time (§4.5), so this payload answers "who was
+ * asked?" and nothing else. `policyVersion` is null when the frozen code default
+ * was in force rather than a written config entry.
+ */
+export const platformApprovalRequestRequested = defineEvent(
+  'platform.approval_request.requested',
+  1,
+  z.strictObject({
+    ...approvalSubject,
+    policyKey: z.string().min(1).max(200),
+    policyVersion: z.number().int().nullable(),
+    workflowInstanceId: z.uuid().nullable(),
+    workflowAction: z.string().max(100).nullable(),
+    /** `null` when a timer-fired transition opened it — nobody to notify. */
+    requestedBy: z.uuid().nullable(),
+    assignees: z.array(approvalAssigneeRef),
+    /** Warnings the *requester* was shown and acknowledged at submit (PL-017). */
+    acknowledgedWarnings: z.array(acknowledgedWarning),
+  }),
+);
+
+/**
+ * The decisive approval (PL-016, any-one-approves). There is no second one.
+ *
+ * The deciding person is the envelope's `actor_person_id`; `delegationId` says
+ * whether they were acting on their own authority or carrying someone else's.
+ */
+export const platformApprovalRequestApproved = defineEvent(
+  'platform.approval_request.approved',
+  1,
+  z.strictObject({
+    ...approvalSubject,
+    policyKey: z.string().min(1).max(200),
+    /** Set when the decider's authority came via a delegation. */
+    delegationId: z.uuid().nullable(),
+    /** Warnings the *approver* acknowledged — soft, never blocking (PL-017). */
+    acknowledgedWarnings: z.array(acknowledgedWarning),
+    workflowInstanceId: z.uuid().nullable(),
+    /** The runtime action this approval fired, in the same transaction (§5.5). */
+    workflowAction: z.string().max(100).nullable(),
+  }),
+);
+
+/**
+ * The decisive rejection. `hasReason` is always true — PL-016 makes the reason
+ * mandatory at the schema *and* the CHECK constraint — and the text itself stays
+ * on `approval_decision.reason`, out of immutable storage (ADR-0019).
+ */
+export const platformApprovalRequestRejected = defineEvent(
+  'platform.approval_request.rejected',
+  1,
+  z.strictObject({
+    ...approvalSubject,
+    policyKey: z.string().min(1).max(200),
+    delegationId: z.uuid().nullable(),
+    acknowledgedWarnings: z.array(acknowledgedWarning),
+    workflowInstanceId: z.uuid().nullable(),
+    workflowAction: z.string().max(100).nullable(),
+    hasReason: z.literal(true),
+  }),
+);
+
+/** A pending request was withdrawn before anyone decided it. */
+export const platformApprovalRequestCancelled = defineEvent(
+  'platform.approval_request.cancelled',
+  1,
+  z.strictObject({
+    ...approvalSubject,
+    policyKey: z.string().min(1).max(200),
+    /** Who ended it: the requester, an administrator, or the owning workflow. */
+    source: z.enum(['requester', 'admin', 'workflow']),
+    hasReason: z.boolean(),
+  }),
+);
+
+/**
+ * A sign-off was **not** sought, because the configured threshold did not call
+ * for one (PL-018) — the auto-approve path.
+ *
+ * **Streamed on the subject, and this is the engine's one ADR-0021 exception**
+ * (§12.2 Q2, resolved 2026-08-06: no request row is created). The fact is about
+ * a request that deliberately does not exist, so there is no
+ * `platform.approval_request` row to hang it on, and the subject is the only
+ * durable thing it is about. Exactly the shape of plan 08's
+ * `platform.task.gate.opened`, and recorded here rather than left silent.
+ *
+ * It carries the same `policyKey`/`policyVersion` as a real request so that
+ * "why was this never approved by anyone?" is answerable from the trail, and so
+ * reporting can count authorisations that happened without a human.
+ */
+export const platformApprovalRequestAutoApproved = defineEvent(
+  'platform.approval_request.auto_approved',
+  1,
+  z.strictObject({
+    policyKey: z.string().min(1).max(200),
+    policyVersion: z.number().int().nullable(),
+    /** The `platform.approvals.threshold.<subjectType>` key that decided it. */
+    thresholdKey: z.string().min(1).max(200),
+    thresholdVersion: z.number().int().nullable(),
+    /** Why no approval was required — `below_threshold` in every current case. */
+    reason: z.enum(['below_threshold']),
+    requestedBy: z.uuid().nullable(),
+    workflowInstanceId: z.uuid().nullable(),
+    workflowAction: z.string().max(100).nullable(),
+  }),
+);
+
+/**
+ * An approver handed their authority to someone else for a period (HL-035).
+ *
+ * `kind='security'` at the call site: a delegation transfers the power to
+ * authorise, which is the same class of fact as a role grant (plan 04). Both
+ * parties are on the payload because the envelope's actor is whoever *created*
+ * it — an administrator arranging cover for an absent approver is neither.
+ */
+export const platformApprovalDelegationCreated = defineEvent(
+  'platform.approval_delegation.created',
+  1,
+  z.strictObject({
+    delegatorPersonId: z.uuid(),
+    delegatePersonId: z.uuid(),
+    /** `null` = every subject type. */
+    subjectType: streamTypeName.nullable(),
+    validFrom: z.iso.datetime(),
+    validTo: z.iso.datetime(),
+    hasReason: z.boolean(),
+  }),
+);
+
+/** A delegation was ended early. The window stays on the row; this stamps it. */
+export const platformApprovalDelegationRevoked = defineEvent(
+  'platform.approval_delegation.revoked',
+  1,
+  z.strictObject({
+    delegatorPersonId: z.uuid(),
+    delegatePersonId: z.uuid(),
+    subjectType: streamTypeName.nullable(),
+    /** Whether the window had already lapsed — a revocation of nothing is a fact. */
+    alreadyExpired: z.boolean(),
+  }),
+);

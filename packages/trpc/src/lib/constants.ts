@@ -202,3 +202,39 @@ export type TaskDependencyKind = (typeof TASK_DEPENDENCY_KINDS)[number];
  */
 export const TASK_SORTS = ['due', 'raised'] as const;
 export type TaskSort = (typeof TASK_SORTS)[number];
+
+// --- Approval engine (core plan 09, PL-016…018) ------------------------------
+
+/**
+ * `platform.approval_request.status`. Mirrors the CHECK constraint and the
+ * inlined literals in `.kysely-codegenrc.json`. All three non-pending states are
+ * terminal — there is no reopen, because a change of mind is a new request
+ * (§4.4, and the one-pending-per-subject index is what makes that safe).
+ */
+export const APPROVAL_STATUSES = ['pending', 'approved', 'rejected', 'cancelled'] as const;
+export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
+
+/** `platform.approval_decision.decision` — the two decisive outcomes. */
+export const APPROVAL_DECISIONS = ['approved', 'rejected'] as const;
+export type ApprovalDecision = (typeof APPROVAL_DECISIONS)[number];
+
+/**
+ * `platform.approval_assignee.source` — how a person came to be asked.
+ *
+ * There is no `policy_person`: a policy may not name an individual (plan 06
+ * §4.5, PL-021). See plan 09 §4.5.
+ */
+export const APPROVAL_ASSIGNEE_SOURCES = ['policy_role', 'designated', 'delegation'] as const;
+export type ApprovalAssigneeSource = (typeof APPROVAL_ASSIGNEE_SOURCES)[number];
+
+/** Who ended a pending request, for the `cancelled` event and the audit view. */
+export const APPROVAL_CANCEL_SOURCES = ['requester', 'admin', 'workflow'] as const;
+export type ApprovalCancelSource = (typeof APPROVAL_CANCEL_SOURCES)[number];
+
+/**
+ * Sort columns for the approvals inbox. `submitted` is the working order (the
+ * oldest outstanding request first, which is the one someone is waiting on);
+ * `decided` orders the history view.
+ */
+export const APPROVAL_SORTS = ['submitted', 'decided'] as const;
+export type ApprovalSort = (typeof APPROVAL_SORTS)[number];

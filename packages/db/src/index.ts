@@ -1,6 +1,10 @@
 import type { Insertable, Selectable, Updateable } from 'kysely';
 import type {
   Account,
+  PlatformApprovalAssignee,
+  PlatformApprovalDecision,
+  PlatformApprovalDelegation,
+  PlatformApprovalRequest,
   PlatformConfigEntry,
   PlatformDomainEvent,
   PlatformEventConsumption,
@@ -64,6 +68,10 @@ export type { DB } from './types.js';
 export type { Json, JsonArray, JsonObject, JsonPrimitive, JsonValue, Timestamp } from './types.js';
 export type {
   Account,
+  PlatformApprovalAssignee,
+  PlatformApprovalDecision,
+  PlatformApprovalDelegation,
+  PlatformApprovalRequest,
   PlatformConfigEntry,
   PlatformDomainEvent,
   PlatformEventConsumption,
@@ -181,3 +189,22 @@ export type TaskUpdate = Updateable<PlatformTask>;
 export type TaskDependencyRecord = Selectable<PlatformTaskDependency>;
 export type NewTaskDependency = Insertable<PlatformTaskDependency>;
 export type TaskDependencyUpdate = Updateable<PlatformTaskDependency>;
+
+// Approval engine (core plan 09, PL-016…018). `approval_decision` is
+// append-only (ADR-0011) and so has no `Updateable` alias — the absence is the
+// point: there is no code path that could name the type of an edit to a
+// decision, because there is no such operation.
+export type ApprovalRequestRecord = Selectable<PlatformApprovalRequest>;
+export type NewApprovalRequest = Insertable<PlatformApprovalRequest>;
+export type ApprovalRequestUpdate = Updateable<PlatformApprovalRequest>;
+
+export type ApprovalAssigneeRecord = Selectable<PlatformApprovalAssignee>;
+export type NewApprovalAssignee = Insertable<PlatformApprovalAssignee>;
+export type ApprovalAssigneeUpdate = Updateable<PlatformApprovalAssignee>;
+
+export type ApprovalDecisionRecord = Selectable<PlatformApprovalDecision>;
+export type NewApprovalDecision = Insertable<PlatformApprovalDecision>;
+
+export type ApprovalDelegationRecord = Selectable<PlatformApprovalDelegation>;
+export type NewApprovalDelegation = Insertable<PlatformApprovalDelegation>;
+export type ApprovalDelegationUpdate = Updateable<PlatformApprovalDelegation>;

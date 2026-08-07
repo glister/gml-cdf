@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ROLE_KEYS } from '@repo/domain';
 import { defineConfigKey } from './registry.js';
+import { defineApprovalSubject } from './approval-subjects.js';
 
 /**
  * The registered configuration keys (core plan 06 §6).
@@ -202,4 +203,89 @@ export const tasksDueTimeZone = defineConfigKey({
     'IANA time zone the due time-of-day is interpreted in. Changing it moves future resolutions only — due dates already resolved keep the instant they were given.',
   editableBy: ['administrator'],
   registeredBy: '08',
+});
+
+// --- Approval engine (core plan 09 §6) ---------------------------------------
+//
+// Two engine-wide keys live here; everything per-subject-type is a **family**
+// registered through `defineApprovalSubject` (see `./approval-subjects.ts`),
+// because "who approves an hr.leave_booking" and "who approves a training
+// spend" are separate values with separate audit trails, not one setting.
+//
+// Note what is absent: no approver, threshold or cadence appears anywhere in
+// code. That is the whole of PL-016/PL-018 — changing who signs off, or the
+// figure above which a sign-off is needed, is a config edit and never a release.
+
+/**
+ * How often an undecided approval request is chased (PL-020, HL-054 driver).
+ *
+ * Stored as the `cadenceRef` on each pending reminder occurrence and resolved
+ * **as-at each firing** by plan 10's reminder handler, so changing it moves the
+ * next chase for every outstanding request with no release and no backfill —
+ * the same contract core plan 08 established for task chases. A subject type
+ * that needs its own rhythm overrides it through its own key
+ * (`platform.approvals.reminder.cadence.<subjectType>`).
+ */
+export const approvalsReminderCadence = defineConfigKey({
+  namespace: 'platform.approvals.reminder',
+  key: 'cadence',
+  schema: z.string().regex(/^P(?!$)(\d+D|\d+W)$/, 'an ISO-8601 day or week duration, e.g. P1D'),
+  defaultValue: 'P1D',
+  description:
+    'How often an undecided approval request is chased, as an ISO-8601 duration (P1D = daily, P7D = weekly). Read afresh at every firing, so a change takes effect from the next chase.',
+  editableBy: ['administrator', 'hr_user'],
+  registeredBy: '09',
+});
+
+/**
+ * The longest period an approver may hand their authority to someone else
+ * (HL-035, §6).
+ *
+ * A ceiling rather than a fixed term: a delegation is cover for an absence, and
+ * an unbounded one is a permanent transfer of authority that never appears in
+ * anyone's role grants. 90 days matches the external-access default above —
+ * long enough for parental leave or a secondment, short enough that a
+ * delegation nobody remembers making expires on its own.
+ *
+ * Administrator-only, unlike the rest of the approvals namespace: this bounds
+ * how far authority can travel, which is a security control rather than an HR
+ * policy.
+ */
+export const approvalsDelegationMaxDurationDays = defineConfigKey({
+  namespace: 'platform.approvals.delegation',
+  key: 'max_duration_days',
+  schema: z.number().int().min(1).max(365),
+  defaultValue: 90,
+  description:
+    'The longest period, in days, that an approver may delegate their approval authority for. A delegation is cover for an absence — renew it rather than setting an open-ended one.',
+  editableBy: ['administrator'],
+  registeredBy: '09',
+});
+
+/**
+ * The pilot subject type (§9.8) — the slice that proves PL-016…018 with no HR
+ * module in existence.
+ *
+ * Administrator any-one-approves with an HR override, so the two halves of
+ * HL-033 are demonstrable at once: any one administrator can decide, and HR can
+ * decide without being notified of every one. The threshold defaults to
+ * `amount > 500`, which is what makes AC-D5 demonstrable — edit the number in
+ * the admin UI and the next submit routes differently, with no release.
+ *
+ * It retires with the pilot slice, exactly as plan 07's `platform.demo.request`
+ * shape and plan 08's `platform.pilot_case` will.
+ */
+export const pilotSignoffSubject = defineApprovalSubject({
+  subjectType: 'platform.pilot_signoff',
+  policyDefault: {
+    mode: 'any-one',
+    approvers: [{ kind: 'role', roleKey: 'administrator' }],
+    overrideRoles: ['hr_user'],
+  },
+  thresholdDefault: { field: 'amount', op: 'gt', value: 500 },
+  policyDescription:
+    'Who may approve a pilot sign-off. Demonstration key for the approval engine — it governs no real business process.',
+  thresholdDescription:
+    'The amount above which a pilot sign-off needs approval at all. Demonstration key for the approval engine: change it and the next request routes differently, with no release (PL-018).',
+  registeredBy: '09',
 });

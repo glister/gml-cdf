@@ -1,6 +1,13 @@
 import type { z } from 'zod';
 import type { EventDefinition } from './define.js';
 import {
+  platformApprovalDelegationCreated,
+  platformApprovalDelegationRevoked,
+  platformApprovalRequestApproved,
+  platformApprovalRequestAutoApproved,
+  platformApprovalRequestCancelled,
+  platformApprovalRequestRejected,
+  platformApprovalRequestRequested,
   platformConfigEntryChanged,
   platformConfigEntryReset,
   platformDataSpecialCategoryAccessed,
@@ -119,6 +126,15 @@ export const eventTypes = {
   'platform.task.cancelled': platformTaskCancelled,
   'platform.task.due_recomputed': platformTaskDueRecomputed,
   'platform.task.gate.opened': platformTaskGateOpened,
+  // Approval engine (core plan 09, PL-016…018). Streamed on the request row per
+  // ADR-0021; `auto_approved` is the documented exception (no row exists).
+  'platform.approval_request.requested': platformApprovalRequestRequested,
+  'platform.approval_request.approved': platformApprovalRequestApproved,
+  'platform.approval_request.rejected': platformApprovalRequestRejected,
+  'platform.approval_request.cancelled': platformApprovalRequestCancelled,
+  'platform.approval_request.auto_approved': platformApprovalRequestAutoApproved,
+  'platform.approval_delegation.created': platformApprovalDelegationCreated,
+  'platform.approval_delegation.revoked': platformApprovalDelegationRevoked,
 } as const;
 
 /** The union of all registered event-type names. */

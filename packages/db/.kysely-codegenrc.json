@@ -16,7 +16,10 @@
       "platform.task.status": "Generated<'blocked' | 'open' | 'done' | 'cancelled'>",
       "platform.task.due_mode": "Generated<'none' | 'absolute' | 'anchor_relative'>",
       "platform.task.source": "'workflow' | 'manual'",
-      "platform.task_dependency.depends_on_kind": "'task' | 'gate'"
+      "platform.task_dependency.depends_on_kind": "'task' | 'gate'",
+      "platform.approval_request.status": "Generated<'pending' | 'approved' | 'rejected' | 'cancelled'>",
+      "platform.approval_assignee.source": "'policy_role' | 'designated' | 'delegation'",
+      "platform.approval_decision.decision": "'approved' | 'rejected'"
     }
   }
 }
