@@ -43,6 +43,17 @@ export {
   type EventType,
   type EventPayload,
 } from './events/index.js';
+export {
+  addCalendarDays,
+  parseCalendarDate,
+  parseTimeOfDay,
+  wallClockIn,
+  zonedInstant,
+  zoneOffsetMs,
+  ZonedTimeError,
+  type WallClock,
+} from './lib/zoned-time.js';
 export * from './workflow/index.js';
 export * from './tasks/index.js';
 export * from './approvals/index.js';
+export * from './notifications/index.js';

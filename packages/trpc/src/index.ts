@@ -108,6 +108,32 @@ export {
   type ApprovalWarningProvider,
 } from './lib/approval-warnings.js';
 
+/**
+ * The notification-kind registry (core plan 10 §5.5) — where a kind binds its
+ * **strict** parameter schema, its channels and the renderer that turns those
+ * parameters into what a person reads. Exported for its module-load side effect
+ * as well as its names: the seed kinds register when this module loads, so the
+ * API and the worker validate against one registry.
+ *
+ * A consuming module registering its own kinds gets the SA-023 guarantee for
+ * free — a schema built as `z.strictObject` cannot have a profile row spread
+ * into it, and a body can only say what its parameters expose (§4.6).
+ */
+export {
+  adminTestKind,
+  assertAppRelative,
+  defineNotificationKind,
+  notificationKindRegistry,
+  reminderChaseKind,
+  renderNotification,
+  requireNotificationKind,
+  unregisterNotificationKindForTests,
+  NotificationKindUnknownError,
+  NotificationPayloadInvalidError,
+  type NotificationKindDef,
+  type RenderedNotification,
+} from './lib/notify-kinds.js';
+
 /** Grant resolution for the API context factory (core plan 04 §9.3). */
 export { loadGrantsForPerson } from './lib/grants-context.js';
 

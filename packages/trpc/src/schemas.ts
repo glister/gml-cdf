@@ -6,11 +6,17 @@ import {
   APPROVAL_SORTS,
   APPROVAL_STATUSES,
   CONFIG_SORTS,
+  DELIVERY_SORTS,
+  DELIVERY_STATUSES,
   FIELD_CLASSES,
   GRANT_STATES,
   LOOKUP_LIST_TYPES,
   LOOKUP_SORTS,
   MODULE_KEYS,
+  NOTIFICATION_CHANNELS,
+  NOTIFICATION_CONTEXTUAL_REFS,
+  NOTIFICATION_RECIPIENT_KINDS,
+  NOTIFICATION_STATUSES,
   PERSON_FLAG_TYPES,
   PERSON_SORTS,
   PERSON_STATUSES,
@@ -1314,3 +1320,150 @@ export const createDelegationInput = z
 export type CreateDelegationInput = z.infer<typeof createDelegationInput>;
 
 export const revokeDelegationInput = z.object({ delegationId: z.uuid() });
+
+// --- Notifications & reminders (core plan 10 §5.5, PL-019…021) ---------------
+
+export const notificationChannelSchema = z.enum(NOTIFICATION_CHANNELS);
+export type NotificationChannelValue = z.infer<typeof notificationChannelSchema>;
+
+export const notificationRecipientKindSchema = z.enum(NOTIFICATION_RECIPIENT_KINDS);
+export const notificationContextualRefSchema = z.enum(NOTIFICATION_CONTEXTUAL_REFS);
+export const notificationStatusSchema = z.enum(NOTIFICATION_STATUSES);
+export const deliveryStatusSchema = z.enum(DELIVERY_STATUSES);
+
+/**
+ * How a notification is addressed (PL-021) — **the schema with no person in it.**
+ *
+ * A discriminated union rather than three optional fields, so "exactly one
+ * shape" is a type-level property on the way in as well as a CHECK constraint at
+ * rest. There is no `{ kind: 'person', personId }` member and there will not be
+ * one: a request for "notify Jane" is a request for a role or a designated
+ * approver policy, and the right time to say so is at design time (§1
+ * anti-scope).
+ */
+export const recipientSpecSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('role'),
+    roleId: z.uuid(),
+    /** Narrows to holders of that role *for this team* — see plan 09 §4.5. */
+    teamId: z.uuid().nullish(),
+  }),
+  z.object({
+    kind: z.literal('policy'),
+    /** `config:<namespace.key>` — resolved through the approval-policy resolver. */
+    policyRef: z.string().trim().min(1).max(200),
+  }),
+  z.object({ kind: z.literal('contextual'), ref: notificationContextualRefSchema }),
+]);
+export type RecipientSpec = z.infer<typeof recipientSpecSchema>;
+
+/** What a notification is about, in journal stream vocabulary (ADR-0021). */
+export const notificationSubjectRef = z.object({
+  streamType: z.string().trim().min(1).max(100),
+  streamId: z.uuid(),
+});
+
+export const myNotificationsInput = z.object({
+  cursor: z.string().nullish(),
+  limit: z.number().int().min(1).max(50).default(20),
+  /** Applied as `read_at IS NULL` in SQL — never over the loaded page (ADR-0004). */
+  unreadOnly: z.boolean().default(false),
+});
+export type MyNotificationsInput = z.infer<typeof myNotificationsInput>;
+
+/**
+ * One row in the inbox.
+ *
+ * `title`/`body` are the rendered, PII-minimal content the kind's registered
+ * renderer produced (§4.6). They carry no special-category detail on any
+ * channel — a sickness notification says an absence was recorded and links to
+ * the RBAC-guarded record, exactly as the calendar shows "absence" only
+ * (SA-023).
+ */
+export const notificationListItemSchema = z.object({
+  /** The **delivery** id — what `markRead` acts on, and what is unique per person. */
+  deliveryId: z.uuid(),
+  notificationId: z.uuid(),
+  kind: z.string(),
+  title: z.string(),
+  body: z.string(),
+  actionUrl: z.string().nullable(),
+  subjectStreamType: z.string().nullable(),
+  subjectStreamId: z.uuid().nullable(),
+  createdAt: z.iso.datetime(),
+  readAt: z.iso.datetime().nullable(),
+});
+export type NotificationListItem = z.infer<typeof notificationListItemSchema>;
+
+export const myNotificationsOutput = z.object({
+  items: z.array(notificationListItemSchema),
+  nextCursor: z.string().nullable(),
+});
+
+export const markNotificationReadInput = z.object({ deliveryId: z.uuid() });
+
+export const unreadCountOutput = z.object({ count: z.number().int().min(0) });
+
+/**
+ * The admin send-test input (§9.7) — the pilot that proves resolution and
+ * dispatch with no HR module in existence.
+ *
+ * `note` is free text the administrator types into their own test message. It is
+ * the *only* free text any notification body carries, it never leaves the
+ * `admin.test` kind, and it is bounded — a test send is the one case where the
+ * person choosing the words and the person reading them are the same.
+ */
+export const sendTestNotificationInput = z.object({
+  recipient: recipientSpecSchema,
+  channels: z.array(notificationChannelSchema).min(1).max(3).optional(),
+  note: z.string().trim().max(200).optional(),
+});
+export type SendTestNotificationInput = z.infer<typeof sendTestNotificationInput>;
+
+export const sendTestNotificationOutput = z.object({
+  notificationId: z.uuid(),
+  /** How many people the spec resolved to — 0 is a real, reportable answer. */
+  resolvedRecipients: z.number().int().min(0),
+});
+
+/** Delivery diagnostics: every facet is a SQL `where`, none a client filter. */
+export const adminDeliveriesInput = z.object({
+  cursor: z.string().nullish(),
+  limit: z.number().int().min(1).max(100).default(25),
+  status: z.array(deliveryStatusSchema).min(1).max(5).optional(),
+  channel: z.array(notificationChannelSchema).min(1).max(3).optional(),
+  kind: z.string().trim().max(100).optional(),
+  personId: z.uuid().optional(),
+  sort: z.enum(DELIVERY_SORTS).default('created_at'),
+  sortDir: z.enum(SORT_DIRECTIONS).default('desc'),
+});
+export type AdminDeliveriesInput = z.infer<typeof adminDeliveriesInput>;
+
+/**
+ * A diagnostics row. It shows the notification's own title and nothing more —
+ * an administrator debugging delivery sees no more content than the recipient
+ * already received, which is already SA-023-clean (§8).
+ */
+export const deliveryDiagnosticSchema = z.object({
+  deliveryId: z.uuid(),
+  notificationId: z.uuid(),
+  kind: z.string(),
+  title: z.string(),
+  personId: z.uuid(),
+  personName: z.string().nullable(),
+  resolvedVia: notificationRecipientKindSchema,
+  channel: notificationChannelSchema,
+  status: deliveryStatusSchema,
+  attemptCount: z.number().int().min(0),
+  attemptedAt: z.iso.datetime().nullable(),
+  lastError: z.string().nullable(),
+  providerRef: z.string().nullable(),
+  readAt: z.iso.datetime().nullable(),
+  createdAt: z.iso.datetime(),
+});
+export type DeliveryDiagnostic = z.infer<typeof deliveryDiagnosticSchema>;
+
+export const adminDeliveriesOutput = z.object({
+  items: z.array(deliveryDiagnosticSchema),
+  nextCursor: z.string().nullable(),
+});
