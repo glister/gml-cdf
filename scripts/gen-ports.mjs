@@ -51,6 +51,10 @@ const SLOTS = {
   mailpitSmtp: 20,
   mailpitUi: 21,
   // reserved: hyperdx UI 22, OTLP 23
+  // HTML->PDF rendering for the document engine (core plan 11 §12.2 Q1). Only
+  // the host mapping is prefixed; the worker reaches it in-network on the
+  // container's fixed 3000 via GOTENBERG_URL, so nothing app-side reads this.
+  gotenberg: 24,
 };
 
 // Which env-file keys each file manages. `port`: value is exactly the derived
@@ -69,6 +73,7 @@ const FILES = {
     { key: 'PORT_AZURITE', kind: 'port', slot: 'azurite' },
     { key: 'PORT_MAILPIT_SMTP', kind: 'port', slot: 'mailpitSmtp' },
     { key: 'PORT_MAILPIT_UI', kind: 'port', slot: 'mailpitUi' },
+    { key: 'PORT_GOTENBERG', kind: 'port', slot: 'gotenberg' },
     { key: 'EMAIL_SMTP_PORT', kind: 'port', slot: 'mailpitSmtp' },
     { key: 'DATABASE_URL', kind: 'url', slots: ['postgres'] },
     { key: 'APP_URL', kind: 'url', slots: ['web'] },

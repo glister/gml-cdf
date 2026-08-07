@@ -124,6 +124,13 @@ const SEED_LOOKUPS: ReadonlyArray<{ listType: SeedListType; code: string; label:
   { listType: 'document_category', code: 'qualification', label: 'Qualification / Card' },
   { listType: 'document_category', code: 'policy', label: 'Policy' },
   { listType: 'document_category', code: 'id_document', label: 'Identity Document' },
+  // Added by core plan 11 (§4.4): the document engine issues correspondence that
+  // is none of the five above, and `offer_letter` is the category the onboarding
+  // plan's first template pack needs. `other` is the honest home for the pilot's
+  // welcome letter — better a category that says "uncategorised" than one that
+  // claims a welcome letter is a contract.
+  { listType: 'document_category', code: 'offer_letter', label: 'Offer Letter' },
+  { listType: 'document_category', code: 'other', label: 'Other' },
 
   // SA-001's sickness categories. The *list* is public reference data; a
   // person's sickness *records* are the HR module's special-category concern.

@@ -86,6 +86,30 @@ services:
       timeout: 5s
       retries: 10
 
+  # HTML -> PDF rendering for the document engine (core plan 11 §4.6, Q1
+  # resolved 2026-08-07). A separate service rather than headless Chromium in the
+  # worker image: the worker stays small and boots fast, and a renderer crash is
+  # a failed HTTP call the effect retries rather than a dead consumer. Stateless,
+  # so no volume and nothing to back up.
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    restart: unless-stopped
+    # Chromium only. The LibreOffice route would convert Office documents, which
+    # this platform deliberately does not do — templates are HTML (§4.1).
+    command:
+      [
+        'gotenberg',
+        '--chromium-disable-javascript=true',
+        '--chromium-allow-list=file:///tmp/.*',
+      ]
+    ports:
+      - '${PORT_GOTENBERG}:3000'
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3000/health']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   dev:
     build:
       context: .
@@ -113,6 +137,9 @@ services:
       EMAIL_SMTP_HOST: mailpit
       # In-network Mailpit listens on its container port, not the host-published one.
       EMAIL_SMTP_PORT: 1025
+      # Gotenberg in-network, on its fixed container port. Server-side only (the
+      # worker renders), so this is deliberately the internal address.
+      GOTENBERG_URL: 'http://gotenberg:3000'
       SERVICE_BUS_CONNECTION_STRING: 'Endpoint=sb://servicebus-emulator;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;'
       AZURE_STORAGE_CONNECTION_STRING: 'DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;'
     ports:
@@ -157,6 +184,8 @@ services:
       azurite:
         condition: service_healthy
       mailpit:
+        condition: service_healthy
+      gotenberg:
         condition: service_healthy
       servicebus-emulator:
         condition: service_started

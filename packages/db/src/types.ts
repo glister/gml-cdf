@@ -121,6 +121,57 @@ export interface PlatformConfigEntry {
   version: number;
 }
 
+export interface PlatformDocument {
+  body_html: string | null;
+  cancel_reason: string | null;
+  cancelled_at: Timestamp | null;
+  capture_data: Json | null;
+  capture_schema_key: string | null;
+  category_id: string;
+  category_kind: Generated<"document_category">;
+  completed_at: Timestamp | null;
+  completed_by: string | null;
+  /**
+   * sha256:<hex> of the rendered PDF bytes. Settable once (NULL -> value) and never rewritable, enforced by document_guard: a hash that could change would make every signature bound to it deniable.
+   */
+  content_hash: string | null;
+  created_at: Generated<Timestamp>;
+  created_by: string;
+  deleted_at: Timestamp | null;
+  evidence_sp_item_id: string | null;
+  filed_at: Timestamp | null;
+  filing_attempts: Generated<number>;
+  filing_error: string | null;
+  filing_state: Generated<"none" | "pending" | "filed" | "failed">;
+  id: string;
+  issue_group_id: string | null;
+  issue_mode: "read_only" | "read_and_sign" | "no_action" | "receipt_only" | "read_and_understood" | "qa_response" | "text_response" | "file_upload";
+  issued_at: Timestamp | null;
+  issued_by: string | null;
+  merge_data: Json | null;
+  /**
+   * Transient render staging only: the rendered PDF between the render step and a successful upload, NULLed once filed. SharePoint is the byte store of record. Registered with plan 16's erasure inventory — transient or not, it holds a rendered document about a person.
+   */
+  pending_content: Buffer | null;
+  response_sp_item_id: string | null;
+  sequence_no: number | null;
+  signed_at: Timestamp | null;
+  sp_drive_id: string | null;
+  sp_item_id: string | null;
+  sp_site_id: string | null;
+  sp_web_url: string | null;
+  status: Generated<"draft" | "issued" | "viewed" | "signed" | "completed" | "cancelled">;
+  subject_person_id: string;
+  subject_stream_id: string | null;
+  subject_stream_type: string | null;
+  template_id: string | null;
+  text_response: string | null;
+  title: string;
+  updated_at: Generated<Timestamp>;
+  updated_by: string;
+  viewed_at: Timestamp | null;
+}
+
 export interface PlatformDomainEvent {
   actor_person_id: string | null;
   causation_id: string | null;
@@ -333,6 +384,22 @@ export interface PlatformScheduledAction {
   workflow_instance_id: string | null;
 }
 
+export interface PlatformSignatureEvidence {
+  ack_scrolled: boolean;
+  created_at: Generated<Timestamp>;
+  created_by: string;
+  document_hash: string;
+  document_id: string;
+  id: string;
+  ip: string;
+  method: "typed_name" | "signature_pad";
+  signatory_person_id: string;
+  signature_image: Buffer | null;
+  signed_at: Timestamp;
+  typed_name: string | null;
+  user_agent: string;
+}
+
 export interface PlatformTask {
   anchor_name: string | null;
   anchor_offset_days: number | null;
@@ -404,6 +471,31 @@ export interface PlatformTeamMembership {
   updated_by: string;
   valid_from: string;
   valid_to: string | null;
+}
+
+export interface PlatformTemplate {
+  archived_at: Timestamp | null;
+  body_html: string;
+  capture_schema_key: string | null;
+  category_id: string;
+  category_kind: Generated<"document_category">;
+  created_at: Generated<Timestamp>;
+  created_by: string;
+  default_issue_mode: Generated<"read_only" | "read_and_sign" | "no_action" | "receipt_only" | "read_and_understood" | "qa_response" | "text_response" | "file_upload">;
+  deleted_at: Timestamp | null;
+  id: string;
+  merge_contexts: Generated<string[]>;
+  /**
+   * Derived from body_html on save, never hand-entered: the declared field contract publish validates against, so a template cannot ship with an unsatisfiable token (§4.5).
+   */
+  merge_fields: Generated<Json>;
+  name: string;
+  published_at: Timestamp | null;
+  status: Generated<"draft" | "published" | "archived">;
+  template_key: string;
+  updated_at: Generated<Timestamp>;
+  updated_by: string;
+  version: number;
 }
 
 export interface PlatformWorkflowInstance {
@@ -491,6 +583,7 @@ export interface DB {
   "platform.approval_delegation": PlatformApprovalDelegation;
   "platform.approval_request": PlatformApprovalRequest;
   "platform.config_entry": PlatformConfigEntry;
+  "platform.document": PlatformDocument;
   "platform.domain_event": PlatformDomainEvent;
   "platform.event_consumption": PlatformEventConsumption;
   "platform.lookup": PlatformLookup;
@@ -503,10 +596,12 @@ export interface DB {
   "platform.role": PlatformRole;
   "platform.role_grant": PlatformRoleGrant;
   "platform.scheduled_action": PlatformScheduledAction;
+  "platform.signature_evidence": PlatformSignatureEvidence;
   "platform.task": PlatformTask;
   "platform.task_dependency": PlatformTaskDependency;
   "platform.team": PlatformTeam;
   "platform.team_membership": PlatformTeamMembership;
+  "platform.template": PlatformTemplate;
   "platform.workflow_instance": PlatformWorkflowInstance;
   "platform.workflow_transition": PlatformWorkflowTransition;
   rate_limit: RateLimit;
