@@ -1,4 +1,5 @@
 import { serve } from '@hono/node-server';
+import { getConnInfo } from '@hono/node-server/conninfo';
 import { httpInstrumentationMiddleware } from '@hono/otel';
 import { trpcServer } from '@hono/trpc-server';
 import { Hono, type Context } from 'hono';
@@ -73,8 +74,9 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  *
  * `x-forwarded-for` is a list, and the **first** entry is the client; the rest
  * are proxies. Trusting the last one would record our own ingress on every
- * signature. Falls back to the socket address, and to `null` rather than to a
- * placeholder — an unknown address recorded as `0.0.0.0` reads like a fact.
+ * signature. Falls back to the **socket** address, and finally to `null` rather
+ * than to a placeholder — an unknown address recorded as `0.0.0.0` reads like a
+ * fact, and this value ends up in a signature evidence pack.
  */
 function clientIp(c: Context<{ Variables: Variables }>): string | null {
   const forwarded = c.req.header('x-forwarded-for');
@@ -82,7 +84,15 @@ function clientIp(c: Context<{ Variables: Variables }>): string | null {
     const first = forwarded.split(',')[0]?.trim();
     if (first) return first;
   }
-  return c.req.header('x-real-ip') ?? null;
+  const real = c.req.header('x-real-ip');
+  if (real) return real;
+  // No proxy in front (local dev, or a direct connection): the socket address is
+  // the honest answer, and it is one we always have.
+  try {
+    return getConnInfo(c).remote.address ?? null;
+  } catch {
+    return null;
+  }
 }
 
 const app = new Hono<{ Variables: Variables }>();

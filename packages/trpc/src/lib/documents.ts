@@ -350,11 +350,19 @@ export async function generateDocuments(
       );
     }
 
-    const { html, mergeData } = mergeTemplate(
-      template.body_html,
+    // The platform supplies its own contexts (§4.5). `person` is the one it
+    // owns, so the caller never assembles profile data and posts it back — which
+    // is both a round trip nobody needs and the shape ADR-0019 exists to
+    // discourage. A consuming module's context (`employee`, later) is supplied
+    // by that module, which is why the caller's bag wins where both have a value.
+    const bag = await withPlatformContexts(
+      trx,
       template.merge_contexts,
+      args.subjectPersonId,
       item.mergeData,
     );
+
+    const { html, mergeData } = mergeTemplate(template.body_html, template.merge_contexts, bag);
 
     const id = newUuidV7();
     const row = await trx
@@ -400,6 +408,48 @@ export async function generateDocuments(
   }
 
   return created;
+}
+
+/**
+ * Fill in the contexts the platform itself owns, leaving the rest to the caller.
+ *
+ * Only `person` today — read from `platform.person` at generation time and
+ * snapshotted onto the document, so a later name change does not rewrite a
+ * letter somebody already signed (ADR-0012).
+ *
+ * A caller-supplied value for the same context wins. That matters for the HR
+ * plans: when the employee plan registers an `employee` context it supplies it
+ * itself, and a module that has a better answer for `person` than the base
+ * record should be able to say so.
+ */
+async function withPlatformContexts(
+  trx: Transaction<DB>,
+  declaredContexts: readonly string[],
+  subjectPersonId: string,
+  supplied: unknown,
+): Promise<Record<string, unknown>> {
+  const bag = { ...((supplied as Record<string, unknown> | null | undefined) ?? {}) };
+  if (!declaredContexts.includes('person') || bag.person !== undefined) return bag;
+
+  const person = await trx
+    .selectFrom('platform.person')
+    .select(['display_name', 'given_name', 'family_name', 'contact_email'])
+    .where('id', '=', subjectPersonId)
+    .where('deleted_at', 'is', null)
+    .executeTakeFirst();
+
+  if (!person) throw new DocumentNotFoundError(subjectPersonId);
+
+  // Exactly the four fields `personMergeContext` declares. Adding a fifth here
+  // without adding it there fails validation, which is the point of the context
+  // being strict.
+  bag.person = {
+    full_name: person.display_name,
+    first_name: person.given_name,
+    last_name: person.family_name,
+    email: person.contact_email,
+  };
+  return bag;
 }
 
 // --- Issue (§4.6) ------------------------------------------------------------
@@ -638,6 +688,15 @@ export async function signDocument(
     // depth): a future caller that forgets the guard still cannot sign for
     // somebody else.
     throw new DocumentForbiddenError('only the subject of a document may sign it');
+  }
+
+  // Evidence with an invented origin is worse than evidence with none: the
+  // column is NOT NULL because a UK SES pack states where a signature came from,
+  // so a caller that cannot say is refused rather than defaulted (PL-011, R2).
+  if (!args.ip) {
+    throw new DocumentStateError(
+      'the request address could not be determined, and a signature is not recorded without one',
+    );
   }
 
   requireOk(

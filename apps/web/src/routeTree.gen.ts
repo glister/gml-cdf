@@ -19,14 +19,19 @@ import { Route as AuthenticatedTasksIndexRouteImport } from './routes/_authentic
 import { Route as AuthenticatedApprovalsIndexRouteImport } from './routes/_authenticated/approvals/index';
 import { Route as AuthenticatedTasksPilotRouteImport } from './routes/_authenticated/tasks/pilot';
 import { Route as AuthenticatedTasksTaskIdRouteImport } from './routes/_authenticated/tasks/$taskId';
+import { Route as AuthenticatedDocumentsDocumentIdRouteImport } from './routes/_authenticated/documents.$documentId';
 import { Route as AuthenticatedApprovalsDelegationsRouteImport } from './routes/_authenticated/approvals/delegations';
 import { Route as AuthenticatedApprovalsRequestIdRouteImport } from './routes/_authenticated/approvals/$requestId';
 import { Route as AuthenticatedAdminNotificationsRouteImport } from './routes/_authenticated/admin/notifications';
+import { Route as AuthenticatedAdminTemplatesIndexRouteImport } from './routes/_authenticated/admin/templates/index';
 import { Route as AuthenticatedAdminTeamsIndexRouteImport } from './routes/_authenticated/admin/teams/index';
 import { Route as AuthenticatedAdminReferenceDataIndexRouteImport } from './routes/_authenticated/admin/reference-data/index';
 import { Route as AuthenticatedAdminPeopleIndexRouteImport } from './routes/_authenticated/admin/people/index';
 import { Route as AuthenticatedAdminConfigIndexRouteImport } from './routes/_authenticated/admin/config/index';
+import { Route as AuthenticatedPeoplePersonIdDocumentsRouteImport } from './routes/_authenticated/people.$personId.documents';
 import { Route as AuthenticatedAdminWorkflowScheduledActionsRouteImport } from './routes/_authenticated/admin/workflow/scheduled-actions';
+import { Route as AuthenticatedAdminTemplatesNewRouteImport } from './routes/_authenticated/admin/templates/new';
+import { Route as AuthenticatedAdminTemplatesTemplateIdRouteImport } from './routes/_authenticated/admin/templates/$templateId';
 import { Route as AuthenticatedAdminTeamsTeamIdRouteImport } from './routes/_authenticated/admin/teams/$teamId';
 import { Route as AuthenticatedAdminReferenceDataListTypeRouteImport } from './routes/_authenticated/admin/reference-data/$listType';
 import { Route as AuthenticatedAdminPeopleNewRouteImport } from './routes/_authenticated/admin/people/new';
@@ -91,6 +96,12 @@ const AuthenticatedTasksTaskIdRoute =
     path: '/tasks/$taskId',
     getParentRoute: () => AuthenticatedRoute,
   } as any);
+const AuthenticatedDocumentsDocumentIdRoute =
+  AuthenticatedDocumentsDocumentIdRouteImport.update({
+    id: '/documents/$documentId',
+    path: '/documents/$documentId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any);
 const AuthenticatedApprovalsDelegationsRoute =
   AuthenticatedApprovalsDelegationsRouteImport.update({
     id: '/approvals/delegations',
@@ -107,6 +118,12 @@ const AuthenticatedAdminNotificationsRoute =
   AuthenticatedAdminNotificationsRouteImport.update({
     id: '/notifications',
     path: '/notifications',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any);
+const AuthenticatedAdminTemplatesIndexRoute =
+  AuthenticatedAdminTemplatesIndexRouteImport.update({
+    id: '/templates/',
+    path: '/templates/',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any);
 const AuthenticatedAdminTeamsIndexRoute =
@@ -133,10 +150,28 @@ const AuthenticatedAdminConfigIndexRoute =
     path: '/config/',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any);
+const AuthenticatedPeoplePersonIdDocumentsRoute =
+  AuthenticatedPeoplePersonIdDocumentsRouteImport.update({
+    id: '/people/$personId/documents',
+    path: '/people/$personId/documents',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any);
 const AuthenticatedAdminWorkflowScheduledActionsRoute =
   AuthenticatedAdminWorkflowScheduledActionsRouteImport.update({
     id: '/workflow/scheduled-actions',
     path: '/workflow/scheduled-actions',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any);
+const AuthenticatedAdminTemplatesNewRoute =
+  AuthenticatedAdminTemplatesNewRouteImport.update({
+    id: '/templates/new',
+    path: '/templates/new',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any);
+const AuthenticatedAdminTemplatesTemplateIdRoute =
+  AuthenticatedAdminTemplatesTemplateIdRouteImport.update({
+    id: '/templates/$templateId',
+    path: '/templates/$templateId',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any);
 const AuthenticatedAdminTeamsTeamIdRoute =
@@ -215,6 +250,7 @@ export interface FileRoutesByFullPath {
   '/admin/notifications': typeof AuthenticatedAdminNotificationsRoute;
   '/approvals/$requestId': typeof AuthenticatedApprovalsRequestIdRoute;
   '/approvals/delegations': typeof AuthenticatedApprovalsDelegationsRoute;
+  '/documents/$documentId': typeof AuthenticatedDocumentsDocumentIdRoute;
   '/tasks/$taskId': typeof AuthenticatedTasksTaskIdRoute;
   '/tasks/pilot': typeof AuthenticatedTasksPilotRoute;
   '/approvals/': typeof AuthenticatedApprovalsIndexRoute;
@@ -228,11 +264,15 @@ export interface FileRoutesByFullPath {
   '/admin/people/new': typeof AuthenticatedAdminPeopleNewRoute;
   '/admin/reference-data/$listType': typeof AuthenticatedAdminReferenceDataListTypeRoute;
   '/admin/teams/$teamId': typeof AuthenticatedAdminTeamsTeamIdRoute;
+  '/admin/templates/$templateId': typeof AuthenticatedAdminTemplatesTemplateIdRoute;
+  '/admin/templates/new': typeof AuthenticatedAdminTemplatesNewRoute;
   '/admin/workflow/scheduled-actions': typeof AuthenticatedAdminWorkflowScheduledActionsRoute;
+  '/people/$personId/documents': typeof AuthenticatedPeoplePersonIdDocumentsRoute;
   '/admin/config/': typeof AuthenticatedAdminConfigIndexRoute;
   '/admin/people/': typeof AuthenticatedAdminPeopleIndexRoute;
   '/admin/reference-data/': typeof AuthenticatedAdminReferenceDataIndexRoute;
   '/admin/teams/': typeof AuthenticatedAdminTeamsIndexRoute;
+  '/admin/templates/': typeof AuthenticatedAdminTemplatesIndexRoute;
   '/admin/workflow/instances/$instanceId': typeof AuthenticatedAdminWorkflowInstancesInstanceIdRoute;
   '/admin/workflow/instances/': typeof AuthenticatedAdminWorkflowInstancesIndexRoute;
 }
@@ -245,6 +285,7 @@ export interface FileRoutesByTo {
   '/admin/notifications': typeof AuthenticatedAdminNotificationsRoute;
   '/approvals/$requestId': typeof AuthenticatedApprovalsRequestIdRoute;
   '/approvals/delegations': typeof AuthenticatedApprovalsDelegationsRoute;
+  '/documents/$documentId': typeof AuthenticatedDocumentsDocumentIdRoute;
   '/tasks/$taskId': typeof AuthenticatedTasksTaskIdRoute;
   '/tasks/pilot': typeof AuthenticatedTasksPilotRoute;
   '/approvals': typeof AuthenticatedApprovalsIndexRoute;
@@ -258,11 +299,15 @@ export interface FileRoutesByTo {
   '/admin/people/new': typeof AuthenticatedAdminPeopleNewRoute;
   '/admin/reference-data/$listType': typeof AuthenticatedAdminReferenceDataListTypeRoute;
   '/admin/teams/$teamId': typeof AuthenticatedAdminTeamsTeamIdRoute;
+  '/admin/templates/$templateId': typeof AuthenticatedAdminTemplatesTemplateIdRoute;
+  '/admin/templates/new': typeof AuthenticatedAdminTemplatesNewRoute;
   '/admin/workflow/scheduled-actions': typeof AuthenticatedAdminWorkflowScheduledActionsRoute;
+  '/people/$personId/documents': typeof AuthenticatedPeoplePersonIdDocumentsRoute;
   '/admin/config': typeof AuthenticatedAdminConfigIndexRoute;
   '/admin/people': typeof AuthenticatedAdminPeopleIndexRoute;
   '/admin/reference-data': typeof AuthenticatedAdminReferenceDataIndexRoute;
   '/admin/teams': typeof AuthenticatedAdminTeamsIndexRoute;
+  '/admin/templates': typeof AuthenticatedAdminTemplatesIndexRoute;
   '/admin/workflow/instances/$instanceId': typeof AuthenticatedAdminWorkflowInstancesInstanceIdRoute;
   '/admin/workflow/instances': typeof AuthenticatedAdminWorkflowInstancesIndexRoute;
 }
@@ -277,6 +322,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/notifications': typeof AuthenticatedAdminNotificationsRoute;
   '/_authenticated/approvals/$requestId': typeof AuthenticatedApprovalsRequestIdRoute;
   '/_authenticated/approvals/delegations': typeof AuthenticatedApprovalsDelegationsRoute;
+  '/_authenticated/documents/$documentId': typeof AuthenticatedDocumentsDocumentIdRoute;
   '/_authenticated/tasks/$taskId': typeof AuthenticatedTasksTaskIdRoute;
   '/_authenticated/tasks/pilot': typeof AuthenticatedTasksPilotRoute;
   '/_authenticated/approvals/': typeof AuthenticatedApprovalsIndexRoute;
@@ -290,11 +336,15 @@ export interface FileRoutesById {
   '/_authenticated/admin/people/new': typeof AuthenticatedAdminPeopleNewRoute;
   '/_authenticated/admin/reference-data/$listType': typeof AuthenticatedAdminReferenceDataListTypeRoute;
   '/_authenticated/admin/teams/$teamId': typeof AuthenticatedAdminTeamsTeamIdRoute;
+  '/_authenticated/admin/templates/$templateId': typeof AuthenticatedAdminTemplatesTemplateIdRoute;
+  '/_authenticated/admin/templates/new': typeof AuthenticatedAdminTemplatesNewRoute;
   '/_authenticated/admin/workflow/scheduled-actions': typeof AuthenticatedAdminWorkflowScheduledActionsRoute;
+  '/_authenticated/people/$personId/documents': typeof AuthenticatedPeoplePersonIdDocumentsRoute;
   '/_authenticated/admin/config/': typeof AuthenticatedAdminConfigIndexRoute;
   '/_authenticated/admin/people/': typeof AuthenticatedAdminPeopleIndexRoute;
   '/_authenticated/admin/reference-data/': typeof AuthenticatedAdminReferenceDataIndexRoute;
   '/_authenticated/admin/teams/': typeof AuthenticatedAdminTeamsIndexRoute;
+  '/_authenticated/admin/templates/': typeof AuthenticatedAdminTemplatesIndexRoute;
   '/_authenticated/admin/workflow/instances/$instanceId': typeof AuthenticatedAdminWorkflowInstancesInstanceIdRoute;
   '/_authenticated/admin/workflow/instances/': typeof AuthenticatedAdminWorkflowInstancesIndexRoute;
 }
@@ -309,6 +359,7 @@ export interface FileRouteTypes {
     | '/admin/notifications'
     | '/approvals/$requestId'
     | '/approvals/delegations'
+    | '/documents/$documentId'
     | '/tasks/$taskId'
     | '/tasks/pilot'
     | '/approvals/'
@@ -322,11 +373,15 @@ export interface FileRouteTypes {
     | '/admin/people/new'
     | '/admin/reference-data/$listType'
     | '/admin/teams/$teamId'
+    | '/admin/templates/$templateId'
+    | '/admin/templates/new'
     | '/admin/workflow/scheduled-actions'
+    | '/people/$personId/documents'
     | '/admin/config/'
     | '/admin/people/'
     | '/admin/reference-data/'
     | '/admin/teams/'
+    | '/admin/templates/'
     | '/admin/workflow/instances/$instanceId'
     | '/admin/workflow/instances/';
   fileRoutesByTo: FileRoutesByTo;
@@ -339,6 +394,7 @@ export interface FileRouteTypes {
     | '/admin/notifications'
     | '/approvals/$requestId'
     | '/approvals/delegations'
+    | '/documents/$documentId'
     | '/tasks/$taskId'
     | '/tasks/pilot'
     | '/approvals'
@@ -352,11 +408,15 @@ export interface FileRouteTypes {
     | '/admin/people/new'
     | '/admin/reference-data/$listType'
     | '/admin/teams/$teamId'
+    | '/admin/templates/$templateId'
+    | '/admin/templates/new'
     | '/admin/workflow/scheduled-actions'
+    | '/people/$personId/documents'
     | '/admin/config'
     | '/admin/people'
     | '/admin/reference-data'
     | '/admin/teams'
+    | '/admin/templates'
     | '/admin/workflow/instances/$instanceId'
     | '/admin/workflow/instances';
   id:
@@ -370,6 +430,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/notifications'
     | '/_authenticated/approvals/$requestId'
     | '/_authenticated/approvals/delegations'
+    | '/_authenticated/documents/$documentId'
     | '/_authenticated/tasks/$taskId'
     | '/_authenticated/tasks/pilot'
     | '/_authenticated/approvals/'
@@ -383,11 +444,15 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/people/new'
     | '/_authenticated/admin/reference-data/$listType'
     | '/_authenticated/admin/teams/$teamId'
+    | '/_authenticated/admin/templates/$templateId'
+    | '/_authenticated/admin/templates/new'
     | '/_authenticated/admin/workflow/scheduled-actions'
+    | '/_authenticated/people/$personId/documents'
     | '/_authenticated/admin/config/'
     | '/_authenticated/admin/people/'
     | '/_authenticated/admin/reference-data/'
     | '/_authenticated/admin/teams/'
+    | '/_authenticated/admin/templates/'
     | '/_authenticated/admin/workflow/instances/$instanceId'
     | '/_authenticated/admin/workflow/instances/';
   fileRoutesById: FileRoutesById;
@@ -470,6 +535,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedTasksTaskIdRouteImport;
       parentRoute: typeof AuthenticatedRoute;
     };
+    '/_authenticated/documents/$documentId': {
+      id: '/_authenticated/documents/$documentId';
+      path: '/documents/$documentId';
+      fullPath: '/documents/$documentId';
+      preLoaderRoute: typeof AuthenticatedDocumentsDocumentIdRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
     '/_authenticated/approvals/delegations': {
       id: '/_authenticated/approvals/delegations';
       path: '/approvals/delegations';
@@ -489,6 +561,13 @@ declare module '@tanstack/react-router' {
       path: '/notifications';
       fullPath: '/admin/notifications';
       preLoaderRoute: typeof AuthenticatedAdminNotificationsRouteImport;
+      parentRoute: typeof AuthenticatedAdminRoute;
+    };
+    '/_authenticated/admin/templates/': {
+      id: '/_authenticated/admin/templates/';
+      path: '/templates';
+      fullPath: '/admin/templates/';
+      preLoaderRoute: typeof AuthenticatedAdminTemplatesIndexRouteImport;
       parentRoute: typeof AuthenticatedAdminRoute;
     };
     '/_authenticated/admin/teams/': {
@@ -519,11 +598,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminConfigIndexRouteImport;
       parentRoute: typeof AuthenticatedAdminRoute;
     };
+    '/_authenticated/people/$personId/documents': {
+      id: '/_authenticated/people/$personId/documents';
+      path: '/people/$personId/documents';
+      fullPath: '/people/$personId/documents';
+      preLoaderRoute: typeof AuthenticatedPeoplePersonIdDocumentsRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
     '/_authenticated/admin/workflow/scheduled-actions': {
       id: '/_authenticated/admin/workflow/scheduled-actions';
       path: '/workflow/scheduled-actions';
       fullPath: '/admin/workflow/scheduled-actions';
       preLoaderRoute: typeof AuthenticatedAdminWorkflowScheduledActionsRouteImport;
+      parentRoute: typeof AuthenticatedAdminRoute;
+    };
+    '/_authenticated/admin/templates/new': {
+      id: '/_authenticated/admin/templates/new';
+      path: '/templates/new';
+      fullPath: '/admin/templates/new';
+      preLoaderRoute: typeof AuthenticatedAdminTemplatesNewRouteImport;
+      parentRoute: typeof AuthenticatedAdminRoute;
+    };
+    '/_authenticated/admin/templates/$templateId': {
+      id: '/_authenticated/admin/templates/$templateId';
+      path: '/templates/$templateId';
+      fullPath: '/admin/templates/$templateId';
+      preLoaderRoute: typeof AuthenticatedAdminTemplatesTemplateIdRouteImport;
       parentRoute: typeof AuthenticatedAdminRoute;
     };
     '/_authenticated/admin/teams/$teamId': {
@@ -617,11 +717,14 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminPeopleNewRoute: typeof AuthenticatedAdminPeopleNewRoute;
   AuthenticatedAdminReferenceDataListTypeRoute: typeof AuthenticatedAdminReferenceDataListTypeRoute;
   AuthenticatedAdminTeamsTeamIdRoute: typeof AuthenticatedAdminTeamsTeamIdRoute;
+  AuthenticatedAdminTemplatesTemplateIdRoute: typeof AuthenticatedAdminTemplatesTemplateIdRoute;
+  AuthenticatedAdminTemplatesNewRoute: typeof AuthenticatedAdminTemplatesNewRoute;
   AuthenticatedAdminWorkflowScheduledActionsRoute: typeof AuthenticatedAdminWorkflowScheduledActionsRoute;
   AuthenticatedAdminConfigIndexRoute: typeof AuthenticatedAdminConfigIndexRoute;
   AuthenticatedAdminPeopleIndexRoute: typeof AuthenticatedAdminPeopleIndexRoute;
   AuthenticatedAdminReferenceDataIndexRoute: typeof AuthenticatedAdminReferenceDataIndexRoute;
   AuthenticatedAdminTeamsIndexRoute: typeof AuthenticatedAdminTeamsIndexRoute;
+  AuthenticatedAdminTemplatesIndexRoute: typeof AuthenticatedAdminTemplatesIndexRoute;
   AuthenticatedAdminWorkflowInstancesInstanceIdRoute: typeof AuthenticatedAdminWorkflowInstancesInstanceIdRoute;
   AuthenticatedAdminWorkflowInstancesIndexRoute: typeof AuthenticatedAdminWorkflowInstancesIndexRoute;
 }
@@ -641,6 +744,9 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminReferenceDataListTypeRoute:
     AuthenticatedAdminReferenceDataListTypeRoute,
   AuthenticatedAdminTeamsTeamIdRoute: AuthenticatedAdminTeamsTeamIdRoute,
+  AuthenticatedAdminTemplatesTemplateIdRoute:
+    AuthenticatedAdminTemplatesTemplateIdRoute,
+  AuthenticatedAdminTemplatesNewRoute: AuthenticatedAdminTemplatesNewRoute,
   AuthenticatedAdminWorkflowScheduledActionsRoute:
     AuthenticatedAdminWorkflowScheduledActionsRoute,
   AuthenticatedAdminConfigIndexRoute: AuthenticatedAdminConfigIndexRoute,
@@ -648,6 +754,7 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminReferenceDataIndexRoute:
     AuthenticatedAdminReferenceDataIndexRoute,
   AuthenticatedAdminTeamsIndexRoute: AuthenticatedAdminTeamsIndexRoute,
+  AuthenticatedAdminTemplatesIndexRoute: AuthenticatedAdminTemplatesIndexRoute,
   AuthenticatedAdminWorkflowInstancesInstanceIdRoute:
     AuthenticatedAdminWorkflowInstancesInstanceIdRoute,
   AuthenticatedAdminWorkflowInstancesIndexRoute:
@@ -663,10 +770,12 @@ interface AuthenticatedRouteChildren {
   AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute;
   AuthenticatedApprovalsRequestIdRoute: typeof AuthenticatedApprovalsRequestIdRoute;
   AuthenticatedApprovalsDelegationsRoute: typeof AuthenticatedApprovalsDelegationsRoute;
+  AuthenticatedDocumentsDocumentIdRoute: typeof AuthenticatedDocumentsDocumentIdRoute;
   AuthenticatedTasksTaskIdRoute: typeof AuthenticatedTasksTaskIdRoute;
   AuthenticatedTasksPilotRoute: typeof AuthenticatedTasksPilotRoute;
   AuthenticatedApprovalsIndexRoute: typeof AuthenticatedApprovalsIndexRoute;
   AuthenticatedTasksIndexRoute: typeof AuthenticatedTasksIndexRoute;
+  AuthenticatedPeoplePersonIdDocumentsRoute: typeof AuthenticatedPeoplePersonIdDocumentsRoute;
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
@@ -676,10 +785,13 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedApprovalsRequestIdRoute: AuthenticatedApprovalsRequestIdRoute,
   AuthenticatedApprovalsDelegationsRoute:
     AuthenticatedApprovalsDelegationsRoute,
+  AuthenticatedDocumentsDocumentIdRoute: AuthenticatedDocumentsDocumentIdRoute,
   AuthenticatedTasksTaskIdRoute: AuthenticatedTasksTaskIdRoute,
   AuthenticatedTasksPilotRoute: AuthenticatedTasksPilotRoute,
   AuthenticatedApprovalsIndexRoute: AuthenticatedApprovalsIndexRoute,
   AuthenticatedTasksIndexRoute: AuthenticatedTasksIndexRoute,
+  AuthenticatedPeoplePersonIdDocumentsRoute:
+    AuthenticatedPeoplePersonIdDocumentsRoute,
 };
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(

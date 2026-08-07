@@ -5,6 +5,7 @@ import {
   BellRing,
   ChevronDown,
   ClipboardList,
+  FileText,
   GitMerge,
   KeyRound,
   LayoutDashboard,
@@ -90,6 +91,9 @@ function ConfigurationNavSection() {
         </Link>
         <Link to="/admin/teams" className={navItemClass}>
           <NavItemInner icon={<UsersRound size={20} strokeWidth={1.9} />} label="Teams" />
+        </Link>
+        <Link to="/admin/templates" className={navItemClass}>
+          <NavItemInner icon={<FileText size={20} strokeWidth={1.9} />} label="Templates" />
         </Link>
         <Link to="/admin/config" className={navItemClass}>
           <NavItemInner

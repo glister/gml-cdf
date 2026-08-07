@@ -402,8 +402,9 @@ export const documentsRouter = router({
             captureData: input.captureData ?? undefined,
             // The request's own facts, taken server-side. A client-supplied IP
             // or user-agent would be evidence of what the client claimed rather
-            // than of what happened.
-            ip: ctx.requestIp ?? '0.0.0.0',
+            // than of what happened — and `signDocument` refuses outright when
+            // the address is unknown rather than recording a placeholder.
+            ip: ctx.requestIp ?? '',
             userAgent: ctx.userAgent ?? 'unknown',
             signatoryPersonId: actor,
             correlationId: ctx.correlationId,
