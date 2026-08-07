@@ -238,3 +238,60 @@ export type ApprovalCancelSource = (typeof APPROVAL_CANCEL_SOURCES)[number];
  */
 export const APPROVAL_SORTS = ['submitted', 'decided'] as const;
 export type ApprovalSort = (typeof APPROVAL_SORTS)[number];
+
+// --- Notifications & reminders (core plan 10, PL-019…021) --------------------
+
+/**
+ * `platform.notification_delivery.channel`. Mirrors the CHECK constraint and the
+ * inlined literals in `.kysely-codegenrc.json`.
+ *
+ * `push` is here from day one and ships **disabled** (its config toggle defaults
+ * to `false` — ADR-0024). That is the deferral done properly: the enum value,
+ * the per-channel delivery rows and the adapter seam all exist, so turning push
+ * on later is an adapter plus a configuration change rather than a migration.
+ */
+export const NOTIFICATION_CHANNELS = ['in_app', 'email', 'push'] as const;
+export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
+
+/**
+ * `platform.notification.recipient_kind` — the three ways to address a message
+ * (PL-021). There is deliberately no fourth for "a person": a notification names
+ * a role, a policy, or a relationship to its own subject, and the people are
+ * resolved at send time.
+ */
+export const NOTIFICATION_RECIPIENT_KINDS = ['role', 'policy', 'contextual'] as const;
+export type NotificationRecipientKind = (typeof NOTIFICATION_RECIPIENT_KINDS)[number];
+
+/**
+ * `platform.notification.recipient_contextual` — relationships to the subject
+ * that resolve to people only at send time.
+ *
+ * These exist because HL-053 ("the requester shall be notified…") names
+ * recipients that are contextual to the subject rather than configured. PL-021
+ * forbids *configuration* naming individuals; "the requester of this request" is
+ * a property of the request, so it names nobody in advance.
+ */
+export const NOTIFICATION_CONTEXTUAL_REFS = [
+  'subject_person',
+  'requester',
+  'subject_line_manager',
+] as const;
+export type NotificationContextualRef = (typeof NOTIFICATION_CONTEXTUAL_REFS)[number];
+
+/** `platform.notification.status` — the message's own dispatch lifecycle. */
+export const NOTIFICATION_STATUSES = ['pending', 'dispatched', 'expired'] as const;
+export type NotificationStatus = (typeof NOTIFICATION_STATUSES)[number];
+
+/**
+ * `platform.notification_delivery.status`.
+ *
+ * `suppressed` is the one that earns its place: a channel disabled in
+ * configuration records a row saying so rather than skipping silently, which is
+ * what makes "why didn't I get an email?" answerable (AC-D8).
+ */
+export const DELIVERY_STATUSES = ['pending', 'sent', 'failed', 'dead', 'suppressed'] as const;
+export type DeliveryStatus = (typeof DELIVERY_STATUSES)[number];
+
+/** Sort columns for the admin delivery-diagnostics table. */
+export const DELIVERY_SORTS = ['created_at', 'attempted_at'] as const;
+export type DeliverySort = (typeof DELIVERY_SORTS)[number];

@@ -159,6 +159,59 @@ export interface PlatformLookup {
   updated_by: string;
 }
 
+export interface PlatformNotification {
+  action_url: string | null;
+  body: string;
+  channels: ('in_app' | 'email' | 'push')[];
+  created_at: Generated<Timestamp>;
+  created_by: string | null;
+  dedupe_key: string | null;
+  deleted_at: Timestamp | null;
+  dispatched_at: Timestamp | null;
+  expires_at: Timestamp | null;
+  id: string;
+  kind: string;
+  /**
+   * Template parameters, validated by the kind's registered Zod schema: ids and short non-sensitive display strings only. Special-category detail never appears here or in title/body on any channel (SA-023, ADR-0019).
+   */
+  payload: Generated<Json>;
+  /**
+   * Derived from the subject stream at send time, not configured — which is why it does not breach PL-021: no person is named in advance, only a relationship to the subject.
+   */
+  recipient_contextual: "subject_person" | "requester" | "subject_line_manager" | null;
+  recipient_kind: "role" | "policy" | "contextual";
+  recipient_policy_ref: string | null;
+  recipient_role_id: string | null;
+  recipient_team_id: string | null;
+  status: Generated<"pending" | "dispatched" | "expired">;
+  subject_stream_id: string | null;
+  subject_stream_type: string | null;
+  title: string;
+  updated_at: Generated<Timestamp>;
+  updated_by: string | null;
+}
+
+export interface PlatformNotificationDelivery {
+  attempt_count: Generated<number>;
+  attempted_at: Timestamp | null;
+  channel: "in_app" | "email" | "push";
+  created_at: Generated<Timestamp>;
+  created_by: string | null;
+  id: string;
+  last_error: string | null;
+  notification_id: string;
+  /**
+   * The resolved recipient, stamped at send time. The only person reference in the notification model: a record of who was reached, never a configuration of who will be (PL-021).
+   */
+  person_id: string;
+  provider_ref: string | null;
+  read_at: Timestamp | null;
+  resolved_via: "role" | "policy" | "contextual";
+  status: Generated<"pending" | "sent" | "failed" | "dead" | "suppressed">;
+  updated_at: Generated<Timestamp>;
+  updated_by: string | null;
+}
+
 export interface PlatformPerson {
   access_valid_until: Timestamp | null;
   agency_worker_reference: string | null;
@@ -441,6 +494,8 @@ export interface DB {
   "platform.domain_event": PlatformDomainEvent;
   "platform.event_consumption": PlatformEventConsumption;
   "platform.lookup": PlatformLookup;
+  "platform.notification": PlatformNotification;
+  "platform.notification_delivery": PlatformNotificationDelivery;
   "platform.person": PlatformPerson;
   "platform.person_allocation": PlatformPersonAllocation;
   "platform.person_flag": PlatformPersonFlag;

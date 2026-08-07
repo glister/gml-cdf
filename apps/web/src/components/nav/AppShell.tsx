@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Link } from '@tanstack/react-router';
 import {
   AlarmClock,
+  BellRing,
   ChevronDown,
   ClipboardList,
   GitMerge,
@@ -23,6 +24,7 @@ import { ConnectLockup } from '~/components/auth/ConnectLockup';
 import { Avatar } from '~/components/data-display/Avatar';
 import { trpcReact } from '~/trpc';
 import { holdsAnyRole } from '~/lib/authz';
+import { NotificationBell } from '~/components/notifications/NotificationBell';
 import { NavSectionLabel } from './NavSectionLabel';
 
 /* The authenticated application shell (CD Fencing Design System —
@@ -121,6 +123,9 @@ function OperationsNavSection() {
         </Link>
         <Link to="/admin/workflow/scheduled-actions" className={navItemClass}>
           <NavItemInner icon={<AlarmClock size={20} strokeWidth={1.9} />} label="Timers" />
+        </Link>
+        <Link to="/admin/notifications" className={navItemClass}>
+          <NavItemInner icon={<BellRing size={20} strokeWidth={1.9} />} label="Notifications" />
         </Link>
         <Link to="/tasks/pilot" className={navItemClass}>
           <NavItemInner
@@ -268,6 +273,11 @@ function TopBar({
         <Menu size={20} strokeWidth={2} />
       </button>
       <div className="flex-1" />
+      {/* The in-app notification surface (core plan 10 §5.8). Mounted in the
+          shell rather than per-route, because a notification is about something
+          that happened elsewhere — the whole point is that you see it wherever
+          you are. */}
+      <NotificationBell />
       {user && (
         <div className="relative">
           <button

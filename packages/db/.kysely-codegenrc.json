@@ -19,7 +19,14 @@
       "platform.task_dependency.depends_on_kind": "'task' | 'gate'",
       "platform.approval_request.status": "Generated<'pending' | 'approved' | 'rejected' | 'cancelled'>",
       "platform.approval_assignee.source": "'policy_role' | 'designated' | 'delegation'",
-      "platform.approval_decision.decision": "'approved' | 'rejected'"
+      "platform.approval_decision.decision": "'approved' | 'rejected'",
+      "platform.notification.recipient_kind": "'role' | 'policy' | 'contextual'",
+      "platform.notification.recipient_contextual": "'subject_person' | 'requester' | 'subject_line_manager' | null",
+      "platform.notification.status": "Generated<'pending' | 'dispatched' | 'expired'>",
+      "platform.notification.channels": "('in_app' | 'email' | 'push')[]",
+      "platform.notification_delivery.resolved_via": "'role' | 'policy' | 'contextual'",
+      "platform.notification_delivery.channel": "'in_app' | 'email' | 'push'",
+      "platform.notification_delivery.status": "Generated<'pending' | 'sent' | 'failed' | 'dead' | 'suppressed'>"
     }
   }
 }

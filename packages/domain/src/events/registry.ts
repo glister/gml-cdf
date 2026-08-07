@@ -17,6 +17,10 @@ import {
   platformLookupValueDeleted,
   platformLookupValueReactivated,
   platformLookupValueUpdated,
+  platformNotificationDeliveryFailed,
+  platformNotificationRequested,
+  platformNotificationSent,
+  platformNotificationUnresolved,
   platformPersonAccessExpired,
   platformPersonAccessExpirySet,
   platformPersonAllocationAdded,
@@ -35,6 +39,8 @@ import {
   platformPersonReengaged,
   platformPersonRelationshipChanged,
   platformPersonSignedIn,
+  platformReminderChased,
+  platformReminderCompleted,
   platformRoleGranted,
   platformRoleRevoked,
   platformScheduledActionCancelled,
@@ -135,6 +141,18 @@ export const eventTypes = {
   'platform.approval_request.auto_approved': platformApprovalRequestAutoApproved,
   'platform.approval_delegation.created': platformApprovalDelegationCreated,
   'platform.approval_delegation.revoked': platformApprovalDelegationRevoked,
+  // Notifications & reminders (core plan 10, PL-019…021). The four
+  // `platform.notification.*` facts stream on the notification row per
+  // ADR-0021. The two `platform.reminder.*` facts are the documented exception:
+  // a reminder *series* has no row of its own — each occurrence is a
+  // `scheduled_action` — so they stream on the **source** being chased, which
+  // is also where anyone asking "was this chased, and did it stop?" looks.
+  'platform.notification.requested': platformNotificationRequested,
+  'platform.notification.sent': platformNotificationSent,
+  'platform.notification.delivery_failed': platformNotificationDeliveryFailed,
+  'platform.notification.unresolved': platformNotificationUnresolved,
+  'platform.reminder.chased': platformReminderChased,
+  'platform.reminder.completed': platformReminderCompleted,
 } as const;
 
 /** The union of all registered event-type names. */

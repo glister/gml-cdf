@@ -14,7 +14,7 @@ import {
   type DueSpec,
   type TaskStatus,
 } from '@repo/domain';
-import { scheduleAction, cancelScheduledActions } from '@repo/workflow';
+import { cancelReminders, scheduleReminder } from './notify.js';
 import {
   getConfig,
   qualifiedName,
@@ -94,6 +94,8 @@ export interface TaskEngineConfig {
     cadenceRef: string;
     startOffsetDays: number;
     noDueDate: 'from_raise' | 'none';
+    /** The zone the chase's wall clock is read in — plan 10's cadence maths. */
+    timeZone: string;
   };
 }
 
@@ -103,9 +105,6 @@ export interface TaskEngineConfig {
  * leave scheduled rows pointing at a key that no longer exists.
  */
 export const REMINDER_CADENCE_REF = `config:${qualifiedName(tasksReminderCadence)}`;
-
-/** Plan 07's effect-registry name for a reminder occurrence (plan 10 §4.5). */
-export const REMINDER_ACTION_TYPE = 'notification.reminder';
 
 /** The reminder kind plan 10 binds a satisfaction check to (its §5.5 registry). */
 export const TASK_REMINDER_KIND = 'task.incomplete';
@@ -125,13 +124,11 @@ export async function loadTaskEngineConfig(
   ]);
   return {
     due: { timeOfDay, timeZone },
-    reminder: { cadenceRef: REMINDER_CADENCE_REF, startOffsetDays, noDueDate },
+    reminder: { cadenceRef: REMINDER_CADENCE_REF, startOffsetDays, noDueDate, timeZone },
   };
 }
 
 // --- Shared internals --------------------------------------------------------
-
-const DAY_MS = 86_400_000;
 
 /** The wire due spec (ISO strings) as the domain engine wants it (instants). */
 function toDomainDueSpec(spec: DueSpecInput): DueSpec {
@@ -312,16 +309,19 @@ async function satisfyAndUnlock(
 }
 
 /**
- * Schedule the first chase for a task, on plan 10's contract (its §4.5): a
- * `platform.scheduled_action` row with `action_type='notification.reminder'` and
- * the reminder payload that plan's handler reads.
+ * Schedule the first chase for a task, through core plan 10's
+ * `scheduleReminder` (its §5.2).
  *
- * **Plan 10 is not built yet**, so this creates the occurrence through plan 07's
- * `scheduleAction` rather than through plan 10's `scheduleReminder` wrapper —
- * the row, its shape and its journal event are the same either way, and when
- * plan 10 lands it takes over both the wrapper and the firing. Nothing is
- * scheduled twice and nothing has to be migrated; the row simply starts being
- * executed. This is the ordering §12.3's last risk row anticipates.
+ * This used to build the `scheduled_action` row by hand, against plan 10's
+ * §4.5 payload shape, because that plan did not exist yet — the row and its
+ * journal event were identical either way, which is what made the hand-off free
+ * when plan 10 landed (2026-08-07). Nothing was migrated: the rows simply
+ * started being executed, and this call site moved onto the wrapper.
+ *
+ * One behaviour improved in the move. The offset is now applied as **calendar
+ * days in the configured zone** rather than as milliseconds, so a "-2 days from
+ * a 17:00 deadline" chase still lands at 17:00 across a daylight-saving
+ * boundary instead of drifting to 16:00 (plan 10 §9.2).
  */
 async function scheduleTaskReminder(
   trx: Transaction<DB>,
@@ -334,44 +334,33 @@ async function scheduleTaskReminder(
     now: Date;
   },
 ): Promise<void> {
-  const { task, config, now } = input;
-
-  const firstDueAt =
-    task.due_at === null
-      ? config.noDueDate === 'from_raise'
-        ? now
-        : null
-      : new Date(task.due_at.getTime() + config.startOffsetDays * DAY_MS);
+  const { task, config } = input;
 
   // `none` for an undated task means exactly that: no chase. Chasing everything
   // daily from the moment it is raised is how a notification system teaches
   // people to ignore it.
-  if (firstDueAt === null) return;
+  if (task.due_at === null && config.noDueDate !== 'from_raise') return;
 
-  await scheduleAction(trx, {
+  await scheduleReminder(trx, {
+    reminderKind: TASK_REMINDER_KIND,
+    source: { streamType: TASK_STREAM_TYPE, streamId: task.id },
+    // The case, not the task — a contextual recipient (a subject's line
+    // manager) is a property of what the work is about.
+    subject: { streamType: task.stream_type, streamId: task.stream_id },
+    recipient: { kind: 'role', roleId: task.assignee_role_id },
     // A first occurrence whose computed instant has already passed fires on the
     // next scheduler pass, which is the honest behaviour for a task raised after
-    // its own deadline.
-    dueAt: firstDueAt,
-    actionType: REMINDER_ACTION_TYPE,
-    payload: {
-      reminderKind: TASK_REMINDER_KIND,
-      sourceType: TASK_STREAM_TYPE,
-      sourceId: task.id,
-      recipient: { kind: 'role', roleId: task.assignee_role_id },
-      subject: { streamType: task.stream_type, streamId: task.stream_id },
-      anchor: {
-        dueAt: task.due_at?.toISOString() ?? null,
-        offsetDays: config.startOffsetDays,
-      },
-      cadenceRef: config.cadenceRef,
-      occurrence: 1,
-    },
-    subject: { streamType: TASK_STREAM_TYPE, streamId: task.id },
+    // its own deadline — `firstOccurrence` deliberately does not clamp.
+    anchor:
+      task.due_at === null
+        ? { mode: 'from_now' }
+        : { mode: 'instant', at: task.due_at, offsetDays: config.startOffsetDays },
+    cadenceRef: config.cadenceRef,
+    timeZone: config.timeZone,
     workflowInstanceId: input.workflowInstanceId,
-    source: 'workflow',
-    createdBy: input.actorPersonId,
+    actorPersonId: input.actorPersonId,
     correlationId: input.correlationId,
+    now: input.now,
   });
 }
 
@@ -385,9 +374,8 @@ async function cancelTaskReminders(
   trx: Transaction<DB>,
   input: { taskId: string; reason: string; actorPersonId: string | null; correlationId: string },
 ): Promise<void> {
-  await cancelScheduledActions(trx, {
-    subject: { streamType: TASK_STREAM_TYPE, streamId: input.taskId },
-    actionType: REMINDER_ACTION_TYPE,
+  await cancelReminders(trx, {
+    source: { streamType: TASK_STREAM_TYPE, streamId: input.taskId },
     reason: input.reason,
     actorPersonId: input.actorPersonId,
     correlationId: input.correlationId,

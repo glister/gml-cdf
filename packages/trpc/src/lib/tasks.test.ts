@@ -13,9 +13,9 @@ import {
   releaseTask,
   TaskForbiddenError,
   TaskSpecError,
-  REMINDER_ACTION_TYPE,
   type TaskListItem,
 } from './tasks.js';
+import { REMINDER_ACTION_TYPE } from './notify.js';
 import { ROLE_KEYS, type RoleKey } from './constants.js';
 
 /**

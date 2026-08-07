@@ -9,6 +9,8 @@ import type {
   PlatformDomainEvent,
   PlatformEventConsumption,
   PlatformLookup,
+  PlatformNotification,
+  PlatformNotificationDelivery,
   PlatformPerson,
   PlatformPersonAllocation,
   PlatformPersonFlag,
@@ -76,6 +78,8 @@ export type {
   PlatformDomainEvent,
   PlatformEventConsumption,
   PlatformLookup,
+  PlatformNotification,
+  PlatformNotificationDelivery,
   PlatformPerson,
   PlatformPersonAllocation,
   PlatformPersonFlag,
@@ -208,3 +212,14 @@ export type NewApprovalDecision = Insertable<PlatformApprovalDecision>;
 export type ApprovalDelegationRecord = Selectable<PlatformApprovalDelegation>;
 export type NewApprovalDelegation = Insertable<PlatformApprovalDelegation>;
 export type ApprovalDelegationUpdate = Updateable<PlatformApprovalDelegation>;
+
+// Notifications & reminders (core plan 10, PL-019…021). Both tables are
+// operational state, so both carry the full trio: a delivery that could not be
+// updated could not record its own retry.
+export type NotificationRecord = Selectable<PlatformNotification>;
+export type NewNotification = Insertable<PlatformNotification>;
+export type NotificationUpdate = Updateable<PlatformNotification>;
+
+export type NotificationDeliveryRecord = Selectable<PlatformNotificationDelivery>;
+export type NewNotificationDelivery = Insertable<PlatformNotificationDelivery>;
+export type NotificationDeliveryUpdate = Updateable<PlatformNotificationDelivery>;

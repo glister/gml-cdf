@@ -1,6 +1,11 @@
 {
   "extends": "@repo/typescript-config/node.json",
   "compilerOptions": {
+    // `@repo/email` resolves to its React Email source through the
+    // `development` export condition, so this app typechecks .tsx it never
+    // authors. Same reason `apps/api` sets it (core plan 10 §5.3 — the email
+    // channel adapter lives here).
+    "jsx": "react-jsx",
     "rootDir": ".",
     "noEmit": true
   },
