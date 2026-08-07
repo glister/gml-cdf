@@ -116,7 +116,7 @@ describe('defineApprovalSubject — load-time rejections', () => {
           approvers: [{ kind: 'designated', source: 'leave_approvers' }],
         },
       }),
-    ).toThrow(/does not declare .* designatedSources/);
+    ).toThrow(/fails its own schema/);
   });
 
   it('accepts a designated default when the source is declared', () => {
@@ -128,6 +128,59 @@ describe('defineApprovalSubject — load-time rejections', () => {
       designatedSources: ['leave_approvers'],
     });
     expect(def.designatedSources).toEqual(['leave_approvers']);
+  });
+
+  /**
+   * The write-time guard (added 2026-08-06).
+   *
+   * A policy naming a source the subject type never declared is refused by the
+   * key's own schema, which means it is refused at `setConfig` too — not just in
+   * this default. Before the schema was narrowed, an administrator could write
+   * one and it would pass validation, fail at the next submit, and silently
+   * empty the inbox for that subject type in the meantime.
+   */
+  it('rejects a policy naming a source outside the declared set', () => {
+    const def = register('hr.leave_booking', {
+      policyDefault: {
+        mode: 'any-one',
+        approvers: [{ kind: 'designated', source: 'leave_approvers' }],
+      },
+      designatedSources: ['leave_approvers'],
+    });
+
+    const bad = def.policy.schema.safeParse({
+      mode: 'any-one',
+      approvers: [{ kind: 'designated', source: 'leave_aprovers' }], // typo
+    });
+    expect(bad.success).toBe(false);
+
+    const good = def.policy.schema.safeParse({
+      mode: 'any-one',
+      approvers: [{ kind: 'designated', source: 'leave_approvers' }],
+    });
+    expect(good.success).toBe(true);
+  });
+
+  /**
+   * A subject type declaring no sources cannot hold a designated approver at
+   * all — the absence is a property of its schema, not a rule to remember.
+   */
+  it('rejects any designated approver when the subject declares no sources', () => {
+    const def = register('hr.toil_claim');
+    const parsed = def.policy.schema.safeParse({
+      mode: 'any-one',
+      approvers: [{ kind: 'designated', source: 'anything' }],
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('still accepts role approvers on a subject with no declared sources', () => {
+    const def = register('hr.toil_claim');
+    const parsed = def.policy.schema.safeParse({
+      mode: 'any-one',
+      approvers: [{ kind: 'role', roleKey: 'line_manager' }],
+    });
+    expect(parsed.success).toBe(true);
   });
 
   /** `defineConfigKey` validates the default against its own schema at load. */

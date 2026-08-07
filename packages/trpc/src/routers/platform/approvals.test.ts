@@ -2,7 +2,14 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { sql } from 'kysely';
 import { db, newUuidV7 } from '@repo/db';
 import { createMigrator, truncateAll } from '@repo/db/test-support';
-import { setConfig, requireApprovalSubject } from '@repo/config';
+import {
+  defineApprovalSubject,
+  qualifiedName,
+  requireApprovalSubject,
+  setConfig,
+  unregisterApprovalSubjectForTests,
+  unregisterConfigKeyForTests,
+} from '@repo/config';
 import { appRouter } from '../../router.js';
 import type { ContextGrant, TRPCContext } from '../../trpc.js';
 import { ROLE_KEYS, type RoleKey } from '../../lib/constants.js';
@@ -11,7 +18,14 @@ import {
   unregisterWarningProviderForTests,
   WARNINGS_UNAVAILABLE_CODE,
 } from '../../lib/approval-warnings.js';
-import { createDelegation, openApprovalRequest } from '../../lib/approvals.js';
+import {
+  assertDesignatedResolversRegistered,
+  createDelegation,
+  openApprovalRequest,
+  registerDesignatedResolver,
+  resolveApprovalPolicy,
+  unregisterDesignatedResolverForTests,
+} from '../../lib/approvals.js';
 
 /**
  * The `platform.approvals` surface against real Postgres (core plan 09 §10).
@@ -992,6 +1006,68 @@ describe('T12 — the chase is scheduled and cancelled eagerly (HL-054)', () => 
 
     const rows = await pendingReminders(requestId);
     expect(rows.every((r) => r.status === 'cancelled')).toBe(true);
+  });
+});
+
+// --- T14 — the designated-resolver guards ------------------------------------
+
+describe('T14 — a policy cannot name a resolver that does not exist', () => {
+  /**
+   * The conformance half. The config schema stops a *policy* naming an
+   * undeclared source; this stops a subject type *declaring* one nobody
+   * implemented. Together they close the gap that made a config typo silently
+   * empty an inbox (§12.2 Q6's neighbour, fixed 2026-08-06).
+   */
+  it('every declared designated source has a registered resolver', () => {
+    expect(() => assertDesignatedResolversRegistered()).not.toThrow();
+  });
+
+  /**
+   * A subject type declaring a source nobody implemented fails the check, and
+   * the message names the pair — so this is caught by CI rather than by
+   * someone's submit throwing in production.
+   */
+  it('fails loudly when a declared source has no resolver', () => {
+    const def = defineApprovalSubject({
+      subjectType: 'hr.conformance_probe',
+      policyDefault: { mode: 'any-one', approvers: [{ kind: 'role', roleKey: 'line_manager' }] },
+      designatedSources: ['nobody_implemented_me'],
+      policyDescription: 'probe',
+      thresholdDescription: 'probe',
+      registeredBy: 'test',
+    });
+
+    try {
+      expect(() => assertDesignatedResolversRegistered()).toThrow(
+        /hr\.conformance_probe → 'nobody_implemented_me'/,
+      );
+
+      // …and registering the resolver satisfies it.
+      registerDesignatedResolver('hr.conformance_probe', 'nobody_implemented_me', () =>
+        Promise.resolve([]),
+      );
+      expect(() => assertDesignatedResolversRegistered()).not.toThrow();
+    } finally {
+      unregisterDesignatedResolverForTests('hr.conformance_probe', 'nobody_implemented_me');
+      unregisterConfigKeyForTests(qualifiedName(def.policy));
+      unregisterConfigKeyForTests(qualifiedName(def.threshold));
+      unregisterConfigKeyForTests(qualifiedName(def.reminderCadence));
+      unregisterApprovalSubjectForTests('hr.conformance_probe');
+    }
+  });
+
+  /**
+   * And the runtime failure, if one ever got through, is loud rather than
+   * silent: `resolveApprovalPolicy` throws naming the source.
+   */
+  it('throws by name when a policy reaches resolution with an unknown source', async () => {
+    await expect(
+      resolveApprovalPolicy(db, {
+        subjectType: 'hr.not_registered',
+        subjectId: newUuidV7(),
+        at: new Date(),
+      }),
+    ).rejects.toThrow(/approvals are not enabled/);
   });
 });
 

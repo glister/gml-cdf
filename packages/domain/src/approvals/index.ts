@@ -17,6 +17,7 @@ export {
   approvalApproverDesignatedSchema,
   approvalApproverRoleSchema,
   approvalPolicyValueSchema,
+  approvalPolicyValueSchemaFor,
   type ActiveDelegation,
   type ApprovalApprover,
   type ApprovalApproverSource,

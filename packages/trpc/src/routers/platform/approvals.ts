@@ -139,15 +139,26 @@ async function subjectEligibility(ctx: TRPCContext, at: Date): Promise<SubjectEl
     // `subjectId` is irrelevant to the role half of a policy, and the designated
     // half is deliberately not resolved here — see the note on `hasDesignated`.
     const subject = requireApprovalSubject(subjectType);
-    const resolved = await resolveApprovalPolicy(ctx.db, {
-      subjectType,
-      subjectId: '00000000-0000-0000-0000-000000000000',
-      at,
-    }).catch(() => null);
-    if (!resolved) {
-      // A subject type whose designated resolver is unregistered throws in the
-      // service. That is right for a submit, but it must not take down the whole
-      // inbox — the other subject types' requests are still perfectly readable.
+    let resolved: Awaited<ReturnType<typeof resolveApprovalPolicy>> | null = null;
+    try {
+      resolved = await resolveApprovalPolicy(ctx.db, {
+        subjectType,
+        subjectId: '00000000-0000-0000-0000-000000000000',
+        at,
+      });
+    } catch (error) {
+      // One broken subject type must not take down the whole inbox — the other
+      // types' requests are still perfectly readable. But it must not vanish
+      // **quietly** either: this branch drops every request of that type out of
+      // everyone's queue, which looks exactly like "no approvals today" and is
+      // the worst way for a configuration fault to present.
+      ctx.logger.error(
+        'approval policy could not be resolved; its requests are absent from the inbox',
+        {
+          subjectType,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
       out.push({
         subjectType,
         roleIds: [],
@@ -884,23 +895,38 @@ export const approvalsRouter = router({
   /**
    * Every subject type approvals are enabled on, with its resolved policy —
    * the admin surface's "what can be approved, and by whom?".
+   *
+   * **This is where a broken policy surfaces.** A subject type whose policy
+   * cannot be resolved drops out of everyone's inbox (the eligibility query
+   * fails closed), so the fault has to be visible *somewhere* an administrator
+   * looks — and this is that screen. Each row carries its own `error` rather
+   * than the query failing, because one broken type must not hide the others.
    */
   subjects: approvalAdmin.query(async ({ ctx }) => {
     const now = new Date();
     const out = [];
     for (const subjectType of approvalSubjectTypes()) {
       const subject = requireApprovalSubject(subjectType);
-      const resolved = await resolveApprovalPolicy(ctx.db, {
-        subjectType,
-        subjectId: '00000000-0000-0000-0000-000000000000',
-        at: now,
-      }).catch(() => null);
+      let resolved: Awaited<ReturnType<typeof resolveApprovalPolicy>> | null = null;
+      let error: string | null = null;
+      try {
+        resolved = await resolveApprovalPolicy(ctx.db, {
+          subjectType,
+          subjectId: '00000000-0000-0000-0000-000000000000',
+          at: now,
+        });
+      } catch (caught) {
+        error = caught instanceof Error ? caught.message : String(caught);
+      }
       out.push({
         subjectType,
         policyKey: `${subject.policy.namespace}.${subject.policy.key}`,
         thresholdKey: `${subject.threshold.namespace}.${subject.threshold.key}`,
+        designatedSources: [...subject.designatedSources],
         approvers: resolved?.policy.approvers ?? [],
         overrideRoles: resolved?.policy.overrideRoles ?? [],
+        /** Non-null when this subject type's approvals are currently broken. */
+        error,
       });
     }
     return out;

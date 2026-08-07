@@ -21,6 +21,7 @@ import {
   type RoleKey,
 } from '@repo/domain';
 import {
+  approvalSubjectTypes,
   approvalsDelegationMaxDurationDays,
   approvalsReminderCadence,
   getConfig,
@@ -171,6 +172,38 @@ export function registerDesignatedResolver(
 /** Test-only: drop a registration so a suite can substitute a stub. */
 export function unregisterDesignatedResolverForTests(subjectType: string, source: string): void {
   designatedResolvers.delete(resolverKey(subjectType, source));
+}
+
+/**
+ * Every `designated` source a registered subject type **declares** has a
+ * resolver registered to answer it.
+ *
+ * The other half of the guard `approvalPolicyValueSchemaFor` provides. That
+ * schema stops a *policy* naming a source the subject type never declared; this
+ * stops a subject type *declaring* one nobody implemented. Between them, the
+ * only way to reach "a policy names a resolver that does not exist" is to delete
+ * a registration, and this fails the build when you do.
+ *
+ * Asserted by a conformance test rather than at module load, because
+ * registration order is a consumer's business: an HR plan registers its subject
+ * type in `@repo/config` and its resolver in its own module, and requiring the
+ * second to have happened by the time the first is imported would make the
+ * import graph part of the contract.
+ */
+export function assertDesignatedResolversRegistered(): void {
+  const missing: string[] = [];
+  for (const subjectType of approvalSubjectTypes()) {
+    for (const source of requireApprovalSubject(subjectType).designatedSources) {
+      if (!designatedResolvers.has(resolverKey(subjectType, source))) {
+        missing.push(`${subjectType} → '${source}'`);
+      }
+    }
+  }
+  if (missing.length > 0) {
+    throw new Error(
+      `approval subject types declare designated approver sources with no registered resolver: ${missing.join(', ')}. Register one with registerDesignatedResolver(), or drop the source from the subject's designatedSources.`,
+    );
+  }
 }
 
 // --- Reminder contract (plan 10's row shape, plan 07's timer) ----------------

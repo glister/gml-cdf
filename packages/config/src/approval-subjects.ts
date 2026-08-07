@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import {
-  approvalPolicyValueSchema,
+  approvalPolicyValueSchemaFor,
   approvalThresholdValueSchema,
   type ApprovalPolicyValue,
   type ApprovalThresholdValue,
@@ -44,7 +44,13 @@ const SUBJECT_TYPE_PATTERN = /^[a-z][a-z0-9_]+\.[a-z][a-z0-9_]+$/;
 export interface ApprovalSubjectDef {
   /** The journal stream type this configuration governs, e.g. `hr.leave_booking`. */
   readonly subjectType: string;
-  readonly policy: ConfigKeyDef<typeof approvalPolicyValueSchema>;
+  /**
+   * Validated against this subject type's **declared** `designatedSources`, not
+   * against the permissive shape — see `approvalPolicyValueSchemaFor`. A policy
+   * naming an unknown resolver is refused when it is written, rather than
+   * failing at the next submit.
+   */
+  readonly policy: ConfigKeyDef<z.ZodType<ApprovalPolicyValue>>;
   readonly threshold: ConfigKeyDef<typeof approvalThresholdValueSchema>;
   /** Per-subject chase cadence; `null` falls back to the engine-wide default. */
   readonly reminderCadence: ConfigKeyDef<z.ZodNullable<typeof cadence>>;
@@ -105,19 +111,17 @@ export function defineApprovalSubject(input: DefineApprovalSubjectInput): Approv
     );
   }
 
-  const declared = new Set(input.designatedSources ?? []);
-  for (const approver of input.policyDefault.approvers) {
-    if (approver.kind === 'designated' && !declared.has(approver.source)) {
-      throw new Error(
-        `approval subject '${input.subjectType}' defaults to the designated approver source '${approver.source}', which it does not declare in designatedSources`,
-      );
-    }
-  }
+  const designatedSources = input.designatedSources ?? [];
+
+  // The key's schema admits only this subject type's declared sources, so the
+  // default policy is checked against them by `defineConfigKey` at module load
+  // — and so is every later config write, which is the half that was missing.
+  const policySchema = approvalPolicyValueSchemaFor(designatedSources);
 
   const policy = defineConfigKey({
     namespace: `platform.approvals.policy.${module}`,
     key: entity,
-    schema: approvalPolicyValueSchema,
+    schema: policySchema,
     defaultValue: input.policyDefault,
     description: input.policyDescription,
     editableBy: ['administrator', 'hr_user'],
@@ -153,7 +157,7 @@ export function defineApprovalSubject(input: DefineApprovalSubjectInput): Approv
     policy,
     threshold,
     reminderCadence,
-    designatedSources: input.designatedSources ?? [],
+    designatedSources,
   };
   subjects.set(input.subjectType, Object.freeze(def));
   return def;

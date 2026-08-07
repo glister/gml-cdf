@@ -74,6 +74,7 @@ export { PILOT_LARGE_AMOUNT_CODE, PILOT_WARNING_PROVIDER } from './lib/approval-
 
 /** The approval engine's transactional services (core plan 09 §5.1). */
 export {
+  assertDesignatedResolversRegistered,
   cancelApprovalRequest,
   cancelApprovalsForInstance,
   createDelegation,

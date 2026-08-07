@@ -78,6 +78,53 @@ export const approvalPolicyValueSchema = z.strictObject({
 export type ApprovalApprover = z.infer<typeof approvalApproverSchema>;
 export type ApprovalPolicyValue = z.infer<typeof approvalPolicyValueSchema>;
 
+/**
+ * The policy schema **narrowed to one subject type's declared resolvers**.
+ *
+ * {@link approvalPolicyValueSchema} above accepts any well-formed resolver name,
+ * which is right for describing the shape but wrong for validating a stored
+ * value: a `designated` source is only meaningful if something is registered to
+ * answer it, and the permissive schema would happily accept a typo.
+ *
+ * That gap mattered because approver policies are **runtime-editable
+ * configuration** (PL-016). An administrator writing
+ * `{ kind: 'designated', source: 'leave_aprovers' }` would have passed
+ * validation, then failed at the next `submit` — and, worse, quietly emptied the
+ * inbox for that subject type, because eligibility resolution fails closed.
+ * Configuration that can silently stop work reaching people is exactly what
+ * ADR-0016's validate-on-write-and-on-read discipline exists to prevent.
+ *
+ * So `defineApprovalSubject` builds each subject type's key against this
+ * instead. The set comes from the subject's `designatedSources` declaration, so
+ * the config store, the admin editor and the resolver registry all validate
+ * against one list — and a bad source is refused at the moment it is typed,
+ * naming the sources that would have worked.
+ *
+ * A subject type declaring **no** sources gets a union with no `designated`
+ * member at all: for those, "there are no designated approvers here" is a
+ * property of the schema rather than a rule someone has to remember.
+ */
+export function approvalPolicyValueSchemaFor(
+  designatedSources: readonly string[],
+): z.ZodType<ApprovalPolicyValue> {
+  const approver =
+    designatedSources.length === 0
+      ? z.discriminatedUnion('kind', [approvalApproverRoleSchema])
+      : z.discriminatedUnion('kind', [
+          approvalApproverRoleSchema,
+          z.strictObject({
+            kind: z.literal('designated'),
+            source: z.enum([...designatedSources] as [string, ...string[]]),
+          }),
+        ]);
+
+  return z.strictObject({
+    mode: z.literal('any-one'),
+    approvers: z.array(approver).min(1).max(20),
+    overrideRoles: z.array(z.enum(ROLE_KEYS)).max(10).optional(),
+  }) as unknown as z.ZodType<ApprovalPolicyValue>;
+}
+
 /** How a person came to be on a request — mirrors `approval_assignee.source`. */
 export type ApprovalApproverSource = 'policy_role' | 'designated' | 'delegation';
 
