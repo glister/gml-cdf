@@ -151,6 +151,10 @@ async function callerFor(personId: string) {
     email: { sendOtp: async () => {}, sendInvitation: async () => {} },
     sms: { send: async () => {} },
     rateLimit: { check: () => true },
+    // Core plan 11 §4.7: SES evidence records where a signature came from,
+    // taken server-side. Null outside an HTTP request — nothing signs from here.
+    requestIp: null,
+    userAgent: null,
     correlationId,
     actorPersonId: personId,
     grants: await loadGrants(personId),

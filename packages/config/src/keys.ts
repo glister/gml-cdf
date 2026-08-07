@@ -440,3 +440,182 @@ export const pilotSignoffSubject = defineApprovalSubject({
     'The amount above which a pilot sign-off needs approval at all. Demonstration key for the approval engine: change it and the next request routes differently, with no release (PL-018).',
   registeredBy: '09',
 });
+
+// --- Documents, templates & e-signature (core plan 11 §6) --------------------
+//
+// Eight decision points, and the shape of the set is the point: where the bytes
+// go, how hard we try to put them there, whether a signature needs a scroll, who
+// may see which category, and what a response upload may be. None of them is a
+// person, and none is a threshold anyone would want to change by release.
+
+/**
+ * The SharePoint site holding the document library (PL-010, ADR-0017).
+ *
+ * Empty until CDF IT provisions the site and grants `Sites.Selected` consent
+ * (§12.2 Q4). Filing checks it and stays `pending` while it is empty rather than
+ * failing — an unset target is a configuration state, not an error, and the
+ * two-phase issue design exists precisely so documents stay usable through it.
+ */
+export const documentsSharePointSiteId = defineConfigKey({
+  namespace: 'platform.documents',
+  key: 'sharepoint_site_id',
+  schema: z.string().max(300),
+  defaultValue: '',
+  description:
+    'The Microsoft Graph site id of the SharePoint site holding the document library. Empty means filing is not configured yet: documents are still issued, viewed and signed from staged bytes, and filing stays pending.',
+  editableBy: ['administrator'],
+  registeredBy: '11',
+});
+
+/** The drive (document library) within that site. */
+export const documentsSharePointDriveId = defineConfigKey({
+  namespace: 'platform.documents',
+  key: 'sharepoint_drive_id',
+  schema: z.string().max(300),
+  defaultValue: '',
+  description:
+    'The Graph drive id of the document library within the configured site. Empty means filing is not configured yet.',
+  editableBy: ['administrator'],
+  registeredBy: '11',
+});
+
+/**
+ * Where in the library a filed document lands (PL-010).
+ *
+ * Placeholders are substituted at filing time; an unknown one is left verbatim
+ * rather than blanked, so a typo shows up as a visibly wrong folder name instead
+ * of silently collapsing two categories into one directory. The **personnel-file
+ * taxonomy** beyond this generic pattern is Q6, decided with CDF HR when the HR
+ * onboarding plan lands.
+ */
+export const documentsFilingPathPattern = defineConfigKey({
+  namespace: 'platform.documents',
+  key: 'filing_path_pattern',
+  schema: z
+    .string()
+    .min(1)
+    .max(300)
+    .regex(/^[A-Za-z0-9_\-{}/. ]+$/, 'a drive-relative folder path with {placeholder} segments'),
+  defaultValue: 'people/{person_id}/{category_code}/',
+  description:
+    'Drive-relative folder pattern a filed document is written to. Supported placeholders: {person_id}, {category_code}, {document_id}. Changing it affects the next filing, with no release.',
+  editableBy: ['administrator'],
+  registeredBy: '11',
+});
+
+/**
+ * How many times filing is attempted before the document is marked `failed`
+ * and an administrator is told (§4.6).
+ *
+ * Bounded at 20 because the alternative to giving up is a document that retries
+ * for ever and never appears on the diagnostics screen — the failure mode this
+ * whole `failed` state exists to make visible.
+ */
+export const documentsFilingMaxAttempts = defineConfigKey({
+  namespace: 'platform.documents',
+  key: 'filing_max_attempts',
+  schema: z.number().int().min(1).max(20),
+  defaultValue: 8,
+  description:
+    'How many times a document’s SharePoint filing is attempted before it is marked failed and an administrator is notified. A failed filing can be retried by hand from the documents screen.',
+  editableBy: ['administrator'],
+  registeredBy: '11',
+});
+
+/**
+ * Whether signing requires the signatory to have scrolled to the end (PL-011).
+ *
+ * On by default, and it is a real evidential control rather than a nicety:
+ * `ack_scrolled` is a column on the evidence row, so turning this off changes
+ * what the evidence pack can claim. Left configurable because a
+ * countersignature on a document someone has already read is a legitimate flow.
+ */
+export const documentsSignRequireScrollAck = defineConfigKey({
+  namespace: 'platform.documents',
+  key: 'sign_require_scroll_ack',
+  schema: z.boolean(),
+  defaultValue: true,
+  description:
+    'Whether a signatory must scroll to the end of a document before the signature control is accepted. Recorded on the signature evidence row either way, so turning it off changes what the evidence pack can claim.',
+  editableBy: ['administrator'],
+  registeredBy: '11',
+});
+
+/**
+ * Which roles may see documents in each category (PL-012).
+ *
+ * A map of category **code** to role keys — codes, not row ids, because this is
+ * a value a human edits and reads (the 2026-08-07 reconciliation row draws that
+ * line). A category absent from the map falls back to the default list, so
+ * adding a lookup value never accidentally exposes it.
+ *
+ * **The subject always sees their own documents**, and that is not expressible
+ * here on purpose: it is not a role, and a document nobody can sign is not a
+ * document. `exclude_subject` — the HR plans' "attachments must not leak to the
+ * subject" case — is Q7, still open.
+ */
+export const documentsCategoryVisibility = defineConfigKey({
+  namespace: 'platform.documents',
+  key: 'category_visibility',
+  schema: z.record(
+    z.string().regex(/^[a-z0-9][a-z0-9_]{0,63}$/, 'a document category code'),
+    z.array(z.enum(ROLE_KEYS)),
+  ),
+  defaultValue: {},
+  description:
+    'Which roles may view documents in each category, by category code. A category not listed falls back to Administrator and HR only — so adding a category never exposes it by accident. The subject always sees their own documents regardless.',
+  editableBy: ['administrator'],
+  registeredBy: '11',
+});
+
+/**
+ * The roles a category confers when the map above does not mention it.
+ *
+ * Deny-by-default, expressed as a value rather than as a constant, so the
+ * fallback is visible on the configuration screen instead of being a number
+ * somebody has to read the source to discover (§8).
+ */
+export const documentsCategoryVisibilityDefault = defineConfigKey({
+  namespace: 'platform.documents',
+  key: 'category_visibility_default',
+  schema: z.array(z.enum(ROLE_KEYS)).min(1),
+  defaultValue: ['administrator', 'hr_user'],
+  description:
+    'The roles that may view documents in a category with no explicit entry. Deny-by-default: Administrator and HR only.',
+  editableBy: ['administrator'],
+  registeredBy: '11',
+});
+
+/** The largest response file a subject may upload (`file_upload` mode). */
+export const documentsResponseUploadMaxBytes = defineConfigKey({
+  namespace: 'platform.documents',
+  key: 'response_upload_max_bytes',
+  schema: z
+    .number()
+    .int()
+    .min(1024)
+    .max(100 * 1024 * 1024),
+  defaultValue: 10 * 1024 * 1024,
+  description:
+    'The maximum size, in bytes, of a file or photograph uploaded in response to a document issued for file upload.',
+  editableBy: ['administrator'],
+  registeredBy: '11',
+});
+
+/**
+ * What a response upload may be.
+ *
+ * An allow-list, never a deny-list. The content type is also **sniffed from the
+ * bytes** at upload rather than trusted from the multipart header, because a
+ * client controls the header and this list would otherwise be advice.
+ */
+export const documentsResponseUploadAllowedTypes = defineConfigKey({
+  namespace: 'platform.documents',
+  key: 'response_upload_allowed_types',
+  schema: z.array(z.string().regex(/^[a-z]+\/[a-z0-9.+-]+$/, 'a MIME type')).min(1),
+  defaultValue: ['application/pdf', 'image/jpeg', 'image/png', 'image/heic'],
+  description:
+    'The content types a document response upload may be. An allow-list: anything not named is refused. The type is verified against the file’s own bytes, not the type the client declares.',
+  editableBy: ['administrator'],
+  registeredBy: '11',
+});

@@ -193,6 +193,10 @@ function makeCtx(personId: string, grants: ContextGrant[]): TRPCContext {
     email: { sendOtp: async () => {}, sendInvitation: async () => {} },
     sms: { send: async () => {} },
     rateLimit: { check: () => true },
+    // Core plan 11 §4.7: SES evidence records where a signature came from,
+    // taken server-side. Null outside an HTTP request — nothing signs from here.
+    requestIp: null,
+    userAgent: null,
     correlationId: newUuidV7(),
     actorPersonId: personId,
     grants,

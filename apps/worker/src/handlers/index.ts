@@ -13,6 +13,12 @@ import '@repo/trpc';
 // a mail transport into the browser bundle. This app owns concrete services, so
 // it hands the adapter in — and the dispatcher never learns which process it is.
 import './notification-email-channel.js';
+// Side-effect import: registers the **Gotenberg renderer** and the **SharePoint
+// document store** (core plan 11 §4.6). Same inversion, same reason: `@repo/trpc`
+// is imported by `apps/web`, and a static `@repo/m365` import there would put a
+// Graph SDK and its credential chain into the browser bundle. It also keeps
+// ADR-0017's rule structural — Graph is reachable only from this process.
+import './document-ports.js';
 import type { HandlerRegistration } from '../types.js';
 import { effectsHandler } from './effects.js';
 import { helloWorldHandler } from './hello-world.js';

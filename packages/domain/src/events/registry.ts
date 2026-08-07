@@ -12,6 +12,16 @@ import {
   platformConfigEntryReset,
   platformDataSpecialCategoryAccessed,
   platformDemoPinged,
+  platformDocumentCancelled,
+  platformDocumentCompleted,
+  platformDocumentContentAccessed,
+  platformDocumentEvidenceExported,
+  platformDocumentFiled,
+  platformDocumentFilingFailed,
+  platformDocumentGenerated,
+  platformDocumentIssued,
+  platformDocumentSigned,
+  platformDocumentViewed,
   platformLookupValueCreated,
   platformLookupValueDeactivated,
   platformLookupValueDeleted,
@@ -46,6 +56,8 @@ import {
   platformScheduledActionCancelled,
   platformScheduledActionRescheduled,
   platformScheduledActionScheduled,
+  platformTemplateArchived,
+  platformTemplatePublished,
   platformTaskCancelled,
   platformTaskClaimed,
   platformTaskCompleted,
@@ -153,6 +165,25 @@ export const eventTypes = {
   'platform.notification.unresolved': platformNotificationUnresolved,
   'platform.reminder.chased': platformReminderChased,
   'platform.reminder.completed': platformReminderCompleted,
+  // Documents, templates & e-signature (core plan 11, PL-009…012). Template
+  // facts stream on the template row and document facts on the document row
+  // (ADR-0021); the subject person travels as a payload field, so audit and
+  // reporting can still fan out by it. `evidence_exported` and
+  // `content_accessed` are `kind='security'` (ADR-0015) — the second is the
+  // document domain's restricted-category read, deliberately NOT a second
+  // special-category event name (plan 04 owns that one).
+  'platform.template.published': platformTemplatePublished,
+  'platform.template.archived': platformTemplateArchived,
+  'platform.document.generated': platformDocumentGenerated,
+  'platform.document.issued': platformDocumentIssued,
+  'platform.document.viewed': platformDocumentViewed,
+  'platform.document.signed': platformDocumentSigned,
+  'platform.document.completed': platformDocumentCompleted,
+  'platform.document.filed': platformDocumentFiled,
+  'platform.document.filing_failed': platformDocumentFilingFailed,
+  'platform.document.cancelled': platformDocumentCancelled,
+  'platform.document.evidence_exported': platformDocumentEvidenceExported,
+  'platform.document.content_accessed': platformDocumentContentAccessed,
 } as const;
 
 /** The union of all registered event-type names. */
