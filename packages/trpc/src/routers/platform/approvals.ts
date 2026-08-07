@@ -30,6 +30,7 @@ import {
   cancelApprovalRequest,
   createDelegation,
   decideApproval,
+  designatedInboxScopes,
   openApprovalRequest,
   resolveApprovalPolicy,
   revokeDelegation,
@@ -112,8 +113,11 @@ interface SubjectEligibility {
   roleIds: string[];
   /** Roles that may act but are never notified (HL-033). */
   overrideRoleIds: string[];
-  /** True when the policy names a `designated` source (see the note below). */
-  hasDesignated: boolean;
+  /**
+   * Inbox-scope expressions for the policy's `designated` sources — one SQL
+   * subquery each, yielding the subject ids this viewer designate-approves.
+   */
+  designatedScopes: Expression<string>[];
 }
 
 /**
@@ -132,13 +136,18 @@ interface SubjectEligibility {
  * The registered subject types are a small, code-bounded set, so this is a few
  * point reads per inbox load rather than a scan.
  */
-async function subjectEligibility(ctx: TRPCContext, at: Date): Promise<SubjectEligibility[]> {
+async function subjectEligibility(
+  ctx: TRPCContext,
+  viewerPersonId: string,
+  at: Date,
+): Promise<SubjectEligibility[]> {
   const out: SubjectEligibility[] = [];
 
   for (const subjectType of approvalSubjectTypes()) {
-    // `subjectId` is irrelevant to the role half of a policy, and the designated
-    // half is deliberately not resolved here — see the note on `hasDesignated`.
-    const subject = requireApprovalSubject(subjectType);
+    // A placeholder `subjectId` is honest here: this resolves the policy's
+    // *shape* (which roles, which designated sources), and the per-subject half
+    // is answered in SQL by each source's `inboxScope` rather than by resolving
+    // one subject at a time.
     let resolved: Awaited<ReturnType<typeof resolveApprovalPolicy>> | null = null;
     try {
       resolved = await resolveApprovalPolicy(ctx.db, {
@@ -159,12 +168,7 @@ async function subjectEligibility(ctx: TRPCContext, at: Date): Promise<SubjectEl
           error: error instanceof Error ? error.message : String(error),
         },
       );
-      out.push({
-        subjectType,
-        roleIds: [],
-        overrideRoleIds: [],
-        hasDesignated: subject.designatedSources.length > 0,
-      });
+      out.push({ subjectType, roleIds: [], overrideRoleIds: [], designatedScopes: [] });
       continue;
     }
 
@@ -180,7 +184,11 @@ async function subjectEligibility(ctx: TRPCContext, at: Date): Promise<SubjectEl
       overrideRoleIds: overrideKeys
         .map((k) => ids.get(k))
         .filter((id): id is string => id !== undefined),
-      hasDesignated: resolved.policy.approvers.some((a) => a.kind === 'designated'),
+      designatedScopes: designatedInboxScopes(
+        subjectType,
+        resolved.policy.approvers.filter((a) => a.kind === 'designated').map((a) => a.source),
+        viewerPersonId,
+      ),
     });
   }
 
@@ -225,33 +233,49 @@ function eligibilitySql(
       const actingRoleIds = includeOverride
         ? [...entry.roleIds, ...entry.overrideRoleIds]
         : entry.roleIds;
-      if (actingRoleIds.length === 0) return null;
 
-      const roleIdList = sql.join(actingRoleIds.map((id) => sql`${id}::uuid`));
+      const routes: Expression<SqlBool>[] = [];
+
+      if (actingRoleIds.length > 0) {
+        const roleIdList = sql.join(actingRoleIds.map((id) => sql`${id}::uuid`));
+        // Route 1 — a role the policy names (or an override role, when asked for).
+        routes.push(sql<SqlBool>`EXISTS (
+          SELECT 1 FROM platform.role_grant g
+          WHERE g.person_id = ${viewerPersonId}
+            AND g.role_id IN (${roleIdList})
+            AND g.revoked_at IS NULL AND g.deleted_at IS NULL
+            AND g.valid_from <= now()
+            AND (g.valid_until IS NULL OR g.valid_until > now())
+        )`);
+        // Route 2 — carrying the authority of someone who holds one of those roles.
+        routes.push(sql<SqlBool>`EXISTS (
+          SELECT 1 FROM platform.approval_delegation d
+          JOIN platform.role_grant dg ON dg.person_id = d.delegator_person_id
+          WHERE d.delegate_person_id = ${viewerPersonId}
+            AND (d.subject_type IS NULL OR d.subject_type = r.subject_type)
+            AND d.revoked_at IS NULL AND d.deleted_at IS NULL
+            AND d.valid_from <= now() AND d.valid_to > now()
+            AND dg.role_id IN (${roleIdList})
+            AND dg.revoked_at IS NULL AND dg.deleted_at IS NULL
+            AND dg.valid_from <= now()
+            AND (dg.valid_until IS NULL OR dg.valid_until > now())
+        )`);
+      }
+
+      // Route 3 — a `designated` source names this viewer for this subject.
+      // Each source supplies a subquery of subject ids (its `inboxScope`), so
+      // the whole thing stays one statement and the keyset boundary holds.
+      // Designated approvers sit in `approvers[]`, never `overrideRoles`, so
+      // this route is included whether or not overrides were asked for.
+      for (const scope of entry.designatedScopes) {
+        routes.push(sql<SqlBool>`r.subject_id IN ${scope}`);
+      }
+
+      if (routes.length === 0) return null;
+
       return sql<SqlBool>`(
         r.subject_type = ${entry.subjectType}
-        AND (
-          EXISTS (
-            SELECT 1 FROM platform.role_grant g
-            WHERE g.person_id = ${viewerPersonId}
-              AND g.role_id IN (${roleIdList})
-              AND g.revoked_at IS NULL AND g.deleted_at IS NULL
-              AND g.valid_from <= now()
-              AND (g.valid_until IS NULL OR g.valid_until > now())
-          )
-          OR EXISTS (
-            SELECT 1 FROM platform.approval_delegation d
-            JOIN platform.role_grant dg ON dg.person_id = d.delegator_person_id
-            WHERE d.delegate_person_id = ${viewerPersonId}
-              AND (d.subject_type IS NULL OR d.subject_type = r.subject_type)
-              AND d.revoked_at IS NULL AND d.deleted_at IS NULL
-              AND d.valid_from <= now() AND d.valid_to > now()
-              AND dg.role_id IN (${roleIdList})
-              AND dg.revoked_at IS NULL AND dg.deleted_at IS NULL
-              AND dg.valid_from <= now()
-              AND (dg.valid_until IS NULL OR dg.valid_until > now())
-          )
-        )
+        AND (${sql.join(routes, sql` OR `)})
       )`;
     })
     .filter((branch): branch is Exclude<typeof branch, null> => branch !== null);
@@ -429,7 +453,7 @@ export const approvalsRouter = router({
     .query(async ({ ctx, input }) => {
       const actorPersonId = requireActor(ctx);
       const now = new Date();
-      const eligibility = await subjectEligibility(ctx, now);
+      const eligibility = await subjectEligibility(ctx, actorPersonId, now);
       const sortKey =
         input.sort === 'decided' ? DECIDED_SORT_KEY : timestampSortKey('r.created_at');
 

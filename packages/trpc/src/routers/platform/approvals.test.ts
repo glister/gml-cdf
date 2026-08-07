@@ -13,6 +13,7 @@ import {
 import { appRouter } from '../../router.js';
 import type { ContextGrant, TRPCContext } from '../../trpc.js';
 import { ROLE_KEYS, type RoleKey } from '../../lib/constants.js';
+import { managedPersonIds } from '../../lib/scope.js';
 import {
   registerWarningProvider,
   unregisterWarningProviderForTests,
@@ -43,6 +44,45 @@ import {
  */
 
 const SUBJECT = 'platform.pilot_signoff';
+
+/**
+ * A per-team designated-approver subject type, registered once for T15.
+ *
+ * `resolve` and `inboxScope` are the two halves of one fact — "the manager or
+ * deputy of the team this person is in" — and the registration requires both, so
+ * the inbox and the decision surface cannot disagree. `managedPersonIds` is
+ * core 04's existing expression for exactly this relation, reused rather than
+ * re-derived.
+ */
+defineApprovalSubject({
+  subjectType: 'platform.team_signoff',
+  policyDefault: {
+    mode: 'any-one',
+    approvers: [{ kind: 'designated', source: 'team_manager' }],
+  },
+  designatedSources: ['team_manager'],
+  policyDescription: 'test',
+  thresholdDescription: 'test',
+  registeredBy: 'test',
+});
+
+registerDesignatedResolver('platform.team_signoff', 'team_manager', {
+  resolve: async (db_, { subjectId }) => {
+    const rows = await db_
+      .selectFrom('platform.team as t')
+      .innerJoin('platform.team_membership as m', 'm.team_id', 't.id')
+      .select(['t.manager_person_id', 't.deputy_person_id'])
+      .where('m.person_id', '=', subjectId)
+      .where('t.deleted_at', 'is', null)
+      .where(sql<boolean>`m.valid_from <= current_date`)
+      .where(sql<boolean>`(m.valid_to IS NULL OR m.valid_to > current_date)`)
+      .execute();
+    return rows
+      .flatMap((r) => [r.manager_person_id, r.deputy_person_id])
+      .filter(Boolean) as string[];
+  },
+  inboxScope: (viewerPersonId) => managedPersonIds(viewerPersonId),
+});
 
 beforeAll(async () => {
   const { error } = await createMigrator(db).migrateToLatest();
@@ -1043,9 +1083,10 @@ describe('T14 — a policy cannot name a resolver that does not exist', () => {
       );
 
       // …and registering the resolver satisfies it.
-      registerDesignatedResolver('hr.conformance_probe', 'nobody_implemented_me', () =>
-        Promise.resolve([]),
-      );
+      registerDesignatedResolver('hr.conformance_probe', 'nobody_implemented_me', {
+        resolve: () => Promise.resolve([]),
+        inboxScope: () => sql<string>`(SELECT NULL::uuid WHERE false)`,
+      });
       expect(() => assertDesignatedResolversRegistered()).not.toThrow();
     } finally {
       unregisterDesignatedResolverForTests('hr.conformance_probe', 'nobody_implemented_me');
@@ -1068,6 +1109,117 @@ describe('T14 — a policy cannot name a resolver that does not exist', () => {
         at: new Date(),
       }),
     ).rejects.toThrow(/approvals are not enabled/);
+  });
+});
+
+// --- T15 — a designated approver sees the request in their inbox -------------
+
+/**
+ * Core 09 §12.2 Q6, closed 2026-08-07.
+ *
+ * Eligibility is a SQL predicate, and a `designated` source is a TypeScript
+ * function — so before the inverse registration existed, a policy whose only
+ * approver kind was `designated` contributed **no inbox branch at all**. Every
+ * other surface worked, which is what made it dangerous: the approver could
+ * decide from an emailed link and saw an empty Approvals screen.
+ *
+ * The subject type below is the **per-team** shape — "the manager or deputy of
+ * the team this person is in approves for them" — which is what
+ * `managedPersonIds` already expresses for record scope, reused here as the
+ * inbox scope.
+ */
+describe('T15 — designated approvers appear in the inbox (Q6)', () => {
+  const PROBE = 'platform.team_signoff';
+  let manager: string;
+  let member: string;
+  let teamId: string;
+
+  beforeEach(async () => {
+    manager = await insertPerson('Team Manager');
+    member = await insertPerson('Team Member');
+    teamId = newUuidV7();
+
+    await db
+      .insertInto('platform.team')
+      .values({
+        id: teamId,
+        name: 'Probe team',
+        manager_person_id: manager,
+        created_by: manager,
+        updated_by: manager,
+      })
+      .execute();
+    await db
+      .insertInto('platform.team_membership')
+      .values({
+        id: newUuidV7(),
+        team_id: teamId,
+        person_id: member,
+        valid_from: '2020-01-01',
+        created_by: manager,
+        updated_by: manager,
+      })
+      .execute();
+  });
+
+  /** The subject of a probe request is the person it is about. */
+  async function openForMember(): Promise<string> {
+    const result = await db.transaction().execute((trx) =>
+      openApprovalRequest(trx, {
+        subjectType: PROBE,
+        subjectId: member,
+        context: {},
+        requestedBy: requester,
+        correlationId: newUuidV7(),
+        now: new Date(),
+      }),
+    );
+    return result.request!.id;
+  }
+
+  it('lists it for the team manager, and not for an unrelated person', async () => {
+    const requestId = await openForMember();
+
+    const managerInbox = await (await callerFor(manager)).platform.approvals.inbox({ limit: 25 });
+    expect(managerInbox.items.map((i) => i.id)).toContain(requestId);
+    // Reached as a named approver, not via an override role.
+    expect(managerInbox.items[0]!.viaOverride).toBe(false);
+
+    const outsiderInbox = await (await callerFor(outsider)).platform.approvals.inbox({ limit: 25 });
+    expect(outsiderInbox.items.map((i) => i.id)).not.toContain(requestId);
+  });
+
+  it('lets the designated approver decide it', async () => {
+    const requestId = await openForMember();
+    await expect(
+      (await callerFor(manager)).platform.approvals.decide({ requestId, decision: 'approved' }),
+    ).resolves.toMatchObject({ status: 'approved' });
+  });
+
+  /**
+   * The same live-resolution property roles have: end the membership and the
+   * request leaves the manager's inbox, with no writes to any approval row.
+   */
+  it('drops out of the inbox when the membership ends', async () => {
+    const requestId = await openForMember();
+    await db
+      .updateTable('platform.team_membership')
+      .set({ valid_to: '2020-01-02' })
+      .where('team_id', '=', teamId)
+      .execute();
+
+    const after = await (await callerFor(manager)).platform.approvals.inbox({ limit: 25 });
+    expect(after.items.map((i) => i.id)).not.toContain(requestId);
+  });
+
+  it('records the assignee with source=designated', async () => {
+    const requestId = await openForMember();
+    const assignees = await db
+      .selectFrom('platform.approval_assignee')
+      .select(['person_id', 'source'])
+      .where('request_id', '=', requestId)
+      .execute();
+    expect(assignees).toEqual([{ person_id: manager, source: 'designated' }]);
   });
 });
 

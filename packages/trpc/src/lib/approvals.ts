@@ -1,4 +1,4 @@
-import { sql, type Kysely, type Transaction } from 'kysely';
+import { sql, type Expression, type Kysely, type Transaction } from 'kysely';
 import {
   appendEvent,
   isUniqueViolation,
@@ -149,7 +149,39 @@ export type DesignatedResolver = (
   ctx: { subjectType: string; subjectId: string; at: Date },
 ) => Promise<readonly string[]>;
 
-const designatedResolvers = new Map<string, DesignatedResolver>();
+/**
+ * The **inverse**: which subjects does this person designate-approve?
+ *
+ * Returned as a SQL expression yielding subject ids, not as a materialised list,
+ * for two reasons. The inbox is keyset-paginated, so eligibility has to be a
+ * predicate the same query can apply — a list fetched first and filtered after
+ * would corrupt the page boundary (ADR-0004). And the honest answer can be large
+ * (every leave booking of every employee who names me), so materialising it
+ * would put an unbounded `IN` list in the query.
+ *
+ * This is exactly the shape core 04's `managedPersonIds` already uses for
+ * record-level scope, and for the same reasons; a resolver author writing one
+ * has a worked example in `lib/scope.ts`.
+ */
+export type DesignatedInboxScope = (viewerPersonId: string) => Expression<string>;
+
+export interface DesignatedApproverSource {
+  /** Subject → the people who may approve it. Used at read and decide time. */
+  resolve: DesignatedResolver;
+  /**
+   * Person → the subjects they may approve, as SQL. Used by the inbox.
+   *
+   * **Required, deliberately.** It was optional in the first cut and that was a
+   * mistake: a source registered without it resolved correctly everywhere except
+   * the approvals list, so approvers could decide a request from an emailed link
+   * but opened the Approvals screen to find it empty. Making it part of the
+   * registration means the inbox is something you have to answer for rather than
+   * something you can forget (core 09 §12.2 Q6).
+   */
+  inboxScope: DesignatedInboxScope;
+}
+
+const designatedResolvers = new Map<string, DesignatedApproverSource>();
 
 function resolverKey(subjectType: string, source: string): string {
   return `${subjectType}::${source}`;
@@ -158,7 +190,7 @@ function resolverKey(subjectType: string, source: string): string {
 export function registerDesignatedResolver(
   subjectType: string,
   source: string,
-  resolver: DesignatedResolver,
+  definition: DesignatedApproverSource,
 ): void {
   const key = resolverKey(subjectType, source);
   if (designatedResolvers.has(key)) {
@@ -166,7 +198,29 @@ export function registerDesignatedResolver(
       `duplicate designated approver resolver: '${source}' is already registered for '${subjectType}'`,
     );
   }
-  designatedResolvers.set(key, resolver);
+  designatedResolvers.set(key, definition);
+}
+
+/**
+ * The inbox-scope expressions for a subject type's designated sources.
+ *
+ * Returns one expression per source the policy names; the caller ORs them into
+ * that subject type's eligibility branch. An unregistered source yields nothing
+ * rather than throwing — `resolveApprovalPolicy` is the place that fails loudly
+ * on registry drift, and the inbox has already logged and degraded by the time
+ * it would reach here.
+ */
+export function designatedInboxScopes(
+  subjectType: string,
+  sources: readonly string[],
+  viewerPersonId: string,
+): Expression<string>[] {
+  const out: Expression<string>[] = [];
+  for (const source of sources) {
+    const def = designatedResolvers.get(resolverKey(subjectType, source));
+    if (def) out.push(def.inboxScope(viewerPersonId));
+  }
+  return out;
 }
 
 /** Test-only: drop a registration so a suite can substitute a stub. */
@@ -329,7 +383,7 @@ export async function resolveApprovalPolicy(
     }
     designatedMembers.set(
       approver.source,
-      await resolver(db, {
+      await resolver.resolve(db, {
         subjectType: input.subjectType,
         subjectId: input.subjectId,
         at: input.at,
