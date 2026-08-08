@@ -7,4 +7,16 @@ export {
   type EventType,
   type EventPayload,
 } from './registry.js';
-export { platformDemoPinged, workflowTransitionedPayload } from './platform.js';
+export {
+  platformDemoPinged,
+  workflowTransitionedPayload,
+  // Shared calendar & Outlook sync (core plan 12) — the worker's handler and the
+  // pilot procedure both name these definitions rather than the string types.
+  platformCalendarOutlookEventCancelled,
+  platformCalendarOutlookEventCreated,
+  platformCalendarOutlookEventUpdated,
+  platformCalendarOutlookSyncFailed,
+  platformDemoCalendarItemApproved,
+  platformDemoCalendarItemCancelled,
+  platformDemoCalendarItemRescheduled,
+} from './platform.js';

@@ -58,3 +58,4 @@ export * from './tasks/index.js';
 export * from './approvals/index.js';
 export * from './notifications/index.js';
 export * from './documents/index.js';
+export * from './calendar/index.js';
