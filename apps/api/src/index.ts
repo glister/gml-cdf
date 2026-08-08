@@ -1,4 +1,5 @@
 import { serve } from '@hono/node-server';
+import { getConnInfo } from '@hono/node-server/conninfo';
 import { httpInstrumentationMiddleware } from '@hono/otel';
 import { trpcServer } from '@hono/trpc-server';
 import { Hono, type Context } from 'hono';
@@ -17,6 +18,7 @@ import {
   type TRPCContext,
 } from '@repo/trpc';
 import { auth, type Session, type User } from './lib/auth.js';
+import { documentRoutes } from './routes/documents.js';
 import { logger } from './logger.js';
 
 type Variables = {
@@ -66,6 +68,32 @@ const rateLimit = createRateLimiter();
 
 /** Any RFC-4122 UUID shape (accepts an inbound correlation id from a caller). */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The originating client address, as far as it can honestly be known.
+ *
+ * `x-forwarded-for` is a list, and the **first** entry is the client; the rest
+ * are proxies. Trusting the last one would record our own ingress on every
+ * signature. Falls back to the **socket** address, and finally to `null` rather
+ * than to a placeholder — an unknown address recorded as `0.0.0.0` reads like a
+ * fact, and this value ends up in a signature evidence pack.
+ */
+function clientIp(c: Context<{ Variables: Variables }>): string | null {
+  const forwarded = c.req.header('x-forwarded-for');
+  if (forwarded) {
+    const first = forwarded.split(',')[0]?.trim();
+    if (first) return first;
+  }
+  const real = c.req.header('x-real-ip');
+  if (real) return real;
+  // No proxy in front (local dev, or a direct connection): the socket address is
+  // the honest answer, and it is one we always have.
+  try {
+    return getConnInfo(c).remote.address ?? null;
+  } catch {
+    return null;
+  }
+}
 
 const app = new Hono<{ Variables: Variables }>();
 
@@ -133,6 +161,13 @@ function buildContext(c: Context<{ Variables: Variables }>): TRPCContext {
     correlationId,
     actorPersonId: c.get('personId') ?? null,
     grants: c.get('grants') ?? [],
+    // The request's own facts, for SES evidence (core plan 11 §4.7, PL-011).
+    // Taken here rather than accepted as an input: a client-supplied IP would be
+    // evidence of what the client claimed, which is exactly what a repudiation
+    // challenge attacks. `x-forwarded-for` is first because Container Apps
+    // terminates TLS at an ingress — the socket address would be the proxy's.
+    requestIp: clientIp(c),
+    userAgent: c.req.header('user-agent') ?? null,
     user: user
       ? {
           id: user.id,
@@ -156,6 +191,18 @@ app.use(
       buildContext(c as Context<{ Variables: Variables }>) as unknown as Record<string, unknown>,
   }),
 );
+
+// Binary document routes (core plan 11 §5.1). Session-authenticated and
+// record-scoped through the same helpers the tRPC router uses; they are Hono
+// routes only because tRPC is a JSON transport and a PDF is not JSON.
+app.use('/documents/*', async (c, next) => {
+  const result = await auth.api.getSession({ headers: c.req.raw.headers });
+  const personId = (result as { personId?: string | null } | null)?.personId ?? null;
+  c.set('personId', personId);
+  c.set('grants', await loadGrantsForPerson(db, personId));
+  await next();
+});
+app.route('/', documentRoutes);
 
 // Health check.
 app.get('/', (c) => c.json({ status: 'ok' }));

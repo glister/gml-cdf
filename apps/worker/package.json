@@ -23,6 +23,7 @@
     "@repo/env": "workspace:*",
     "@repo/identity": "workspace:*",
     "@repo/logging": "workspace:*",
+    "@repo/m365": "workspace:*",
     "@repo/service-bus": "workspace:*",
     "@repo/trpc": "workspace:*",
     "@repo/workflow": "workspace:*",

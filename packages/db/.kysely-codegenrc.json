@@ -26,7 +26,15 @@
       "platform.notification.channels": "('in_app' | 'email' | 'push')[]",
       "platform.notification_delivery.resolved_via": "'role' | 'policy' | 'contextual'",
       "platform.notification_delivery.channel": "'in_app' | 'email' | 'push'",
-      "platform.notification_delivery.status": "Generated<'pending' | 'sent' | 'failed' | 'dead' | 'suppressed'>"
+      "platform.notification_delivery.status": "Generated<'pending' | 'sent' | 'failed' | 'dead' | 'suppressed'>",
+      "platform.template.status": "Generated<'draft' | 'published' | 'archived'>",
+      "platform.template.default_issue_mode": "Generated<'read_only' | 'read_and_sign' | 'no_action' | 'receipt_only' | 'read_and_understood' | 'qa_response' | 'text_response' | 'file_upload'>",
+      "platform.template.category_kind": "Generated<'document_category'>",
+      "platform.document.issue_mode": "'read_only' | 'read_and_sign' | 'no_action' | 'receipt_only' | 'read_and_understood' | 'qa_response' | 'text_response' | 'file_upload'",
+      "platform.document.status": "Generated<'draft' | 'issued' | 'viewed' | 'signed' | 'completed' | 'cancelled'>",
+      "platform.document.filing_state": "Generated<'none' | 'pending' | 'filed' | 'failed'>",
+      "platform.document.category_kind": "Generated<'document_category'>",
+      "platform.signature_evidence.method": "'typed_name' | 'signature_pad'"
     }
   }
 }

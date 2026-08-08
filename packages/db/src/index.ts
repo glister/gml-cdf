@@ -6,6 +6,7 @@ import type {
   PlatformApprovalDelegation,
   PlatformApprovalRequest,
   PlatformConfigEntry,
+  PlatformDocument,
   PlatformDomainEvent,
   PlatformEventConsumption,
   PlatformLookup,
@@ -18,10 +19,12 @@ import type {
   PlatformRole,
   PlatformRoleGrant,
   PlatformScheduledAction,
+  PlatformSignatureEvidence,
   PlatformTask,
   PlatformTaskDependency,
   PlatformTeam,
   PlatformTeamMembership,
+  PlatformTemplate,
   PlatformWorkflowInstance,
   PlatformWorkflowTransition,
   Session,
@@ -75,6 +78,7 @@ export type {
   PlatformApprovalDelegation,
   PlatformApprovalRequest,
   PlatformConfigEntry,
+  PlatformDocument,
   PlatformDomainEvent,
   PlatformEventConsumption,
   PlatformLookup,
@@ -87,10 +91,12 @@ export type {
   PlatformRole,
   PlatformRoleGrant,
   PlatformScheduledAction,
+  PlatformSignatureEvidence,
   PlatformTask,
   PlatformTaskDependency,
   PlatformTeam,
   PlatformTeamMembership,
+  PlatformTemplate,
   PlatformWorkflowInstance,
   PlatformWorkflowTransition,
   Session,
@@ -223,3 +229,19 @@ export type NotificationUpdate = Updateable<PlatformNotification>;
 export type NotificationDeliveryRecord = Selectable<PlatformNotificationDelivery>;
 export type NewNotificationDelivery = Insertable<PlatformNotificationDelivery>;
 export type NotificationDeliveryUpdate = Updateable<PlatformNotificationDelivery>;
+
+// Documents, templates & e-signature (core plan 11, PL-009…012). `template` is a
+// versioned snapshot class and `document` operational state — both mutable in
+// their permitted directions and both guarded by triggers. `signature_evidence`
+// has no `Updateable`: the table is append-only at the database level, so a type
+// permitting an update would describe an operation Postgres refuses.
+export type TemplateRecord = Selectable<PlatformTemplate>;
+export type NewTemplate = Insertable<PlatformTemplate>;
+export type TemplateUpdate = Updateable<PlatformTemplate>;
+
+export type DocumentRecord = Selectable<PlatformDocument>;
+export type NewDocument = Insertable<PlatformDocument>;
+export type DocumentUpdate = Updateable<PlatformDocument>;
+
+export type SignatureEvidenceRecord = Selectable<PlatformSignatureEvidence>;
+export type NewSignatureEvidence = Insertable<PlatformSignatureEvidence>;

@@ -116,14 +116,47 @@ describe('the registry as a whole', () => {
     }
   });
 
+  const personish = /person_?id|_by$|email/i;
+
+  /**
+   * Strip `{placeholder}` tokens before matching.
+   *
+   * A substitution token is not a person reference: `people/{person_id}/` names
+   * nobody — it is a *shape* the filing worker expands per document (core plan
+   * 11 §6). Without this the tripwire fires on every later plan that configures a
+   * path or a template, and a check that cries wolf gets deleted rather than
+   * fixed. Everything outside the braces is still matched, so a literal id, a
+   * `"…_by"` key or an address in a default trips exactly as before — asserted
+   * below, because a tripwire nobody re-arms after loosening it is worse than
+   * none.
+   */
+  const withoutPlaceholders = (value: string) => value.replace(/\{[a-z0-9_]+\}/gi, '');
+
   it('holds no key whose default value embeds a person reference (§4.5)', () => {
     // A blunt check, but it is the rule that most needs a tripwire: policies
     // reference roles, never named individuals (PL-021). A key wanting to point
     // at a person is a design error, and this is where it surfaces.
-    const personish = /person_?id|_by$|email/i;
     for (const [name, def] of configRegistry) {
-      const serialised = JSON.stringify(def.defaultValue ?? null);
+      const serialised = withoutPlaceholders(JSON.stringify(def.defaultValue ?? null));
       expect(serialised, `${name} default looks like it names a person`).not.toMatch(personish);
     }
+  });
+
+  it('the person-reference tripwire is still armed for real references', () => {
+    // The shapes the rule catches, none of which can hide inside braces — which
+    // is the whole basis for stripping placeholders above.
+    expect(withoutPlaceholders(JSON.stringify({ person_id: 'abc' }))).toMatch(personish);
+    expect(withoutPlaceholders(JSON.stringify({ personId: 'abc' }))).toMatch(personish);
+    expect(withoutPlaceholders(JSON.stringify({ notify: 'email' }))).toMatch(personish);
+    // And a placeholder alone is not a reference.
+    expect(withoutPlaceholders(JSON.stringify('people/{person_id}/'))).not.toMatch(personish);
+
+    // NOTE (core plan 11, 2026-08-07): the pattern's third alternative, `_by$`,
+    // is **dead**. It is matched against `JSON.stringify(...)` output, which
+    // always ends in `"`, `}`, `]` or a digit — never in `_by` — so no value can
+    // reach it. Left alone rather than fixed here: the guard belongs to core plan
+    // 06, and tightening it could newly fail keys this plan does not own.
+    // Reported for that plan to close.
+    expect(JSON.stringify({ approved_by: 'abc' })).not.toMatch(/_by$/);
   });
 });

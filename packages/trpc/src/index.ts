@@ -221,3 +221,112 @@ export * from './lib/constants.js';
 export * from './lib/scope.js';
 export * from './lib/field-classification.js';
 export * from './lib/special-category-journal.js';
+
+// --- Documents, templates & e-signature (core plan 11, PL-009…012) ----------
+
+/**
+ * The document engine's transactional services (§4.6/§4.7) — the single write
+ * path for `platform.template`, `platform.document` and
+ * `platform.signature_evidence` (ADR-0022).
+ */
+export {
+  assertCaptureSchema,
+  cancelDocument,
+  completeDocument,
+  deriveTemplateFields,
+  documentVisibility,
+  generateDocuments,
+  isFilingConfigured,
+  isLockedSql,
+  issueDocuments,
+  loadDocumentConfig,
+  markEvidenceFiled,
+  markFiled,
+  markResponseFiled,
+  precedingIncompleteSql,
+  recordDocumentView,
+  recordFilingFailure,
+  retryFiling,
+  signDocument,
+  stageRender,
+  visibleCategoryCodes,
+  DocumentForbiddenError,
+  DocumentNotFoundError,
+  DocumentStateError,
+  DOCUMENT_EFFECTS,
+  DOCUMENT_REMINDER_KIND,
+  DOCUMENT_STREAM_TYPE,
+  TEMPLATE_STREAM_TYPE,
+  type DocumentEngineConfig,
+} from './lib/documents.js';
+
+/** The canonical digest over rendered bytes (§9.2; the format is in `@repo/domain`). */
+export { computeDocumentHash } from './lib/document-hash.js';
+
+/**
+ * The renderer and document-store ports (§4.6).
+ *
+ * The same inversion the email channel adapter uses: this package owns the
+ * contracts, `apps/worker` owns the concrete Gotenberg and Graph services and
+ * registers them at boot. A static import of either here would put a PDF
+ * renderer and a Graph SDK into the browser bundle.
+ */
+export {
+  hasDocumentStore,
+  registerDocumentRenderer,
+  registerDocumentStore,
+  requireDocumentRenderer,
+  requireDocumentStore,
+  setDocumentPortsForTests,
+  DocumentPortMissingError,
+  type DocumentRenderer,
+  type DocumentStore,
+} from './lib/document-ports.js';
+
+/**
+ * The document engine's workflow effects (§4.6/§4.7).
+ *
+ * Exported for its **module-load side effects**: importing `@repo/trpc`
+ * registers `document.render_and_file`, `document.file_evidence` and
+ * `document.file_response`, exactly as the task and approval engines do.
+ */
+import './lib/document-effects.js';
+
+/**
+ * The document engine's notification kinds, reminder kind and subject context
+ * (§9.5). Imported for its module-load side effects, exactly as the effects are:
+ * the registries must be populated in every process that sends or chases.
+ */
+/**
+ * The personal data this engine holds, declared for core plan 16 (§9.5,
+ * NFR-003). A typed constant rather than a note in a plan document, so the
+ * erasure process imports it instead of rediscovering it from the schema.
+ */
+export {
+  DOCUMENT_ERASURE_SURFACE,
+  type ErasureSurfaceEntry,
+  type ErasureTreatment,
+} from './lib/document-erasure.js';
+
+export {
+  documentCompletedKind,
+  documentFilingFailedKind,
+  documentIssuedKind,
+  documentOutstandingReminder,
+} from './lib/document-notify.js';
+
+/** The read-access helper the Hono content routes share with the router (§5.1). */
+export { documentAccess } from './routers/platform/documents.js';
+
+/**
+ * Record- and role-level helpers, re-exported for the API's **binary** routes
+ * (core plan 11 §5.1).
+ *
+ * `apps/api` mounts three Hono routes that must apply exactly the same
+ * authorisation as the tRPC procedures beside them. Re-exporting from the
+ * security boundary — rather than letting the app import `@repo/domain` and
+ * `lib/scope.ts` directly — keeps one door: a change to how scope is computed
+ * cannot leave the streaming routes on the old rule.
+ */
+export { scopeFor, scopePersons, allocatedPersonIds, managedPersonIds } from './lib/scope.js';
+export { hasRole, ROLE_KEYS, type RoleKey } from '@repo/domain';

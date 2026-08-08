@@ -1203,3 +1203,226 @@ export const platformReminderChased = defineEvent(
     nextDueAt: z.iso.datetime().nullable(),
   }),
 );
+
+// --- Documents, templates & e-signature (core plan 11 §4.2, PL-009…012) ------
+//
+// Every document fact is journalled in the same transaction as its state change
+// (ADR-0010). Payloads are PII-minimal (ADR-0019): ids, the template key and
+// version, the category **code**, the content hash — never a name, never merge
+// data, never a line of document content. The strictness of these schemas is
+// what makes that structural rather than a review rule.
+//
+// Streams follow ADR-0021: `stream_type` is the event type's `<module>.<entity>`
+// prefix, so template events hang on the template row and document events on the
+// document row. The subject person travels as a payload field, exactly as plans
+// 07/08/09 carry their subjects — an audit trail or a reporting feed fans out by
+// it without the stream having to be the subject.
+
+/** A category code from `platform.lookup` — safe in a payload; a name is not. */
+const categoryCode = z.string().max(64);
+/** `sha256:<hex>` (core plan 11 §9.2). */
+const contentHash = z.string().max(80);
+const issueMode = z.enum([
+  'read_only',
+  'read_and_sign',
+  'no_action',
+  'receipt_only',
+  'read_and_understood',
+  'qa_response',
+  'text_response',
+  'file_upload',
+]);
+
+/**
+ * A template version was published — `kind='admin'`.
+ *
+ * Admin rather than domain, and for the same reason a configuration change is:
+ * publishing a template changes what the system will say to people, without any
+ * business fact having occurred. Plan 13's audit view groups it with the other
+ * levers someone can pull.
+ */
+export const platformTemplatePublished = defineEvent(
+  'platform.template.published',
+  1,
+  z.strictObject({
+    templateKey: z.string().max(64),
+    version: z.number().int().min(1),
+    categoryCode,
+    defaultIssueMode: issueMode,
+    /** The declared merge-field paths — `person.full_name`, not their values. */
+    mergeFields: z.array(z.string().max(140)),
+  }),
+);
+
+/** A published template version was retired — `kind='admin'`. */
+export const platformTemplateArchived = defineEvent(
+  'platform.template.archived',
+  1,
+  z.strictObject({
+    templateKey: z.string().max(64),
+    version: z.number().int().min(1),
+  }),
+);
+
+/**
+ * A draft document was generated from a template version.
+ *
+ * `templateVersion` is on the payload as well as being reachable through
+ * `templateId`, because the whole point of version pinning is that this question
+ * stays answerable from the journal alone after the template family has moved on
+ * (AC-D3).
+ */
+export const platformDocumentGenerated = defineEvent(
+  'platform.document.generated',
+  1,
+  z.strictObject({
+    templateId: z.uuid().nullable(),
+    templateKey: z.string().max(64).nullable(),
+    templateVersion: z.number().int().min(1).nullable(),
+    categoryCode,
+    subjectPersonId: z.uuid(),
+    issueMode,
+  }),
+);
+
+/** The issue action: the document now requires something of its subject. */
+export const platformDocumentIssued = defineEvent(
+  'platform.document.issued',
+  1,
+  z.strictObject({
+    categoryCode,
+    subjectPersonId: z.uuid(),
+    issueMode,
+    issueGroupId: z.uuid().nullable(),
+    sequenceNo: z.number().int().min(1).nullable(),
+    /**
+     * What the relay fans onto the `effects` queue — the render-and-file step
+     * (§4.6). Carried on the event rather than enqueued directly, so the
+     * consequence cannot be split from the issue that asked for it (the
+     * 2026-08-07 payload-carried-effects rule).
+     */
+    effects: z.array(effectRef).optional(),
+  }),
+);
+
+/** The subject opened it for the first time (ON-016's status fact). */
+export const platformDocumentViewed = defineEvent(
+  'platform.document.viewed',
+  1,
+  z.strictObject({ subjectPersonId: z.uuid() }),
+);
+
+/**
+ * SES evidence was captured.
+ *
+ * The hash is here on purpose: it is the one field that lets the journal
+ * corroborate the evidence row rather than merely point at it, and it is not
+ * personal data by any reading.
+ */
+export const platformDocumentSigned = defineEvent(
+  'platform.document.signed',
+  1,
+  z.strictObject({
+    signatureEvidenceId: z.uuid(),
+    signatoryPersonId: z.uuid(),
+    method: z.enum(['typed_name', 'signature_pad']),
+    documentHash: contentHash,
+    ackScrolled: z.boolean(),
+    /** Builds and files the evidence certificate alongside the document. */
+    effects: z.array(effectRef).optional(),
+  }),
+);
+
+/**
+ * The document is done, however its mode defines done.
+ *
+ * Emitted alongside `signed` for a signature document rather than instead of it,
+ * so a consumer waiting for "this person has finished with it" — a sequence
+ * advance, an onboarding provisioning trigger — subscribes to one event type
+ * regardless of which of the eight modes was used.
+ */
+export const platformDocumentCompleted = defineEvent(
+  'platform.document.completed',
+  1,
+  z.strictObject({
+    subjectPersonId: z.uuid(),
+    issueMode,
+    issueGroupId: z.uuid().nullable(),
+    sequenceNo: z.number().int().min(1).nullable(),
+    /** Whether a response payload was captured. Never the responses. */
+    hasCaptureData: z.boolean(),
+    /**
+     * A consequence of the completion itself — filing an uploaded response
+     * (§5.1). Optional because most completions have none.
+     */
+    effects: z.array(effectRef).optional(),
+  }),
+);
+
+/** The worker confirmed the bytes are in SharePoint (PL-010). */
+export const platformDocumentFiled = defineEvent(
+  'platform.document.filed',
+  1,
+  z.strictObject({
+    spItemId: z.string().max(300),
+    contentHash,
+    attempts: z.number().int().min(1),
+  }),
+);
+
+/** Filing gave up. Consumed by notifications (admin alert) and audit. */
+export const platformDocumentFilingFailed = defineEvent(
+  'platform.document.filing_failed',
+  1,
+  z.strictObject({
+    attempts: z.number().int().min(1),
+    /** The adapter's message, truncated. Diagnostic text, never document content. */
+    error: z.string().max(500),
+  }),
+);
+
+/** An issued document was withdrawn. Superseded, never deleted (§7). */
+export const platformDocumentCancelled = defineEvent(
+  'platform.document.cancelled',
+  1,
+  z.strictObject({
+    subjectPersonId: z.uuid(),
+    reason: z.string().min(1).max(2000),
+    /** The status it was withdrawn from — a signed document cannot be. */
+    fromStatus: z.enum(['draft', 'issued', 'viewed']),
+  }),
+);
+
+/** An evidence pack was exported — `kind='security'` (PL-011, ON-020). */
+export const platformDocumentEvidenceExported = defineEvent(
+  'platform.document.evidence_exported',
+  1,
+  z.strictObject({
+    signatureEvidenceId: z.uuid().nullable(),
+    /** Whether the recomputed hash still matched the stored bytes. */
+    hashMatches: z.boolean(),
+  }),
+);
+
+/**
+ * A **non-subject** streamed the content of a restricted-category document —
+ * `kind='security'` (ADR-0015: sensitive reads are journalled).
+ *
+ * This is the document domain's restricted-category read event, and it is
+ * deliberately **not** a special-category one. When special-category document
+ * types arrive (fit notes, occupational-health reports — HR plans), those reads
+ * additionally go through plan 04's `journalSpecialCategoryRead()`, which emits
+ * the canonical `platform.data.special_category.accessed`. Minting a second
+ * special-category name here would give plan 13's read-audit two sources to
+ * reconcile.
+ */
+export const platformDocumentContentAccessed = defineEvent(
+  'platform.document.content_accessed',
+  1,
+  z.strictObject({
+    categoryCode,
+    subjectPersonId: z.uuid(),
+    /** Why the reader was entitled to it — the thing an auditor asks next. */
+    viaRole: z.string().max(64),
+  }),
+);

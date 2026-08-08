@@ -5,11 +5,16 @@ import {
   APPROVAL_DECISIONS,
   APPROVAL_SORTS,
   APPROVAL_STATUSES,
+  COMPLETION_ACTIONS,
   CONFIG_SORTS,
   DELIVERY_SORTS,
   DELIVERY_STATUSES,
+  DOCUMENT_SORTS,
+  DOCUMENT_STATUSES,
   FIELD_CLASSES,
+  FILING_STATES,
   GRANT_STATES,
+  ISSUE_MODES,
   LOOKUP_LIST_TYPES,
   LOOKUP_SORTS,
   MODULE_KEYS,
@@ -25,12 +30,15 @@ import {
   ROLE_KEYS,
   SCHEDULED_ACTION_SORTS,
   SCHEDULED_ACTION_STATUSES,
+  SIGNATURE_METHODS,
   SORT_DIRECTIONS,
   TASK_DEPENDENCY_KINDS,
   TASK_DUE_MODES,
   TASK_SORTS,
   TASK_STATUSES,
   TEAM_SORTS,
+  TEMPLATE_SORTS,
+  TEMPLATE_STATUSES,
   USER_ROLES,
   WORKFLOW_INSTANCE_SORTS,
 } from './lib/constants.js';
@@ -1467,3 +1475,327 @@ export const adminDeliveriesOutput = z.object({
   items: z.array(deliveryDiagnosticSchema),
   nextCursor: z.string().nullable(),
 });
+
+// --- Documents, templates & e-signature (core plan 11 §5.1, PL-009…012) -----
+
+export const templateStatusSchema = z.enum(TEMPLATE_STATUSES);
+export const issueModeSchema = z.enum(ISSUE_MODES);
+export const documentStatusSchema = z.enum(DOCUMENT_STATUSES);
+export const filingStateSchema = z.enum(FILING_STATES);
+export const signatureMethodSchema = z.enum(SIGNATURE_METHODS);
+export const completionActionSchema = z.enum(COMPLETION_ACTIONS);
+
+/**
+ * A template body. Bounded because it is rendered to PDF by a service with its
+ * own limits, and an unbounded text column reachable from an admin form is how a
+ * renderer times out in production rather than in review.
+ */
+const bodyHtmlSchema = z.string().min(1).max(200_000);
+
+/** A stable template family key — matches the column's CHECK exactly. */
+const templateKeySchema = z
+  .string()
+  .regex(/^[a-z][a-z0-9_]{0,63}$/, 'a lowercase identifier, e.g. welcome_letter');
+
+/** A registered merge context name (`@repo/domain`'s registry validates it). */
+const mergeContextSchema = z.string().regex(/^[a-z][a-z0-9_]*$/);
+
+/** A registered capture schema key. */
+const captureSchemaKeySchema = z.string().regex(/^[a-z][a-z0-9_]*$/);
+
+/** One declared merge field, as derived from the body at save (§4.5). */
+export const mergeFieldSchema = z.object({
+  path: z.string(),
+  context: z.string(),
+  field: z.string(),
+  required: z.boolean(),
+});
+export type MergeFieldOutput = z.infer<typeof mergeFieldSchema>;
+
+export const templateSummarySchema = z.object({
+  id: z.uuid(),
+  templateKey: z.string(),
+  version: z.number().int().min(1),
+  name: z.string(),
+  categoryId: z.uuid(),
+  categoryCode: z.string(),
+  categoryLabel: z.string(),
+  defaultIssueMode: issueModeSchema,
+  status: templateStatusSchema,
+  publishedAt: z.iso.datetime().nullable(),
+  updatedAt: z.iso.datetime(),
+  /** Whether this is the highest published version for its key (§4.1). */
+  isCurrent: z.boolean(),
+});
+export type TemplateSummary = z.infer<typeof templateSummarySchema>;
+
+export const templateDetailSchema = templateSummarySchema.extend({
+  bodyHtml: z.string(),
+  mergeFields: z.array(mergeFieldSchema),
+  mergeContexts: z.array(z.string()),
+  captureSchemaKey: z.string().nullable(),
+  archivedAt: z.iso.datetime().nullable(),
+});
+export type TemplateDetail = z.infer<typeof templateDetailSchema>;
+
+export const listTemplatesInput = z.object({
+  cursor: z.string().nullish(),
+  limit: z.number().int().min(1).max(100).default(25),
+  status: z.array(templateStatusSchema).min(1).max(3).optional(),
+  categoryId: z.uuid().optional(),
+  search: z.string().trim().max(200).optional(),
+  /** Show every version rather than the current one per key. */
+  allVersions: z.boolean().default(false),
+  sort: z.enum(TEMPLATE_SORTS).default('updated_at'),
+  sortDir: z.enum(SORT_DIRECTIONS).default('desc'),
+});
+export type ListTemplatesInput = z.infer<typeof listTemplatesInput>;
+
+export const listTemplatesOutput = z.object({
+  items: z.array(templateSummarySchema),
+  nextCursor: z.string().nullable(),
+});
+
+export const templateRefInput = z.object({ id: z.uuid() });
+export const templateKeyRefInput = z.object({ templateKey: templateKeySchema });
+
+export const createTemplateInput = z.object({
+  templateKey: templateKeySchema,
+  name: z.string().trim().min(1).max(200),
+  categoryId: z.uuid(),
+  bodyHtml: bodyHtmlSchema,
+  mergeContexts: z.array(mergeContextSchema).max(10).default([]),
+  defaultIssueMode: issueModeSchema.default('read_and_sign'),
+  captureSchemaKey: captureSchemaKeySchema.nullish(),
+});
+export type CreateTemplateInput = z.infer<typeof createTemplateInput>;
+
+export const updateTemplateInput = z.object({
+  id: z.uuid(),
+  name: z.string().trim().min(1).max(200).optional(),
+  categoryId: z.uuid().optional(),
+  bodyHtml: bodyHtmlSchema.optional(),
+  mergeContexts: z.array(mergeContextSchema).max(10).optional(),
+  defaultIssueMode: issueModeSchema.optional(),
+  captureSchemaKey: captureSchemaKeySchema.nullish(),
+});
+export type UpdateTemplateInput = z.infer<typeof updateTemplateInput>;
+
+/** Preview a body against sample data. Nothing is persisted (§5.1). */
+export const previewTemplateInput = z.object({
+  bodyHtml: bodyHtmlSchema,
+  mergeContexts: z.array(mergeContextSchema).max(10),
+  /** Omitted: the engine invents plausible sample values per declared field. */
+  sampleData: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
+});
+
+export const previewTemplateOutput = z.object({
+  html: z.string(),
+  mergeFields: z.array(mergeFieldSchema),
+  /** Field paths the sample data did not carry — rendered blank. */
+  blanks: z.array(z.string()),
+});
+
+/** The merge-field palette the editor offers (§9.4). */
+export const mergeContextCatalogueOutput = z.array(
+  z.object({
+    name: z.string(),
+    description: z.string(),
+    fields: z.array(z.object({ path: z.string(), field: z.string(), required: z.boolean() })),
+  }),
+);
+
+/** The registered response sets a template may ask for (§4.3). */
+export const captureSchemaCatalogueOutput = z.array(
+  z.object({
+    key: z.string(),
+    description: z.string(),
+    questions: z.array(
+      z.object({
+        name: z.string(),
+        label: z.string(),
+        kind: z.enum(['text', 'long_text', 'boolean', 'choice', 'number', 'date']),
+        options: z.array(z.string()).optional(),
+        required: z.boolean(),
+      }),
+    ),
+  }),
+);
+
+// --- Documents ---------------------------------------------------------------
+
+export const documentSummarySchema = z.object({
+  id: z.uuid(),
+  title: z.string(),
+  categoryCode: z.string(),
+  categoryLabel: z.string(),
+  issueMode: issueModeSchema,
+  status: documentStatusSchema,
+  filingState: filingStateSchema,
+  subjectPersonId: z.uuid(),
+  templateKey: z.string().nullable(),
+  templateVersion: z.number().int().nullable(),
+  issueGroupId: z.uuid().nullable(),
+  sequenceNo: z.number().int().nullable(),
+  /**
+   * Computed **in SQL** over the whole group (§4.3, ADR-0004) — never by
+   * counting what happened to be on the loaded page.
+   */
+  isLocked: z.boolean(),
+  /** Whether the render step has produced bytes yet ("Preparing document…"). */
+  isRendered: z.boolean(),
+  issuedAt: z.iso.datetime().nullable(),
+  viewedAt: z.iso.datetime().nullable(),
+  signedAt: z.iso.datetime().nullable(),
+  completedAt: z.iso.datetime().nullable(),
+  completedBy: z.uuid().nullable(),
+  createdAt: z.iso.datetime(),
+});
+export type DocumentSummary = z.infer<typeof documentSummarySchema>;
+
+export const documentDetailSchema = documentSummarySchema.extend({
+  bodyHtml: z.string().nullable(),
+  contentHash: z.string().nullable(),
+  captureSchemaKey: z.string().nullable(),
+  captureData: z.record(z.string(), z.unknown()).nullable(),
+  textResponse: z.string().nullable(),
+  spWebUrl: z.string().nullable(),
+  filingAttempts: z.number().int().min(0),
+  filingError: z.string().nullable(),
+  cancelReason: z.string().nullable(),
+  /** Resolved for the viewer, so the screen never re-derives the control. */
+  requireScrollAck: z.boolean(),
+});
+export type DocumentDetail = z.infer<typeof documentDetailSchema>;
+
+export const listDocumentsInput = z.object({
+  cursor: z.string().nullish(),
+  limit: z.number().int().min(1).max(100).default(25),
+  /** Omitted means "mine" — the self case, without the client naming itself. */
+  subjectPersonId: z.uuid().optional(),
+  status: z.array(documentStatusSchema).min(1).max(6).optional(),
+  filingState: z.array(filingStateSchema).min(1).max(4).optional(),
+  categoryId: z.uuid().optional(),
+  search: z.string().trim().max(200).optional(),
+  /** Outstanding only — the subject's "what do I still have to do?" filter. */
+  outstandingOnly: z.boolean().default(false),
+  sort: z.enum(DOCUMENT_SORTS).default('created_at'),
+  sortDir: z.enum(SORT_DIRECTIONS).default('desc'),
+});
+export type ListDocumentsInput = z.infer<typeof listDocumentsInput>;
+
+export const listDocumentsOutput = z.object({
+  items: z.array(documentSummarySchema),
+  nextCursor: z.string().nullable(),
+});
+
+export const generateDocumentsInput = z.object({
+  subjectPersonId: z.uuid(),
+  items: z
+    .array(
+      z.object({
+        templateId: z.uuid(),
+        /** Overrides the title derived from the template name. */
+        title: z.string().trim().min(1).max(200).optional(),
+        /** The data bag, validated against the template's declared contexts. */
+        mergeData: z.record(z.string(), z.record(z.string(), z.unknown())).default({}),
+      }),
+    )
+    .min(1)
+    .max(20),
+  streamRef: z.object({ streamType: z.string().min(1).max(100), streamId: z.uuid() }).nullish(),
+});
+export type GenerateDocumentsInput = z.infer<typeof generateDocumentsInput>;
+
+export const updateDocumentDraftInput = z.object({
+  id: z.uuid(),
+  title: z.string().trim().min(1).max(200).optional(),
+  bodyHtml: bodyHtmlSchema.optional(),
+});
+
+export const issueDocumentsInput = z.object({
+  /** Ordered. With `ordered: true`, this array IS the sequence. */
+  documentIds: z.array(z.uuid()).min(1).max(20),
+  /** Overrides each document's own mode. Rarely wanted. */
+  issueMode: issueModeSchema.optional(),
+  ordered: z.boolean().default(false),
+});
+export type IssueDocumentsInput = z.infer<typeof issueDocumentsInput>;
+
+export const signDocumentInput = z.object({
+  documentId: z.uuid(),
+  method: signatureMethodSchema.default('typed_name'),
+  typedName: z.string().trim().min(1).max(200),
+  /**
+   * The hash the client displayed. Not a cache check: it is the difference
+   * between "signed a document" and "signed **these bytes**" (§4.3).
+   */
+  expectedHash: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+  ackScrolled: z.boolean(),
+  /** For a signature document that also declares a capture schema (ON-026). */
+  captureData: z.record(z.string(), z.unknown()).nullish(),
+});
+export type SignDocumentInput = z.infer<typeof signDocumentInput>;
+
+export const completeDocumentInput = z.object({
+  documentId: z.uuid(),
+  action: completionActionSchema,
+  captureData: z.record(z.string(), z.unknown()).nullish(),
+  textResponse: z.string().trim().max(10_000).nullish(),
+  ackScrolled: z.boolean().default(false),
+});
+export type CompleteDocumentInput = z.infer<typeof completeDocumentInput>;
+
+export const cancelDocumentInput = z.object({
+  documentId: z.uuid(),
+  reason: z.string().trim().min(1).max(2000),
+});
+
+/** The evidence pack (§4.1). Streamed PDF bytes travel over the Hono route. */
+export const evidencePackSchema = z.object({
+  document: z.object({
+    id: z.uuid(),
+    title: z.string(),
+    category: z.string(),
+    templateKey: z.string().nullable(),
+    templateVersion: z.number().int().nullable(),
+    contentHash: z.string().nullable(),
+    sharepoint: z.object({
+      siteId: z.string().nullable(),
+      driveId: z.string().nullable(),
+      itemId: z.string().nullable(),
+      webUrl: z.string().nullable(),
+    }),
+  }),
+  issue: z.object({
+    issuedBy: z.uuid().nullable(),
+    issuedAt: z.iso.datetime().nullable(),
+    issueMode: issueModeSchema,
+  }),
+  signature: z
+    .object({
+      signatoryPersonId: z.uuid(),
+      method: signatureMethodSchema,
+      typedName: z.string().nullable(),
+      signedAt: z.iso.datetime(),
+      ip: z.string(),
+      userAgent: z.string(),
+      ackScrolled: z.boolean(),
+      documentHash: z.string(),
+    })
+    .nullable(),
+  events: z.array(
+    z.object({
+      eventType: z.string(),
+      occurredAt: z.iso.datetime(),
+      actorPersonId: z.uuid().nullable(),
+    }),
+  ),
+  verification: z.object({
+    hashRecomputedAtExport: z.boolean(),
+    hashMatches: z.boolean(),
+    /** Why the hash could not be recomputed, when it could not be. */
+    note: z.string().nullable(),
+  }),
+});
+export type EvidencePack = z.infer<typeof evidencePackSchema>;

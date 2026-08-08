@@ -182,6 +182,10 @@ function makeCtx(overrides: Partial<TRPCContext> = {}): TRPCContext {
     correlationId: newUuidV7(),
     actorPersonId,
     grants: [],
+    // Core plan 11 §4.7: SES evidence records where a signature came from,
+    // taken server-side. Null outside an HTTP request — nothing signs from here.
+    requestIp: null,
+    userAgent: null,
     ...overrides,
   };
 }

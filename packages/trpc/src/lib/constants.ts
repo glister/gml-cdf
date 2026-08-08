@@ -295,3 +295,35 @@ export type DeliveryStatus = (typeof DELIVERY_STATUSES)[number];
 /** Sort columns for the admin delivery-diagnostics table. */
 export const DELIVERY_SORTS = ['created_at', 'attempted_at'] as const;
 export type DeliverySort = (typeof DELIVERY_SORTS)[number];
+
+// --- Documents, templates & e-signature (core plan 11, PL-009…012) ----------
+
+/**
+ * The eight required actions a document can be issued with (PL-009).
+ *
+ * Re-exported from `@repo/domain`'s `ISSUE_MODES` rather than restated, so the
+ * Zod enum, the CHECK constraint's literals and the lifecycle engine's
+ * completion table cannot drift into three different sets.
+ */
+export { ISSUE_MODES, DOCUMENT_STATUSES, COMPLETION_ACTIONS } from '@repo/domain';
+export type { IssueMode, DocumentStatus, CompletionAction } from '@repo/domain';
+
+/** Template lifecycle (§4.3). */
+export const TEMPLATE_STATUSES = ['draft', 'published', 'archived'] as const;
+export type TemplateStatus = (typeof TEMPLATE_STATUSES)[number];
+
+/** The asynchronous SharePoint half of a document's state (§4.3). */
+export const FILING_STATES = ['none', 'pending', 'filed', 'failed'] as const;
+export type FilingStateValue = (typeof FILING_STATES)[number];
+
+/** UK SES capture methods. The pad lands with the mobile app (ADR-0023). */
+export const SIGNATURE_METHODS = ['typed_name', 'signature_pad'] as const;
+export type SignatureMethod = (typeof SIGNATURE_METHODS)[number];
+
+/** Sort columns for the template manager table. */
+export const TEMPLATE_SORTS = ['name', 'category', 'updated_at'] as const;
+export type TemplateSort = (typeof TEMPLATE_SORTS)[number];
+
+/** Sort columns for a subject's document list. */
+export const DOCUMENT_SORTS = ['created_at', 'issued_at', 'title', 'status'] as const;
+export type DocumentSort = (typeof DOCUMENT_SORTS)[number];

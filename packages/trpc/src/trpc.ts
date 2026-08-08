@@ -75,6 +75,21 @@ export interface TRPCContext {
    * authorising without the session being restarted (§5.1).
    */
   grants: ContextGrant[];
+  /**
+   * The request's originating IP and user-agent, taken **server-side** (core
+   * plan 11 §4.7, PL-011).
+   *
+   * They exist for one reason: a UK Simple Electronic Signature's evidence pack
+   * records where and from what a document was signed. Taking them from the
+   * request rather than from an input field is the whole point — a
+   * client-supplied IP would be evidence of what the client *claimed*, which is
+   * exactly the thing a repudiation challenge attacks (R2).
+   *
+   * `null` outside an HTTP request (a worker call, a test) — nothing may sign
+   * from there anyway.
+   */
+  requestIp: string | null;
+  userAgent: string | null;
 }
 
 /**
