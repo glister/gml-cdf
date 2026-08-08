@@ -5,6 +5,7 @@ import type {
   PlatformApprovalDecision,
   PlatformApprovalDelegation,
   PlatformApprovalRequest,
+  PlatformCalendarSyncState,
   PlatformConfigEntry,
   PlatformDocument,
   PlatformDomainEvent,
@@ -77,6 +78,7 @@ export type {
   PlatformApprovalDecision,
   PlatformApprovalDelegation,
   PlatformApprovalRequest,
+  PlatformCalendarSyncState,
   PlatformConfigEntry,
   PlatformDocument,
   PlatformDomainEvent,
@@ -245,3 +247,10 @@ export type DocumentUpdate = Updateable<PlatformDocument>;
 
 export type SignatureEvidenceRecord = Selectable<PlatformSignatureEvidence>;
 export type NewSignatureEvidence = Insertable<PlatformSignatureEvidence>;
+
+// Shared calendar & Outlook sync (core plan 12, PL-024). Operational state, so
+// all three wrappers apply: the row is created pending, updated as Graph
+// answers, and never deleted.
+export type CalendarSyncStateRecord = Selectable<PlatformCalendarSyncState>;
+export type NewCalendarSyncState = Insertable<PlatformCalendarSyncState>;
+export type CalendarSyncStateUpdate = Updateable<PlatformCalendarSyncState>;

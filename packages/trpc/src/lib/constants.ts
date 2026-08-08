@@ -327,3 +327,59 @@ export type TemplateSort = (typeof TEMPLATE_SORTS)[number];
 /** Sort columns for a subject's document list. */
 export const DOCUMENT_SORTS = ['created_at', 'issued_at', 'title', 'status'] as const;
 export type DocumentSort = (typeof DOCUMENT_SORTS)[number];
+
+// --- Shared calendar & Outlook sync (core plan 12, PL-022…024) --------------
+
+/**
+ * The canonical event shape's `kind` (§4.1.1) — what a row *is*, independent of
+ * which module contributed it.
+ *
+ * `hr_event` is PL-023a's kind: probation reviews, return-to-work meetings,
+ * OH/wellbeing reviews, D&A appointments and exit interviews all render as one
+ * generic kind on any shared view, because the fact that a meeting exists is
+ * shareable and its type is not. The sources themselves register from the HR
+ * plans; the kind is fixed here so they have a contract to register against.
+ */
+export const CALENDAR_KINDS = [
+  'leave',
+  'absence',
+  'blackout',
+  'shutdown',
+  'bank_holiday',
+  'hr_event',
+] as const;
+export type CalendarKind = (typeof CALENDAR_KINDS)[number];
+
+/**
+ * A calendar row's approval status. Config- and reference-sourced items (a
+ * blackout period, a bank holiday) are always `approved` — they are facts, not
+ * requests — and **only `approved` items ever reach Outlook** (PL-024).
+ */
+export const CALENDAR_EVENT_STATUSES = ['approved', 'requested'] as const;
+export type CalendarEventStatus = (typeof CALENDAR_EVENT_STATUSES)[number];
+
+/**
+ * The visibility class of a source (§4.1.2, SA-023).
+ *
+ * `restricted` is structural, not a filter: the composer injects a constant
+ * label and overrides `type_ref` with the kind, so a restricted fragment has no
+ * way to express per-row detail. Leaking absence detail would require changing
+ * the platform contract, not just a source.
+ */
+export const CALENDAR_VISIBILITY_CLASSES = ['normal', 'restricted'] as const;
+export type CalendarVisibilityClass = (typeof CALENDAR_VISIBILITY_CLASSES)[number];
+
+/** What the feed colours by (PL-022 "configurable by type and/or team"). */
+export const CALENDAR_COLOUR_MODES = ['type', 'team'] as const;
+export type CalendarColourMode = (typeof CALENDAR_COLOUR_MODES)[number];
+
+/** `platform.calendar_sync_state.status` — the Outlook rail's state machine (§4.4). */
+export const CALENDAR_SYNC_STATUSES = [
+  'pending',
+  'synced',
+  'amend_pending',
+  'cancel_pending',
+  'cancelled',
+  'failed',
+] as const;
+export type CalendarSyncStatus = (typeof CALENDAR_SYNC_STATUSES)[number];
