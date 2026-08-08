@@ -2,7 +2,13 @@ import * as React from 'react';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { z } from 'zod';
-import { CALENDAR_KIND_LABELS, CALENDAR_KINDS, type CalendarKind } from '@repo/trpc';
+// **The subpath, not the barrel.** `@repo/trpc`'s root export starts with
+// `appRouter`, so a *runtime* import of it drags every router, every Kysely
+// query and `node:crypto` into the browser bundle — where `node:crypto` cannot
+// resolve and the production build fails outright. The client imports the
+// barrel type-only and reaches for a subpath when it needs a real value, which
+// is the same rule the root CLAUDE.md states for `apps/mobile`.
+import { CALENDAR_KIND_LABELS, CALENDAR_KINDS, type CalendarKind } from '@repo/trpc/constants';
 import { trpcReact } from '~/trpc';
 import { PageHeader } from '~/components/nav/PageHeader';
 import { Callout } from '~/components/feedback/Callout';
