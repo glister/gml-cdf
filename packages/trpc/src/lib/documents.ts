@@ -17,7 +17,10 @@ import {
   type IssueMode,
   type RoleKey,
 } from '@repo/domain';
+import { requestNotification, scheduleReminder, cancelReminders } from './notify.js';
 import {
+  notificationsDefaultReminderCadence,
+  qualifiedName,
   documentsCategoryVisibility,
   documentsCategoryVisibilityDefault,
   documentsFilingMaxAttempts,
@@ -531,6 +534,44 @@ export async function issueDocuments(
       correlationId: args.correlationId,
     });
 
+    // Tell the subject, and start chasing them (§9.5, ON AC-6 driver). Both in
+    // this transaction: a document issued without its notification is one
+    // nobody knows about, and the notification service exists so that cannot
+    // happen by omission (ADR-0022).
+    //
+    // Skipped for `no_action` — it is already complete, so there is nothing to
+    // ask for and nothing to chase.
+    if (!stamp.completes) {
+      await requestNotification(trx, {
+        kind: 'document.issued',
+        recipient: { kind: 'contextual', ref: 'subject_person' },
+        payload: {
+          title: doc.title,
+          category: doc.category_code,
+          requiredAction: REQUIRED_ACTION_TEXT[mode],
+          actionUrl: `/documents/${documentId}`,
+        },
+        subject: { streamType: DOCUMENT_STREAM_TYPE, streamId: documentId },
+        // One notification per issue, whatever the queue does with the effect.
+        dedupeKey: `document.issued:${documentId}`,
+        requestedBy: args.actorPersonId,
+        correlationId: args.correlationId,
+        now: args.now,
+      });
+
+      await scheduleReminder(trx, {
+        reminderKind: DOCUMENT_REMINDER_KIND,
+        source: { streamType: DOCUMENT_STREAM_TYPE, streamId: documentId },
+        recipient: { kind: 'contextual', ref: 'subject_person' },
+        anchor: { mode: 'from_now' },
+        cadenceRef: DOCUMENT_REMINDER_CADENCE_REF,
+        timeZone: DOCUMENT_REMINDER_TIME_ZONE,
+        actorPersonId: args.actorPersonId,
+        correlationId: args.correlationId,
+        now: args.now,
+      });
+    }
+
     // `no_action` is complete the moment it is issued. Journalled separately so
     // a consumer waiting on "they are finished with it" subscribes to one event
     // type across all eight modes.
@@ -579,6 +620,97 @@ async function appendCompleted(
       hasCaptureData: args.hasCaptureData,
       ...(args.effects?.length ? { effects: args.effects } : {}),
     },
+    actorPersonId: args.actorPersonId,
+    correlationId: args.correlationId,
+  });
+}
+
+/** What the subject is being asked to do, in the words the notification uses. */
+const REQUIRED_ACTION_TEXT: Record<IssueMode, string> = {
+  read_only: 'Read this document.',
+  read_and_sign: 'Read this document and sign it.',
+  no_action: 'For your information. Nothing to do.',
+  receipt_only: 'Confirm you have received it.',
+  read_and_understood: 'Read it, then confirm you have understood it.',
+  qa_response: 'Read it and answer the questions.',
+  text_response: 'Read it and write a response.',
+  file_upload: 'Read it and upload the file it asks for.',
+};
+
+/** How a completion reads on the issuer's notification. */
+const OUTCOME_TEXT: Record<IssueMode, string> = {
+  read_only: 'read',
+  read_and_sign: 'signed',
+  no_action: 'issued',
+  receipt_only: 'acknowledged as received',
+  read_and_understood: 'read and understood',
+  qa_response: 'answered',
+  text_response: 'responded to',
+  file_upload: 'answered with an upload',
+};
+
+/**
+ * The cadence a document chase runs on, and the zone its wall clock is read in.
+ *
+ * Plan 10's own default cadence key rather than one of this plan's: "chase daily
+ * until it is done" is not a document-specific decision, and a second key would
+ * mean an administrator who changed the cadence had to find both.
+ */
+export const DOCUMENT_REMINDER_CADENCE_REF = `config:${qualifiedName(notificationsDefaultReminderCadence)}`;
+/** Europe/London — the same wall clock plans 08 and 09 chase on. */
+export const DOCUMENT_REMINDER_TIME_ZONE = 'Europe/London';
+
+/**
+ * Tell whoever issues documents that this one is done (ON-024 driver), and stop
+ * chasing the subject.
+ *
+ * Addressed to the **HR role**, not to the person who issued it. Someone who has
+ * left HR should not still be told about documents they issued last year, and a
+ * role is what makes that true with no reconfiguration (PL-021).
+ */
+async function notifyCompletion(
+  trx: Transaction<DB>,
+  args: {
+    documentId: string;
+    title: string;
+    categoryCode: string;
+    issueMode: IssueMode;
+    actorPersonId: string | null;
+    correlationId: string;
+    now: Date;
+  },
+): Promise<void> {
+  const hrRole = await trx
+    .selectFrom('platform.role')
+    .select('id')
+    .where('key', '=', 'hr_user')
+    .executeTakeFirst();
+
+  if (hrRole) {
+    await requestNotification(trx, {
+      kind: 'document.completed',
+      recipient: { kind: 'role', roleId: hrRole.id },
+      payload: {
+        title: args.title,
+        category: args.categoryCode,
+        outcome: OUTCOME_TEXT[args.issueMode],
+        actionUrl: `/documents/${args.documentId}`,
+      },
+      subject: { streamType: DOCUMENT_STREAM_TYPE, streamId: args.documentId },
+      dedupeKey: `document.completed:${args.documentId}`,
+      requestedBy: args.actorPersonId,
+      correlationId: args.correlationId,
+      now: args.now,
+    });
+  }
+
+  // Eager cancellation is an optimisation, not a correctness requirement — the
+  // reminder handler re-runs `isSatisfied` before every send, so a path that
+  // forgot this costs one redundant chase and can never chase after completion
+  // (core plan 10's own note on the contract).
+  await cancelReminders(trx, {
+    source: { streamType: DOCUMENT_STREAM_TYPE, streamId: args.documentId },
+    reason: 'document completed',
     actorPersonId: args.actorPersonId,
     correlationId: args.correlationId,
   });
@@ -643,6 +775,15 @@ export async function recordDocumentView(
       hasCaptureData: false,
       actorPersonId: args.actorPersonId,
       correlationId: args.correlationId,
+    });
+    await notifyCompletion(trx, {
+      documentId: args.documentId,
+      title: doc.title,
+      categoryCode: doc.category_code,
+      issueMode: doc.issue_mode,
+      actorPersonId: args.actorPersonId,
+      correlationId: args.correlationId,
+      now: args.now,
     });
   }
 
@@ -779,6 +920,16 @@ export async function signDocument(
     correlationId: args.correlationId,
   });
 
+  await notifyCompletion(trx, {
+    documentId: args.documentId,
+    title: doc.title,
+    categoryCode: doc.category_code,
+    issueMode: doc.issue_mode,
+    actorPersonId: args.signatoryPersonId,
+    correlationId: args.correlationId,
+    now: args.now,
+  });
+
   return { document: row, signatureEvidenceId: evidenceId };
 }
 
@@ -897,6 +1048,16 @@ export async function completeDocument(
     effects: args.effects,
     actorPersonId: args.actorPersonId,
     correlationId: args.correlationId,
+  });
+
+  await notifyCompletion(trx, {
+    documentId: args.documentId,
+    title: doc.title,
+    categoryCode: doc.category_code,
+    issueMode: doc.issue_mode,
+    actorPersonId: args.actorPersonId,
+    correlationId: args.correlationId,
+    now: args.now,
   });
 
   return row;
@@ -1090,6 +1251,41 @@ export async function recordFilingFailure(
     actorPersonId: null,
     correlationId: args.correlationId,
   });
+
+  // Tell an administrator (§9.5). A `failed` row on a diagnostics screen nobody
+  // is looking at is the same as no row at all — this is what turns the terminal
+  // state into something somebody acts on.
+  const adminRole = await trx
+    .selectFrom('platform.role')
+    .select('id')
+    .where('key', '=', 'administrator')
+    .executeTakeFirst();
+
+  if (adminRole) {
+    const doc = await trx
+      .selectFrom('platform.document')
+      .select('title')
+      .where('id', '=', args.documentId)
+      .executeTakeFirst();
+
+    await requestNotification(trx, {
+      kind: 'document.filing_failed',
+      recipient: { kind: 'role', roleId: adminRole.id },
+      payload: {
+        title: doc?.title ?? 'A document',
+        attempts,
+        reason: args.error.slice(0, 300),
+        actionUrl: `/documents/${args.documentId}`,
+      },
+      subject: { streamType: DOCUMENT_STREAM_TYPE, streamId: args.documentId },
+      // Once per document per failure run. A retry resets `filing_attempts`, so
+      // a genuinely new failure after an admin retry gets its own alert.
+      dedupeKey: `document.filing_failed:${args.documentId}:${attempts}`,
+      requestedBy: null,
+      correlationId: args.correlationId,
+      now: new Date(),
+    });
+  }
 
   return { terminal: true, attempts };
 }

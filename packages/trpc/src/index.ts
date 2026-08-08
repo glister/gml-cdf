@@ -292,6 +292,29 @@ export {
  */
 import './lib/document-effects.js';
 
+/**
+ * The document engine's notification kinds, reminder kind and subject context
+ * (§9.5). Imported for its module-load side effects, exactly as the effects are:
+ * the registries must be populated in every process that sends or chases.
+ */
+/**
+ * The personal data this engine holds, declared for core plan 16 (§9.5,
+ * NFR-003). A typed constant rather than a note in a plan document, so the
+ * erasure process imports it instead of rediscovering it from the schema.
+ */
+export {
+  DOCUMENT_ERASURE_SURFACE,
+  type ErasureSurfaceEntry,
+  type ErasureTreatment,
+} from './lib/document-erasure.js';
+
+export {
+  documentCompletedKind,
+  documentFilingFailedKind,
+  documentIssuedKind,
+  documentOutstandingReminder,
+} from './lib/document-notify.js';
+
 /** The read-access helper the Hono content routes share with the router (§5.1). */
 export { documentAccess } from './routers/platform/documents.js';
 

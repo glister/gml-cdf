@@ -21,6 +21,9 @@ import { requireEffect } from '@repo/workflow';
 // (`src/index.ts`) does this for every real consumer; a test importing the
 // router directly has to say so itself.
 import '../../lib/document-effects.js';
+// Likewise the notification kinds, reminder kind and subject context (§9.5):
+// issuing a document sends one, so the registry has to be populated here too.
+import '../../lib/document-notify.js';
 
 /**
  * The document engine against real Postgres (core plan 11 §10).
