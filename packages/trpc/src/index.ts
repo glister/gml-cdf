@@ -289,7 +289,6 @@ export {
   type SyncableItem,
 } from './lib/calendar/registry.js';
 export { composeFeed, type ComposeFeedArgs, type FeedRow } from './lib/calendar/compose.js';
-export { syncHash } from './lib/calendar/sync-hash.js';
 export {
   CONFIG_PERIOD_SOURCE_KEY,
   configPeriodSource,

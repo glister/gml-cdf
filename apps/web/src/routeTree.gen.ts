@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteImport } from './routes/_authenticated';
 import { Route as IndexRouteImport } from './routes/index';
 import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications';
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard';
+import { Route as AuthenticatedCalendarRouteImport } from './routes/_authenticated/calendar';
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin';
 import { Route as AuthenticatedTasksIndexRouteImport } from './routes/_authenticated/tasks/index';
 import { Route as AuthenticatedApprovalsIndexRouteImport } from './routes/_authenticated/approvals/index';
@@ -67,6 +68,11 @@ const AuthenticatedNotificationsRoute =
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
+const AuthenticatedCalendarRoute = AuthenticatedCalendarRouteImport.update({
+  id: '/calendar',
+  path: '/calendar',
   getParentRoute: () => AuthenticatedRoute,
 } as any);
 const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
@@ -245,6 +251,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute;
   '/login': typeof LoginRoute;
   '/admin': typeof AuthenticatedAdminRouteWithChildren;
+  '/calendar': typeof AuthenticatedCalendarRoute;
   '/dashboard': typeof AuthenticatedDashboardRoute;
   '/notifications': typeof AuthenticatedNotificationsRoute;
   '/admin/notifications': typeof AuthenticatedAdminNotificationsRoute;
@@ -280,6 +287,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute;
   '/login': typeof LoginRoute;
   '/admin': typeof AuthenticatedAdminRouteWithChildren;
+  '/calendar': typeof AuthenticatedCalendarRoute;
   '/dashboard': typeof AuthenticatedDashboardRoute;
   '/notifications': typeof AuthenticatedNotificationsRoute;
   '/admin/notifications': typeof AuthenticatedAdminNotificationsRoute;
@@ -317,6 +325,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteWithChildren;
   '/login': typeof LoginRoute;
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren;
+  '/_authenticated/calendar': typeof AuthenticatedCalendarRoute;
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute;
   '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute;
   '/_authenticated/admin/notifications': typeof AuthenticatedAdminNotificationsRoute;
@@ -354,6 +363,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/admin'
+    | '/calendar'
     | '/dashboard'
     | '/notifications'
     | '/admin/notifications'
@@ -389,6 +399,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/admin'
+    | '/calendar'
     | '/dashboard'
     | '/notifications'
     | '/admin/notifications'
@@ -425,6 +436,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/login'
     | '/_authenticated/admin'
+    | '/_authenticated/calendar'
     | '/_authenticated/dashboard'
     | '/_authenticated/notifications'
     | '/_authenticated/admin/notifications'
@@ -498,6 +510,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard';
       fullPath: '/dashboard';
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
+    '/_authenticated/calendar': {
+      id: '/_authenticated/calendar';
+      path: '/calendar';
+      fullPath: '/calendar';
+      preLoaderRoute: typeof AuthenticatedCalendarRouteImport;
       parentRoute: typeof AuthenticatedRoute;
     };
     '/_authenticated/admin': {
@@ -766,6 +785,7 @@ const AuthenticatedAdminRouteWithChildren =
 
 interface AuthenticatedRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRouteWithChildren;
+  AuthenticatedCalendarRoute: typeof AuthenticatedCalendarRoute;
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute;
   AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute;
   AuthenticatedApprovalsRequestIdRoute: typeof AuthenticatedApprovalsRequestIdRoute;
@@ -780,6 +800,7 @@ interface AuthenticatedRouteChildren {
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRouteWithChildren,
+  AuthenticatedCalendarRoute: AuthenticatedCalendarRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,
   AuthenticatedApprovalsRequestIdRoute: AuthenticatedApprovalsRequestIdRoute,

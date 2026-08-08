@@ -6,7 +6,6 @@ import {
   calendarOutlookSyncEnabled,
   getConfig,
   bindingForEventType,
-  syncHash,
   type SyncableItem,
 } from '@repo/trpc';
 import {
@@ -19,6 +18,7 @@ import {
   type GraphClient,
 } from '@repo/m365';
 import { consumeOnce } from '../lib/consume-once.js';
+import { syncHash } from '../lib/sync-hash.js';
 import { eventEnvelopeSchema } from '../relay/envelope.js';
 import type { SubscriptionHandler } from '../types.js';
 

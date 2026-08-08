@@ -1,5 +1,6 @@
 import { sql, type Expression, type Kysely, type RawBuilder, type SqlBool } from 'kysely';
 import type { DB } from '@repo/db';
+import { CALENDAR_KIND_LABELS } from '../constants.js';
 import type {
   CalendarColourMode,
   CalendarEventStatus,
@@ -221,14 +222,27 @@ function quote(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
 }
 
-/** The legend label for whichever dimension won. */
+/**
+ * The legend label for whichever dimension won.
+ *
+ * The kind fallback is written out rather than left as the raw key: a legend
+ * reading `bank_holiday` is a database column leaking onto the screen, and the
+ * mapping belongs beside the colours it labels rather than in the browser (§6 —
+ * one expression for the bars and the key).
+ */
 function colourLabelExpression(colourBy: CalendarColourMode): RawBuilder<string> {
+  const kindLabel = sql.raw(
+    `(CASE src.kind ${Object.entries(CALENDAR_KIND_LABELS)
+      .map(([kind, label]) => `WHEN ${quote(kind)} THEN ${quote(label)}`)
+      .join(' ')} ELSE src.kind END)`,
+  );
+
   if (colourBy === 'team') {
-    return sql<string>`CASE WHEN tc.team_colour IS NOT NULL THEN tc.team_name ELSE src.kind END`;
+    return sql<string>`CASE WHEN tc.team_colour IS NOT NULL THEN tc.team_name ELSE ${kindLabel} END`;
   }
   return sql<string>`CASE
     WHEN src.type_colour IS NOT NULL THEN COALESCE(src.type_label, src.type_ref)
-    ELSE src.kind
+    ELSE ${kindLabel}
   END`;
 }
 

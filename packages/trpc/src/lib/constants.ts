@@ -351,6 +351,24 @@ export const CALENDAR_KINDS = [
 export type CalendarKind = (typeof CALENDAR_KINDS)[number];
 
 /**
+ * How each kind is written for a person.
+ *
+ * Here rather than in the web app because the **feed** uses them: a legend entry
+ * that fell back to the kind default has to read "Bank holiday", not
+ * `bank_holiday`, and §6's whole point is that the legend and the bars come from
+ * one server-side expression. A second copy in the browser would be a second
+ * vocabulary to keep in step.
+ */
+export const CALENDAR_KIND_LABELS: Record<CalendarKind, string> = {
+  leave: 'Leave',
+  absence: 'Absence',
+  blackout: 'Blackout',
+  shutdown: 'Shut-down',
+  bank_holiday: 'Bank holiday',
+  hr_event: 'HR event',
+};
+
+/**
  * A calendar row's approval status. Config- and reference-sourced items (a
  * blackout period, a bank holiday) are always `approved` — they are facts, not
  * requests — and **only `approved` items ever reach Outlook** (PL-024).
