@@ -36,6 +36,61 @@ import type { CalendarKind, CalendarVisibilityClass, PersonScope } from '../cons
  * `type_ref`, `type_label` and `type_colour`, substituting the kind. Leaking a
  * sickness type onto the shared calendar would therefore require changing this
  * file — not just registering a careless source.
+ *
+ * ---
+ *
+ * ## The HR consumption contract (core plan 12 §9.5)
+ *
+ * Four sources are specified and unbuilt. They are listed here rather than only
+ * in the plan document because this is the file whoever builds them will read,
+ * and two of the four have a rule that is not obvious from the types.
+ *
+ * ### `hr.leave` — HR Holiday & Leave plan (HL-043…046)
+ *
+ * Approved **and** requested bookings, `kind: 'leave'`, `visibilityClass:
+ * 'normal'`. `typeRef`/`typeLabel`/`typeColour` project `hr.leave_type`'s id,
+ * name and `colour` — **from the HR fragment**, because the calendar may not
+ * join an `hr` table itself (ADR-0008); that is the entire reason those two
+ * columns are in the canonical shape. `outlookSync` binds
+ * `hr.leave_booking.approved` → create and `hr.leave_booking.cancelled` →
+ * cancel, and **no `onAmended`**: ADR-0021 models amendment as supersession, so
+ * an amended booking arrives as a cancel plus a create of the successor
+ * (§12.2 Q3). `sourceRefFor` can be omitted — those events stream on the
+ * booking row, so `streamId` is already the ref.
+ *
+ * ### `hr.absence` — HR Sickness & Absence plan (SA-023/024)
+ *
+ * **MUST register as `visibilityClass: 'restricted'` with `restrictedLabel:
+ * 'Absence'`.** This is the one registration in the system where getting the
+ * class wrong is a data-protection incident rather than a bug: `normal` would
+ * put a sickness type on every teammate's screen. The composer's substitution
+ * makes the *fragment* harmless either way, so the class is the only thing
+ * standing between the two outcomes — review it, and note that
+ * `routers/platform/calendar.test.ts` drives a deliberately hostile restricted
+ * fragment to prove the substitution holds. No `outlookSync`: an absence is a
+ * fact recorded after the event, not something to book into a calendar.
+ *
+ * ### `hr.bank_holiday` — HR Holiday & Leave plan (PL-023, §4.1.2)
+ *
+ * A fragment over `hr.bank_holiday_calendar` + `hr.bank_holiday_date` (Tier-3
+ * reference data, effective-dated per year — core plan 05 defers both tables to
+ * that plan). `kind: 'bank_holiday'`, `personId: NULL` (organisation-wide, so it
+ * passes every viewer's scope), `label` = the holiday name, `status`
+ * `'approved'`, `visibilityClass: 'normal'`, **no `outlookSync`** — a bank
+ * holiday is in everyone's calendar already. Authored in the HR module's own
+ * code and exported to this registry, like every other fragment.
+ *
+ * ### `hr_event` sources — ER, Sickness & Absence, Wellbeing, D&A, Offboarding
+ *
+ * Probation reviews, return-to-work meetings, OH/wellbeing reviews, D&A
+ * appointments and exit interviews (PL-023a). All `kind: 'hr_event'`,
+ * `visibilityClass: 'restricted'` with a generic label, **and an `audience`
+ * predicate** — typically HR, the subject, and the subject's line manager. The
+ * predicate *replaces* the uniform team scoping for that source rather than
+ * intersecting with it, because the right audience is narrower in one direction
+ * (a teammate must not see it) and wider in another (HR always does). It must
+ * reference {@link SRC_PERSON_ID}, since it is applied to the composed union
+ * rather than to the source's own table.
  */
 
 // --- The canonical event shape (§4.1.1) --------------------------------------
