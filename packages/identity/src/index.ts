@@ -18,6 +18,13 @@ import { type DB, newUuidV7 } from '@repo/db';
 type Db = Kysely<DB>;
 type Trx = Transaction<DB>;
 
+/**
+ * Better Auth's provider id for the Entra (Microsoft) social provider. One
+ * constant, because the string is written in the auth config, read on sign-in,
+ * and now read again by the Outlook rail — three places is where a typo hides.
+ */
+export const ENTRA_PROVIDER_ID = 'microsoft';
+
 export { identityConfig, type IdentityConfig } from './config.js';
 
 // --- Resolution (sign-in path + procedure context) --------------------------
@@ -79,6 +86,35 @@ export async function listCredentials(db: Db, personId: string): Promise<Credent
     userId: r.userId,
     createdAt: r.createdAt,
   }));
+}
+
+/**
+ * The Entra directory object a person signs in as, or `null` when they have no
+ * Microsoft credential (core plan 12 §12.1).
+ *
+ * Graph addresses a mailbox as `/users/{id-or-userPrincipalName}`, and the
+ * **object id is the stable half** — a UPN changes when somebody marries or the
+ * tenant renames a domain, and an Outlook event created under the old one would
+ * then be unamendable. `account.account_id` for the `microsoft` provider is that
+ * object id, written by the Entra sign-in path (plan 03 / ADR-0014).
+ *
+ * `null` is a legitimate answer, not an error: an agency worker or a candidate
+ * has no CDF mailbox, so there is no calendar to sync into. The caller decides
+ * what that means — the Outlook rail records it against the item rather than
+ * failing silently.
+ *
+ * Lives here because it reads `account`, which is this package's boundary.
+ */
+export async function resolveDirectoryObjectId(db: Db, personId: string): Promise<string | null> {
+  const row = await db
+    .selectFrom('account')
+    .innerJoin('user', 'user.id', 'account.user_id')
+    .select('account.account_id as accountId')
+    .where('user.person_id', '=', personId)
+    .where('account.provider_id', '=', ENTRA_PROVIDER_ID)
+    .orderBy('account.created_at', 'asc')
+    .executeTakeFirst();
+  return row?.accountId ?? null;
 }
 
 /**

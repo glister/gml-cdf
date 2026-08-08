@@ -24,6 +24,14 @@ export {
   type GraphClientOptions,
 } from './graph-client.js';
 export {
+  createCalendarEvent,
+  deleteCalendarEvent,
+  updateCalendarEvent,
+  type CalendarEventBody,
+  type CalendarTarget,
+  type GraphDateTime,
+} from './calendar.js';
+export {
   deleteFile,
   downloadFile,
   downloadFileBytes,

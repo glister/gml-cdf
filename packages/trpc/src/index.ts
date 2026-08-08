@@ -264,6 +264,44 @@ export {
 export { computeDocumentHash } from './lib/document-hash.js';
 
 /**
+ * Shared calendar & Outlook sync (core plan 12). The registry and the composer
+ * live here because the feed is a tRPC procedure; `apps/worker` consumes the
+ * binding lookup and the hash, and the HR plans register their sources against
+ * these types.
+ */
+export {
+  bindingForEventType,
+  calendarSource,
+  calendarSources,
+  canonicalFragment,
+  registerCalendarSource,
+  syncEventTypes,
+  unregisterCalendarSourceForTests,
+  validateCalendarSource,
+  CalendarSourceError,
+  CANONICAL_COLUMNS,
+  SRC_PERSON_ID,
+  type CalendarSource,
+  type CalendarViewer,
+  type CalendarWindow,
+  type CanonicalProjection,
+  type OutlookSyncBinding,
+  type SyncableItem,
+} from './lib/calendar/registry.js';
+export { composeFeed, type ComposeFeedArgs, type FeedRow } from './lib/calendar/compose.js';
+export { syncHash } from './lib/calendar/sync-hash.js';
+export {
+  CONFIG_PERIOD_SOURCE_KEY,
+  configPeriodSource,
+} from './lib/calendar/sources/config-periods.js';
+export {
+  demoItemSource,
+  demoSourceRef,
+  parseDemoSourceRef,
+  DEMO_SOURCE_KEY,
+} from './lib/calendar/sources/demo.js';
+
+/**
  * The renderer and document-store ports (§4.6).
  *
  * The same inversion the email channel adapter uses: this package owns the

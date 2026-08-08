@@ -58,9 +58,15 @@ module "service_bus" {
   # platform does *after* a fact commits: the effects a transition fans out via
   # the relay, the timers the scheduler drains (core plan 07 §5.4), and core
   # plan 03's daily identity sweeps.
-  queues        = ["hello-world", "effects"]
-  topics        = ["domain-events"]
-  subscriptions = { "pilot-demo" = "domain-events" }
+  queues = ["hello-world", "effects"]
+  topics = ["domain-events"]
+  subscriptions = {
+    "pilot-demo" = "domain-events"
+    # Outlook calendar sync (core plan 12 §9.3, PL-024). No SQL filter: the
+    # handler resolves each event against the calendar-source registry, so an
+    # HR plan binding leave to the rail needs no Terraform change.
+    "calendar-sync" = "domain-events"
+  }
 
   # Effect MessageIds are deterministic, so a replayed relay batch or a
   # scheduler re-send after a crash collapses into one delivery inside this
