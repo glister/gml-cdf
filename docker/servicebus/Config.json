@@ -44,6 +44,16 @@
                   "MaxDeliveryCount": 10,
                   "RequiresSession": false
                 }
+              },
+              {
+                "Name": "calendar-sync",
+                "Properties": {
+                  "DeadLetteringOnMessageExpiration": true,
+                  "DefaultMessageTimeToLive": "PT1H",
+                  "LockDuration": "PT1M",
+                  "MaxDeliveryCount": 10,
+                  "RequiresSession": false
+                }
               }
             ]
           }

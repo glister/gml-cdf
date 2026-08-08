@@ -39,6 +39,15 @@ export {
   isEventType,
   platformDemoPinged,
   workflowTransitionedPayload,
+  // Shared calendar & Outlook sync (core plan 12) — the worker's handler and the
+  // pilot procedure name these definitions rather than the string types.
+  platformCalendarOutlookEventCancelled,
+  platformCalendarOutlookEventCreated,
+  platformCalendarOutlookEventUpdated,
+  platformCalendarOutlookSyncFailed,
+  platformDemoCalendarItemApproved,
+  platformDemoCalendarItemCancelled,
+  platformDemoCalendarItemRescheduled,
   type EventDefinition,
   type EventType,
   type EventPayload,
@@ -58,3 +67,4 @@ export * from './tasks/index.js';
 export * from './approvals/index.js';
 export * from './notifications/index.js';
 export * from './documents/index.js';
+export * from './calendar/index.js';

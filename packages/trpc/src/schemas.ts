@@ -5,6 +5,10 @@ import {
   APPROVAL_DECISIONS,
   APPROVAL_SORTS,
   APPROVAL_STATUSES,
+  CALENDAR_COLOUR_MODES,
+  CALENDAR_EVENT_STATUSES,
+  CALENDAR_KINDS,
+  CALENDAR_VISIBILITY_CLASSES,
   COMPLETION_ACTIONS,
   CONFIG_SORTS,
   DELIVERY_SORTS,
@@ -1799,3 +1803,133 @@ export const evidencePackSchema = z.object({
   }),
 });
 export type EvidencePack = z.infer<typeof evidencePackSchema>;
+
+// --- Shared calendar & Outlook sync (core plan 12 §5.1, PL-022…024) ---------
+
+export const calendarKindSchema = z.enum(CALENDAR_KINDS);
+export const calendarEventStatusSchema = z.enum(CALENDAR_EVENT_STATUSES);
+export const calendarVisibilityClassSchema = z.enum(CALENDAR_VISIBILITY_CLASSES);
+export const calendarColourModeSchema = z.enum(CALENDAR_COLOUR_MODES);
+
+/** A hex colour token, matching `platform.team.colour`'s CHECK exactly. */
+const colourTokenSchema = z.string().regex(/^#[0-9a-f]{6}$/);
+
+/** The longest window the feed will serve — a month or week view, nothing more. */
+export const CALENDAR_MAX_WINDOW_DAYS = 92;
+
+/** Inclusive day count between two ISO dates, both ends counted. */
+function spanDays(from: string, to: string): number {
+  const ms = Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`);
+  return Math.floor(ms / 86_400_000) + 1;
+}
+
+/**
+ * The feed's window and facets (§5.1).
+ *
+ * Every facet here is applied as SQL in the procedure — the browser collects
+ * intent and nothing else (ADR-0004). The window bound is not politeness: the
+ * feed unions every registered source, and an unbounded `from`/`to` would turn
+ * a month view into a full-history scan across every module's tables.
+ */
+export const calendarFeedInput = z
+  .object({
+    /** Inclusive. */
+    from: z.iso.date(),
+    /** Inclusive. */
+    to: z.iso.date(),
+    /** Omit for every team the viewer can see. Org-wide rows always pass. */
+    teamIds: z.array(z.uuid()).max(50).optional(),
+    kinds: z.array(calendarKindSchema).min(1).max(CALENDAR_KINDS.length).optional(),
+    typeRefs: z.array(z.string().max(100)).max(100).optional(),
+    status: z.enum(['approved', 'requested', 'all']).default('all'),
+    /** Which dimension drives the resolved colour and the legend (§6). */
+    colourBy: calendarColourModeSchema.default('type'),
+  })
+  .refine((w) => w.to >= w.from, { message: 'to must not precede from', path: ['to'] })
+  .refine((w) => spanDays(w.from, w.to) <= CALENDAR_MAX_WINDOW_DAYS, {
+    message: `window must not exceed ${CALENDAR_MAX_WINDOW_DAYS} days`,
+    path: ['to'],
+  });
+export type CalendarFeedInput = z.infer<typeof calendarFeedInput>;
+
+/**
+ * One row of the read model (§4.1.1), after the composer has joined team
+ * membership and the person's display name and resolved the colour.
+ *
+ * `label` for a restricted row is the constant the composer injected, never
+ * anything the source chose (SA-023). `personLabel` is null for org-wide items,
+ * and for restricted rows it is the subject's name — who is away is the point of
+ * a resourcing calendar; *why* is what must not travel.
+ */
+export const calendarEventSchema = z.object({
+  sourceKey: z.string(),
+  sourceRef: z.string(),
+  personId: z.uuid().nullable(),
+  personLabel: z.string().nullable(),
+  teamIds: z.array(z.uuid()),
+  startsOn: z.iso.date(),
+  endsOn: z.iso.date(),
+  dayPart: z.enum(['am', 'pm']).nullable(),
+  kind: calendarKindSchema,
+  typeRef: z.string().nullable(),
+  label: z.string(),
+  status: calendarEventStatusSchema,
+  visibilityClass: calendarVisibilityClassSchema,
+  /** Resolved server-side, so the bar, the filter and the legend cannot disagree. */
+  colour: colourTokenSchema,
+});
+export type CalendarEvent = z.infer<typeof calendarEventSchema>;
+
+/** One legend entry — the same colour expression the rows were resolved with. */
+export const calendarLegendEntrySchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  colour: colourTokenSchema,
+  by: z.enum(['type', 'team', 'kind']),
+});
+export type CalendarLegendEntry = z.infer<typeof calendarLegendEntrySchema>;
+
+export const calendarFeedOutput = z.object({
+  /** Deterministically ordered: starts_on, kind, source_key, source_ref. */
+  events: z.array(calendarEventSchema),
+  legend: z.array(calendarLegendEntrySchema),
+});
+export type CalendarFeedOutput = z.infer<typeof calendarFeedOutput>;
+
+/** A registered source, as the filter UI sees it (§5.1 `sources`). */
+export const calendarSourceSchema = z.object({
+  key: z.string(),
+  kinds: z.array(calendarKindSchema),
+  visibilityClass: calendarVisibilityClassSchema,
+  /** Whether the source binds any of its items to the Outlook rail (§5.2). */
+  syncsToOutlook: z.boolean(),
+});
+export type CalendarSourceSummary = z.infer<typeof calendarSourceSchema>;
+
+/**
+ * The pilot slice (§5.1 `demoOutlookSync`): drive create → amend → cancel
+ * against the caller's own Outlook calendar with no HR source in existence.
+ *
+ * The caller is always the subject — an admin proving the rail books into their
+ * own calendar, never somebody else's.
+ */
+export const demoOutlookSyncInput = z.object({
+  action: z.enum(['approve', 'amend', 'cancel']),
+  /** Which demo item; a second ref gives a second, independent Outlook event. */
+  ref: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9_-]{0,63}$/)
+    .default('demo'),
+  startsOn: z.iso.date().optional(),
+  endsOn: z.iso.date().optional(),
+});
+export type DemoOutlookSyncInput = z.infer<typeof demoOutlookSyncInput>;
+
+export const demoOutlookSyncOutput = z.object({
+  eventId: z.uuid(),
+  eventType: z.string(),
+  sourceRef: z.string(),
+  /** False when `platform.calendar.outlook_sync.enabled` is off — the rail no-ops. */
+  syncEnabled: z.boolean(),
+});
+export type DemoOutlookSyncOutput = z.infer<typeof demoOutlookSyncOutput>;

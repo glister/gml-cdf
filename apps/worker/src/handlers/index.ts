@@ -23,12 +23,17 @@ import type { HandlerRegistration } from '../types.js';
 import { effectsHandler } from './effects.js';
 import { helloWorldHandler } from './hello-world.js';
 import { pilotDemoHandler } from './pilot-demo.js';
+import { calendarOutlookSyncHandler } from './calendar-outlook-sync.js';
 
 /** Barrel of all handler registrations. Add new handlers here. */
 export const handlers: HandlerRegistration[] = [
   { queue: 'hello-world', handler: helloWorldHandler },
   // Pilot consumer of the domain-event journal relay (core plan 02 §5.2).
   { queue: 'domain-events', subscription: 'pilot-demo', handler: pilotDemoHandler },
+  // Outlook calendar sync (core plan 12 §5.2). Subscribes to the journal relay
+  // and resolves each event against the calendar-source registry, so the HR
+  // plans bind leave to the same rail without touching this list.
+  { queue: 'domain-events', subscription: 'calendar-sync', handler: calendarOutlookSyncHandler },
   // Scheduled identity sweeps — dispatched by message subject (core plan 03 §5.2).
   { queue: 'effects', handler: effectsHandler },
 ];

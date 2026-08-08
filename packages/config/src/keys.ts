@@ -619,3 +619,127 @@ export const documentsResponseUploadAllowedTypes = defineConfigKey({
   editableBy: ['administrator'],
   registeredBy: '11',
 });
+
+// --- Shared calendar & Outlook sync (core plan 12 §6) ------------------------
+//
+// Four keys, and only two of them are the calendar's own. `hr.leave.*` are
+// registered **here, ahead of the HR leave plan** and against plan 06's exact
+// catalogued names, shapes and defaults (core 12 §6): the config-period source
+// is the platform-owned calendar source, so blackout and shut-down periods have
+// to be settable in Phase 1 for PL-023 to be demonstrable at all. The HR leave
+// plan inherits these registrations rather than re-creating them — a duplicate
+// `defineConfigKey` for either name will throw on boot, which is the intended
+// way for the two plans to discover the overlap.
+
+/**
+ * A dated period on the calendar — the shape both `hr.leave.*` period keys use.
+ *
+ * Dates rather than timestamps: a blackout is a whole-day fact, and both ends
+ * are **inclusive**, matching the canonical event shape (§4.1.1). ISO strings
+ * rather than `z.date()` because the value round-trips through `jsonb` and a
+ * Date would come back as a string anyway.
+ */
+const calendarPeriodSchema = z
+  .object({
+    from: z.iso.date(),
+    to: z.iso.date(),
+    label: z.string().min(1).max(120),
+  })
+  .refine((p) => p.to >= p.from, { message: 'to must not precede from', path: ['to'] });
+
+/**
+ * HL-040 — the dates on which leave is blocked or flagged.
+ *
+ * This plan owns only the **display**: the periods render on the shared
+ * calendar (PL-023). Enforcement against a leave request is a leave-approval
+ * guard in the HR Holiday & Leave plan (ADR-0013), reading this same key.
+ *
+ * These are **configuration, not reference data** (PL-005e) — a date range with
+ * a label has no lifecycle, no membership and nothing to point at it, so a Tier-3
+ * entity would be a table with one meaningful use.
+ */
+export const leaveBlackoutPeriods = defineConfigKey({
+  namespace: 'hr.leave',
+  key: 'blackout_periods',
+  schema: z.array(calendarPeriodSchema).max(100),
+  defaultValue: [],
+  description:
+    'Date ranges during which leave is blocked or flagged (HL-040). Shown on the shared calendar; both ends inclusive.',
+  editableBy: ['hr_user'],
+  registeredBy: '12',
+});
+
+/**
+ * HL-041 — company shut-down periods (the Christmas close, a plant shutdown).
+ *
+ * Auto-booking leave against a shut-down and flagging the resulting allowance
+ * shortfall (HL-041/042) belong to the HR leave plan. Here the period is a band
+ * on the calendar and nothing more.
+ */
+export const leaveShutdownPeriods = defineConfigKey({
+  namespace: 'hr.leave',
+  key: 'shutdown_periods',
+  schema: z.array(calendarPeriodSchema).max(100),
+  defaultValue: [],
+  description:
+    'Company shut-down date ranges (HL-041). Shown on the shared calendar; both ends inclusive.',
+  editableBy: ['hr_user'],
+  registeredBy: '12',
+});
+
+/**
+ * The fallback colour for each calendar kind (§6).
+ *
+ * Last in the resolution order — **type colour → team colour → kind default** —
+ * and the only one guaranteed to produce a value, which is why every kind must
+ * be present. Hex rather than a Tailwind token because the same string has to
+ * satisfy `platform.team.colour`'s CHECK when colour-by-team is in play, and one
+ * colour vocabulary is what lets the SQL CASE fall through between the two.
+ *
+ * The palette is the design system's status hues: leave blue, absence amber,
+ * blackout red, shut-down purple, bank holiday green, HR event slate.
+ */
+export const calendarKindColours = defineConfigKey({
+  namespace: 'platform.calendar',
+  key: 'kind_colours',
+  schema: z.object({
+    leave: z.string().regex(/^#[0-9a-f]{6}$/),
+    absence: z.string().regex(/^#[0-9a-f]{6}$/),
+    blackout: z.string().regex(/^#[0-9a-f]{6}$/),
+    shutdown: z.string().regex(/^#[0-9a-f]{6}$/),
+    bank_holiday: z.string().regex(/^#[0-9a-f]{6}$/),
+    hr_event: z.string().regex(/^#[0-9a-f]{6}$/),
+  }),
+  defaultValue: {
+    leave: '#2563eb',
+    absence: '#d97706',
+    blackout: '#dc2626',
+    shutdown: '#7c3aed',
+    bank_holiday: '#059669',
+    hr_event: '#475569',
+  },
+  description:
+    'The colour used for each kind of calendar item when no leave-type or team colour applies. Changing a colour re-colours the calendar and its legend together, with no release.',
+  editableBy: ['administrator'],
+  registeredBy: '12',
+});
+
+/**
+ * The master switch for the Outlook rail (PL-024, §12.2 Q1).
+ *
+ * **Ships `false` and stays there until CDF IT grants `Calendars.ReadWrite`
+ * admin consent.** With it off the sync handler records its state row, journals
+ * nothing to Graph and returns — a no-op, not a failure — so the rest of the
+ * calendar is fully demonstrable while the consent is outstanding, and enabling
+ * it on the day consent lands is a configuration change rather than a release.
+ */
+export const calendarOutlookSyncEnabled = defineConfigKey({
+  namespace: 'platform.calendar',
+  key: 'outlook_sync_enabled',
+  schema: z.boolean(),
+  defaultValue: false,
+  description:
+    'Whether approved calendar items are pushed to people’s Outlook calendars. Off until Microsoft 365 admin consent for calendar write access has been granted.',
+  editableBy: ['administrator'],
+  registeredBy: '12',
+});

@@ -1426,3 +1426,117 @@ export const platformDocumentContentAccessed = defineEvent(
     viaRole: z.string().max(64),
   }),
 );
+
+// --- Shared calendar & Outlook sync (core plan 12 §4.3, PL-024) --------------
+//
+// **The entity is `calendar_sync_state`, not `calendar`.** §4.3 wrote
+// `platform.calendar.outlook_event_created`; ADR-0021 fixes the entity segment
+// as the *stream's table name*, and there is no `platform.calendar` table —
+// the calendar is a read model with no table at all. The one durable row these
+// facts are about is the sync-state row, so that is the stream. This is the
+// same correction core plans 06, 07, 08 and 09 each made to their own §4
+// sketches, and it means `stream_id` is the sync-state id, carried by the
+// envelope rather than repeated in every payload.
+//
+// **There is no `…amended`.** ADR-0021 retires that verb from the vocabulary
+// outright, and §12.2 Q3 already settled that leave amendment reaches this rail
+// as cancel + create. What remains is a genuinely different fact — an item
+// whose dates moved *in place* (a rescheduled HR event, an edited demo item),
+// which produces a Graph PATCH against the same event id. `…updated` names
+// that without claiming the supersession semantics the ADR forbids, exactly as
+// plan 07 named its in-place timer change `platform.scheduled_action.rescheduled`.
+
+/** Which registered source and item a sync fact is about (§4.1.1's identity). */
+const syncedItem = {
+  sourceKey: z.string().max(100),
+  sourceRef: z.string().max(200),
+};
+
+/** The Outlook event was created — the id we will amend and cancel with. */
+export const platformCalendarOutlookEventCreated = defineEvent(
+  'platform.calendar_sync_state.outlook_event_created',
+  1,
+  z.strictObject({ ...syncedItem, graphEventId: z.string().max(512) }),
+);
+
+/** An already-synced item moved, and the same Outlook event was patched. */
+export const platformCalendarOutlookEventUpdated = defineEvent(
+  'platform.calendar_sync_state.outlook_event_updated',
+  1,
+  z.strictObject({ ...syncedItem, graphEventId: z.string().max(512) }),
+);
+
+/**
+ * The Outlook event was removed. A Graph 404 counts — the desired end state is
+ * "not in the calendar", and something else having got there first satisfies it.
+ */
+export const platformCalendarOutlookEventCancelled = defineEvent(
+  'platform.calendar_sync_state.outlook_event_cancelled',
+  1,
+  z.strictObject({
+    ...syncedItem,
+    graphEventId: z.string().max(512),
+    /** True when Graph said the event was already gone. */
+    alreadyGone: z.boolean(),
+  }),
+);
+
+/**
+ * Retries are exhausted and the item is `failed`.
+ *
+ * A **code**, never a message body: Graph's error text can quote the request,
+ * and the request carries the subject line (ADR-0019). The full text lives in
+ * `calendar_sync_state.last_error`, behind the application's own access control.
+ */
+export const platformCalendarOutlookSyncFailed = defineEvent(
+  'platform.calendar_sync_state.outlook_sync_failed',
+  1,
+  z.strictObject({
+    ...syncedItem,
+    operation: z.enum(['create', 'update', 'cancel']),
+    errorCode: z.string().max(64),
+    attempts: z.number().int().min(1),
+  }),
+);
+
+// --- The pilot slice (core plan 12 §5.1) -------------------------------------
+//
+// The demo item has no table, deliberately: proving the rail end to end without
+// HR should not cost a table that exists only to be demonstrated against. These
+// three events ARE the demo source's state — its `load()` folds the newest one
+// for a ref back into a syncable item — which is `platform.demo`'s established
+// role (core plan 02's `platform.demo.pinged`). `stream_id` is the calling
+// administrator's person id: the demo item is always in their own calendar.
+//
+// The dates are in the payload, and that is not an ADR-0019 exception. A demo
+// item is a fabrication an administrator typed about themselves to watch a
+// queue work; it is not leave, not absence, and records nothing about anybody.
+
+/** A demo item was approved — the rail should create an Outlook event. */
+export const platformDemoCalendarItemApproved = defineEvent(
+  'platform.demo.calendar_item_approved',
+  1,
+  z.strictObject({
+    ref: z.string().max(64),
+    startsOn: z.iso.date(),
+    endsOn: z.iso.date(),
+  }),
+);
+
+/** A demo item's dates moved in place — the rail should patch the same event. */
+export const platformDemoCalendarItemRescheduled = defineEvent(
+  'platform.demo.calendar_item_rescheduled',
+  1,
+  z.strictObject({
+    ref: z.string().max(64),
+    startsOn: z.iso.date(),
+    endsOn: z.iso.date(),
+  }),
+);
+
+/** A demo item was cancelled — the rail should delete the Outlook event. */
+export const platformDemoCalendarItemCancelled = defineEvent(
+  'platform.demo.calendar_item_cancelled',
+  1,
+  z.strictObject({ ref: z.string().max(64) }),
+);

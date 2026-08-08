@@ -104,6 +104,26 @@ export interface PlatformApprovalRequest {
   workflow_instance_id: string | null;
 }
 
+export interface PlatformCalendarSyncState {
+  attempts: Generated<number>;
+  created_at: Generated<Timestamp>;
+  created_by: string | null;
+  deleted_at: Timestamp | null;
+  graph_event_id: string | null;
+  id: string;
+  last_error: string | null;
+  /**
+   * sha256 of the canonical JSON of the last projection pushed to Graph. A redelivered amend with an equal hash is a no-op (§5.2 step 4).
+   */
+  last_synced_hash: string | null;
+  person_id: string;
+  source_key: string;
+  source_ref: string;
+  status: Generated<"pending" | "synced" | "amend_pending" | "cancel_pending" | "cancelled" | "failed">;
+  updated_at: Generated<Timestamp>;
+  updated_by: string | null;
+}
+
 export interface PlatformConfigEntry {
   created_at: Generated<Timestamp>;
   created_by: string;
@@ -582,6 +602,7 @@ export interface DB {
   "platform.approval_decision": PlatformApprovalDecision;
   "platform.approval_delegation": PlatformApprovalDelegation;
   "platform.approval_request": PlatformApprovalRequest;
+  "platform.calendar_sync_state": PlatformCalendarSyncState;
   "platform.config_entry": PlatformConfigEntry;
   "platform.document": PlatformDocument;
   "platform.domain_event": PlatformDomainEvent;

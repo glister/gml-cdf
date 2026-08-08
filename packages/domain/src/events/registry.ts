@@ -14,6 +14,13 @@ import {
   platformDemoPinged,
   platformDocumentCancelled,
   platformDocumentCompleted,
+  platformCalendarOutlookEventCancelled,
+  platformCalendarOutlookEventCreated,
+  platformCalendarOutlookEventUpdated,
+  platformCalendarOutlookSyncFailed,
+  platformDemoCalendarItemApproved,
+  platformDemoCalendarItemCancelled,
+  platformDemoCalendarItemRescheduled,
   platformDocumentContentAccessed,
   platformDocumentEvidenceExported,
   platformDocumentFiled,
@@ -184,6 +191,18 @@ export const eventTypes = {
   'platform.document.cancelled': platformDocumentCancelled,
   'platform.document.evidence_exported': platformDocumentEvidenceExported,
   'platform.document.content_accessed': platformDocumentContentAccessed,
+  // Shared calendar & Outlook sync (core plan 12, PL-024). The entity is
+  // `calendar_sync_state` — the only durable row involved — not the `calendar`
+  // the plan's §4.3 sketched, which is a read model with no table (ADR-0021).
+  // The demo trio streams on `platform.demo`, whose events ARE the pilot
+  // source's state: it has no table on purpose.
+  'platform.calendar_sync_state.outlook_event_created': platformCalendarOutlookEventCreated,
+  'platform.calendar_sync_state.outlook_event_updated': platformCalendarOutlookEventUpdated,
+  'platform.calendar_sync_state.outlook_event_cancelled': platformCalendarOutlookEventCancelled,
+  'platform.calendar_sync_state.outlook_sync_failed': platformCalendarOutlookSyncFailed,
+  'platform.demo.calendar_item_approved': platformDemoCalendarItemApproved,
+  'platform.demo.calendar_item_rescheduled': platformDemoCalendarItemRescheduled,
+  'platform.demo.calendar_item_cancelled': platformDemoCalendarItemCancelled,
 } as const;
 
 /** The union of all registered event-type names. */

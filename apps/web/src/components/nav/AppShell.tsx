@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router';
 import {
   AlarmClock,
   BellRing,
+  CalendarDays,
   ChevronDown,
   ClipboardList,
   FileText,
@@ -222,6 +223,15 @@ function Sidebar({ user }: { user: AppShellUser | null }) {
           */}
           <Link to="/approvals" activeOptions={{ exact: true }} className={navItemClass}>
             <NavItemInner icon={<Stamp size={20} strokeWidth={1.9} />} label="Approvals" />
+          </Link>
+          {/*
+            The calendar is self-scoping too, and more thoroughly than either of
+            the above: the feed's scope predicate decides whose items appear, so
+            an agency worker sees their own rows and the company shut-down and
+            nothing else (core plan 12 §5.1). Everyone with a login has one.
+          */}
+          <Link to="/calendar" className={navItemClass}>
+            <NavItemInner icon={<CalendarDays size={20} strokeWidth={1.9} />} label="Calendar" />
           </Link>
         </div>
         <NavSectionLabel>People</NavSectionLabel>

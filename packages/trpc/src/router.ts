@@ -2,6 +2,7 @@ import { router } from './trpc.js';
 import { usersRouter } from './routers/users.js';
 import { approvalsRouter } from './routers/platform/approvals.js';
 import { authzRouter } from './routers/platform/authz.js';
+import { calendarRouter } from './routers/platform/calendar.js';
 import { configRouter } from './routers/platform/config.js';
 import { documentsRouter } from './routers/platform/documents.js';
 import { identityRouter } from './routers/platform/identity.js';
@@ -32,6 +33,7 @@ export const appRouter = router({
     notifications: notificationsRouter,
     templates: templatesRouter,
     documents: documentsRouter,
+    calendar: calendarRouter,
   }),
 });
 
